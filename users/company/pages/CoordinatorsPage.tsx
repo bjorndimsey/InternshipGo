@@ -1,0 +1,1742 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+  Image,
+  Alert,
+  TextInput,
+  Linking,
+  Platform,
+  Modal,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { apiService } from '../../../lib/api';
+import CompanyLocationMap from '../../../components/CompanyLocationMap';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
+
+const { width } = Dimensions.get('window');
+
+interface Coordinator {
+  id: string;
+  userId?: string; // Add user_id from users table
+  companyId?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  profilePicture?: string;
+  employeeId: string;
+  department: string;
+  position: string;
+  university: string;
+  officeLocation: string;
+  status: 'active' | 'inactive';
+  moaStatus: 'sent' | 'received' | 'approved' | 'rejected' | 'expired' | 'active' | 'pending' | 'none';
+  moaDocument?: string;
+  moaUrl?: string;
+  moaPublicId?: string;
+  moaSentDate?: string;
+  moaReceivedDate?: string;
+  moaExpiryDate?: string;
+  partnershipStatus: 'pending' | 'approved' | 'rejected';
+  assignedInterns: number;
+  lastContact: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface UserInfo {
+  name: string;
+  email: string;
+  picture?: string;
+  id: string;
+}
+
+interface CoordinatorsPageProps {
+  currentUser: UserInfo | null;
+}
+
+export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps) {
+  console.log('🔄 CoordinatorsPage component rendered');
+  
+  const [coordinators, setCoordinators] = useState<Coordinator[]>([]);
+  const [filteredCoordinators, setFilteredCoordinators] = useState<Coordinator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'partners' | 'pending'>('all');
+  const [selectedCoordinator, setSelectedCoordinator] = useState<Coordinator | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showLocationMap, setShowLocationMap] = useState(false);
+  const [showLocationPictures, setShowLocationPictures] = useState(false);
+  const [coordinatorPictures, setCoordinatorPictures] = useState<any[]>([]);
+  const [picturesLoading, setPicturesLoading] = useState(false);
+  const [currentUserLocation, setCurrentUserLocation] = useState<{ latitude: number; longitude: number; profilePicture?: string } | null>(null);
+
+  useEffect(() => {
+    fetchCoordinators();
+    fetchCurrentUserLocation();
+  }, []);
+
+  useEffect(() => {
+    filterCoordinators();
+  }, [searchQuery, filter, coordinators]);
+
+  const fetchCoordinators = async () => {
+    try {
+      console.log('🔄 Starting fetchCoordinators...');
+      setLoading(true);
+      
+      // Test API connection first
+      console.log('🧪 Testing API connection...');
+      try {
+        const testResponse = await fetch('http://localhost:3001/api/coordinators/test-partnership');
+        const testData = await testResponse.json();
+        console.log('✅ API connection test result:', testData);
+        console.log('🔍 Sample coordinator fields:', Object.keys(testData.sampleCoordinator || {}));
+      } catch (testError) {
+        console.error('❌ API connection test failed:', testError);
+      }
+      
+      console.log('🔍 Fetching coordinators with MOA from API...');
+      // Get the current company's ID by looking up the company record
+      let companyId = null;
+      if (currentUser) {
+        try {
+          // Get all companies and find the one that matches this user
+          const companiesResponse = await apiService.getCompanies();
+          console.log('📋 Companies response:', companiesResponse);
+          if (companiesResponse.success && companiesResponse.companies) {
+            console.log('📋 Available companies:', companiesResponse.companies.map((c: any) => ({ 
+              id: c.id, 
+              userId: c.userId, 
+              name: c.name,
+              company_name: c.company_name,
+              user_id: c.user_id
+            })));
+            console.log('🔍 Looking for user ID:', currentUser.id);
+            const userCompany = companiesResponse.companies.find((company: any) => 
+              company.userId === currentUser.id || company.user_id === currentUser.id
+            );
+            if (userCompany) {
+              companyId = userCompany.id.toString();
+              console.log('📝 Found company ID from companies list:', companyId, 'for company:', userCompany.name);
+            } else {
+              console.log('⚠️ No company found for user, using user ID as fallback');
+              console.log('🔍 Searched for user_id:', currentUser.id, 'or id:', currentUser.id);
+              companyId = currentUser.id;
+            }
+          } else {
+            console.log('⚠️ No companies found, using user ID as fallback');
+            companyId = currentUser.id;
+          }
+        } catch (error) {
+          console.log('⚠️ Error getting companies, using user ID as fallback:', error);
+          companyId = currentUser.id;
+        }
+      }
+      
+      if (!companyId) {
+        console.error('❌ No company ID available');
+        setCoordinators([]);
+        Alert.alert('Error', 'Unable to determine company ID');
+        return;
+      }
+      
+      console.log('🔍 Using company ID for coordinator fetch:', companyId);
+      const response = await apiService.getCoordinatorsWithMOA(companyId);
+      console.log('📥 Raw API response:', response);
+      
+      if (response.success && response.coordinators && Array.isArray(response.coordinators)) {
+        console.log('✅ Coordinators with MOA fetched successfully:', response.coordinators.length);
+        console.log('📋 Coordinator details:', response.coordinators.map(c => ({
+          id: c.id,
+          name: `${c.firstName} ${c.lastName}`,
+          companyId: c.companyId,
+          hasCompanyId: !!c.companyId,
+          moaUrl: c.moaUrl,
+          hasMoaUrl: !!c.moaUrl,
+          moaStatus: c.moaStatus,
+          partnershipStatus: c.partnershipStatus
+        })));
+        setCoordinators(response.coordinators);
+        console.log('✅ Coordinators state updated');
+      } else {
+        console.error('❌ Failed to fetch coordinators with MOA:', response);
+        console.error('❌ Response details:', {
+          success: response.success,
+          message: response.message,
+          coordinators: response.coordinators,
+          isArray: Array.isArray(response.coordinators)
+        });
+        setCoordinators([]); // Set empty array as fallback
+        Alert.alert('Error', response.message || 'Failed to fetch coordinators');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching coordinators with MOA:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      setCoordinators([]); // Set empty array as fallback
+      Alert.alert('Error', 'Failed to fetch coordinators. Please try again.');
+    } finally {
+      console.log('🔄 Setting loading to false');
+      setLoading(false);
+    }
+  };
+
+  const filterCoordinators = () => {
+    console.log('🔍 Filtering coordinators...', {
+      totalCoordinators: coordinators.length,
+      filter,
+      searchQuery,
+      coordinators: coordinators.map(c => ({
+        id: c.id,
+        name: `${c.firstName} ${c.lastName}`,
+        partnershipStatus: c.partnershipStatus
+      }))
+    });
+    
+    let filtered = coordinators;
+
+    // Filter by partnership status
+    switch (filter) {
+      case 'partners':
+        filtered = filtered.filter(c => c.partnershipStatus === 'approved');
+        console.log('📊 After partners filter:', filtered.length);
+        break;
+      case 'pending':
+        filtered = filtered.filter(c => c.partnershipStatus === 'pending');
+        console.log('📊 After pending filter:', filtered.length);
+        break;
+      default:
+        // Show all
+        console.log('📊 Showing all coordinators:', filtered.length);
+        break;
+    }
+
+    // Filter by search query
+    if (searchQuery) {
+      filtered = filtered.filter(coordinator =>
+        coordinator.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        coordinator.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        coordinator.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        coordinator.department.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      console.log('📊 After search filter:', filtered.length);
+    }
+
+    console.log('✅ Final filtered coordinators:', filtered.length);
+    setFilteredCoordinators(filtered);
+  };
+
+  const handleViewDetails = (coordinator: Coordinator) => {
+    setSelectedCoordinator(coordinator);
+    setShowDetailsModal(true);
+  };
+
+  const fetchCurrentUserLocation = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const response = await apiService.getProfile(currentUser.id);
+      if (response.success && response.user) {
+        const user = response.user;
+        if (user.latitude !== null && user.longitude !== null && user.latitude !== undefined && user.longitude !== undefined) {
+          setCurrentUserLocation({
+            latitude: user.latitude,
+            longitude: user.longitude,
+            profilePicture: user.profile_picture
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching current user location:', error);
+    }
+  };
+
+  const handleViewLocation = (coordinator: Coordinator) => {
+    setSelectedCoordinator(coordinator);
+    setShowLocationMap(true);
+  };
+
+  const closeLocationMap = () => {
+    setShowLocationMap(false);
+  };
+
+  const fetchCoordinatorPictures = async (coordinator: Coordinator) => {
+    try {
+      setPicturesLoading(true);
+      console.log('📸 Fetching location pictures for coordinator:', coordinator);
+      
+      // Use userId if available, otherwise fall back to coordinator id
+      const userId = coordinator.userId || coordinator.id;
+      console.log('📸 Using userId for pictures:', userId);
+      
+      const response = await apiService.getLocationPictures(userId);
+      console.log('📸 Location pictures response:', response);
+      
+      if (response.success && (response as any).pictures) {
+        setCoordinatorPictures((response as any).pictures);
+        console.log('✅ Location pictures loaded:', (response as any).pictures.length);
+      } else {
+        console.log('⚠️ No location pictures found or error:', response.message);
+        setCoordinatorPictures([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching coordinator pictures:', error);
+      setCoordinatorPictures([]);
+    } finally {
+      setPicturesLoading(false);
+    }
+  };
+
+  const handleViewPictures = (coordinator: Coordinator) => {
+    setSelectedCoordinator(coordinator);
+    setShowLocationPictures(true);
+    fetchCoordinatorPictures(coordinator);
+  };
+
+  const closeLocationPictures = () => {
+    setShowLocationPictures(false);
+    setCoordinatorPictures([]);
+  };
+
+
+  const directFileDownload = async (coordinator: Coordinator) => {
+    console.log('📥 ===== DIRECT FILE DOWNLOAD =====');
+    console.log('👤 Coordinator:', {
+      name: `${coordinator.firstName} ${coordinator.lastName}`,
+      id: coordinator.id,
+      moaUrl: coordinator.moaUrl
+    });
+    
+    try {
+      // Validate URL
+      if (!coordinator.moaUrl) {
+        throw new Error('No MOA URL available');
+      }
+      
+      console.log('🔍 URL Validation:', {
+        url: coordinator.moaUrl,
+        isValid: coordinator.moaUrl.startsWith('http'),
+        length: coordinator.moaUrl.length
+      });
+      
+      // Create filename
+      const sanitizedName = `${coordinator.firstName}_${coordinator.lastName}`.replace(/[^a-zA-Z0-9_]/g, '_');
+      const fileName = `MOA_${sanitizedName}_${coordinator.moaSentDate || new Date().toISOString().split('T')[0]}.pdf`;
+      console.log('📝 Generated filename:', fileName);
+      
+      // Check if we're in a web environment
+      const isWeb = typeof window !== 'undefined' && window.document;
+      console.log('🌐 Environment check:', { isWeb, hasFileSystem: !!FileSystem.documentDirectory });
+      
+      if (isWeb) {
+        // Use browser download for web
+        console.log('🌐 Using browser download method...');
+        
+        // Fetch the file
+        console.log('📥 Fetching file from URL...');
+        const response = await fetch(coordinator.moaUrl!);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+        }
+        
+        console.log('📊 Fetch response:', {
+          ok: response.ok,
+          status: response.status,
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length')
+        });
+        
+        // Convert to blob
+        const blob = await response.blob();
+        console.log('📄 Blob details:', {
+          size: blob.size,
+          type: blob.type
+        });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        console.log('✅ File download initiated in browser');
+        Alert.alert('Download Started', `MOA document "${fileName}" download has started. Check your Downloads folder.`);
+        
+                } else {
+        // Use FileSystem for native apps
+        console.log('📱 Using FileSystem for native app...');
+        
+        // Check FileSystem availability
+        console.log('📁 FileSystem Check:', {
+          documentDirectory: FileSystem.documentDirectory,
+          available: !!FileSystem.documentDirectory
+        });
+        
+        if (!FileSystem.documentDirectory) {
+          throw new Error('FileSystem not available');
+        }
+        
+        // Download file
+                const fileUri = FileSystem.documentDirectory + fileName;
+        console.log('💾 Download Details:', {
+          sourceUrl: coordinator.moaUrl,
+          targetPath: fileUri,
+          fileName: fileName
+        });
+        
+        console.log('⬇️ Starting FileSystem.downloadAsync...');
+                const downloadResult = await FileSystem.downloadAsync(
+                  coordinator.moaUrl!,
+                  fileUri
+                );
+
+        console.log('📊 Download Result:', {
+          status: downloadResult.status,
+          uri: downloadResult.uri,
+          success: downloadResult.status === 200
+        });
+
+                if (downloadResult.status === 200) {
+                  console.log('✅ File downloaded successfully');
+          console.log('📁 Downloaded file location:', downloadResult.uri);
+                  
+                  // Try to share the file
+          console.log('📤 Checking sharing availability...');
+                  const isAvailable = await Sharing.isAvailableAsync();
+          console.log('📤 Sharing available:', isAvailable);
+                  
+                  if (isAvailable) {
+                    try {
+              console.log('📤 Starting share process...');
+                      await Sharing.shareAsync(downloadResult.uri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: `MOA Document - ${coordinator.firstName} ${coordinator.lastName}`,
+                      });
+              console.log('✅ File shared successfully');
+                    } catch (shareError) {
+                      console.error('❌ Share error:', shareError);
+              console.log('⚠️ File downloaded but sharing failed. Check your device\'s file manager.');
+                    }
+                  } else {
+            console.log('⚠️ Sharing not available, file saved locally');
+                  }
+                } else {
+                  throw new Error(`Download failed with status: ${downloadResult.status}`);
+                }
+      }
+    } catch (error) {
+      console.error('❌ Direct download error:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Unknown'
+      });
+      Alert.alert('Download Error', `Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    console.log('📥 ===== DIRECT FILE DOWNLOAD COMPLETED =====');
+  };
+
+
+
+  const handleAcceptPartnershipDirect = async (coordinator: Coordinator) => {
+    try {
+      console.log('🔥 DIRECT ACCEPT PARTNERSHIP CALLED!', coordinator.id);
+      console.log('📤 API Request Details:', {
+        coordinatorId: coordinator.id,
+        status: 'approved',
+        approvedBy: currentUser?.id || ''
+      });
+      
+      console.log('🔄 Making API call to updateCoordinatorPartnershipStatus...');
+      const response = await apiService.updateCoordinatorPartnershipStatus(
+        coordinator.id,
+        'approved',
+        currentUser?.id || '',
+        coordinator.companyId || undefined
+      );
+      console.log('📥 API Response:', response);
+      console.log('📥 API Response Success:', response.success);
+      console.log('📥 API Response Message:', response.message);
+
+      if (response.success) {
+        console.log('✅ Partnership accepted successfully, updating UI immediately...');
+        
+        // Update the coordinator data immediately in the state
+        setCoordinators(prevCoordinators => 
+          prevCoordinators.map(coord => 
+            coord.id === coordinator.id 
+              ? { ...coord, partnershipStatus: 'approved' }
+              : coord
+          )
+        );
+        
+        console.log('🔄 UI updated immediately, partnership status should now show as approved');
+        Alert.alert('Success', 'Partnership accepted successfully! The status has been updated.');
+      } else {
+        console.error('❌ Failed to accept partnership:', response.message);
+        Alert.alert('Error', response.message || 'Failed to accept partnership');
+      }
+    } catch (error) {
+      console.error('❌ Error accepting partnership:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Unknown'
+      });
+      Alert.alert('Error', `Failed to accept partnership: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleAcceptPartnership = async (coordinator: Coordinator) => {
+    console.log('🔍 Coordinator data for partnership acceptance:', {
+      id: coordinator.id,
+      name: `${coordinator.firstName} ${coordinator.lastName}`,
+      companyId: coordinator.companyId,
+      hasCompanyId: !!coordinator.companyId,
+      moaUrl: coordinator.moaUrl,
+      partnershipStatus: coordinator.partnershipStatus
+    });
+    
+    // Note: We don't need companyId for coordinator partnership updates
+    console.log('✅ Proceeding with coordinator partnership update (companyId not required)');
+
+    Alert.alert(
+      'Accept Partnership',
+      `Accept partnership with ${coordinator.firstName} ${coordinator.lastName}?\n\nThis will mark the company as having an active MOA in the program.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Accept', 
+          onPress: async () => {
+            console.log('🔥 USER CONFIRMED ACCEPT PARTNERSHIP!');
+            try {
+              console.log('✅ Accepting partnership for coordinator:', coordinator.id);
+              console.log('📤 API Request Details:', {
+                coordinatorId: coordinator.id,
+                status: 'approved',
+                approvedBy: currentUser?.id || ''
+              });
+              
+              console.log('🔄 Making API call to updateCoordinatorPartnershipStatus...');
+              const response = await apiService.updateCoordinatorPartnershipStatus(
+                coordinator.id,
+                'approved',
+                currentUser?.id || ''
+              );
+              console.log('📥 API Response:', response);
+              console.log('📥 API Response Success:', response.success);
+              console.log('📥 API Response Message:', response.message);
+
+              if (response.success) {
+                // Refresh the coordinators list to get updated data from database
+                console.log('✅ Partnership accepted successfully, refreshing coordinators list...');
+                await fetchCoordinators();
+                Alert.alert('Success', 'Partnership accepted successfully. The company now has an active MOA in the program.');
+              } else {
+                console.error('❌ Failed to accept partnership:', response.message);
+                Alert.alert('Error', response.message || 'Failed to accept partnership');
+              }
+            } catch (error) {
+              console.error('❌ Error accepting partnership:', error);
+              console.error('❌ Error details:', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+                name: error instanceof Error ? error.name : 'Unknown'
+              });
+              Alert.alert('Error', `Failed to accept partnership: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const handleDenyPartnershipDirect = async (coordinator: Coordinator) => {
+    try {
+      console.log('🔥 DIRECT DENY PARTNERSHIP CALLED!', coordinator.id);
+      console.log('📤 API Request Details:', {
+        coordinatorId: coordinator.id,
+        status: 'rejected',
+        approvedBy: currentUser?.id || ''
+      });
+      
+      console.log('🔄 Making API call to updateCoordinatorPartnershipStatus...');
+      const response = await apiService.updateCoordinatorPartnershipStatus(
+        coordinator.id,
+        'rejected',
+        currentUser?.id || '',
+        coordinator.companyId || undefined
+      );
+      console.log('📥 API Response:', response);
+      console.log('📥 API Response Success:', response.success);
+      console.log('📥 API Response Message:', response.message);
+
+      if (response.success) {
+        console.log('✅ Partnership denied successfully, updating UI immediately...');
+        
+        // Update the coordinator data immediately in the state
+        setCoordinators(prevCoordinators => 
+          prevCoordinators.map(coord => 
+            coord.id === coordinator.id 
+              ? { ...coord, partnershipStatus: 'rejected' }
+              : coord
+          )
+        );
+        
+        console.log('🔄 UI updated immediately, partnership status should now show as rejected');
+        Alert.alert('Success', 'Partnership denied successfully! The status has been updated.');
+      } else {
+        console.error('❌ Failed to deny partnership:', response.message);
+        Alert.alert('Error', response.message || 'Failed to deny partnership');
+      }
+    } catch (error) {
+      console.error('❌ Error denying partnership:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Unknown'
+      });
+      Alert.alert('Error', `Failed to deny partnership: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleDenyPartnership = async (coordinator: Coordinator) => {
+    console.log('🔍 Coordinator data for partnership denial:', {
+      id: coordinator.id,
+      name: `${coordinator.firstName} ${coordinator.lastName}`,
+      companyId: coordinator.companyId,
+      hasCompanyId: !!coordinator.companyId,
+      moaUrl: coordinator.moaUrl,
+      partnershipStatus: coordinator.partnershipStatus
+    });
+    
+    // Note: We don't need companyId for coordinator partnership updates
+    console.log('✅ Proceeding with coordinator partnership denial (companyId not required)');
+
+    Alert.alert(
+      'Deny Partnership',
+      `Deny partnership with ${coordinator.firstName} ${coordinator.lastName}?\n\nThis will remove the coordinator from the pending list and mark the partnership as rejected.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Deny', 
+          style: 'destructive',
+          onPress: async () => {
+            console.log('🔥 USER CONFIRMED DENY PARTNERSHIP!');
+            try {
+              console.log('❌ Denying partnership for coordinator:', coordinator.id);
+              console.log('📤 API Request Details:', {
+                coordinatorId: coordinator.id,
+                status: 'rejected',
+                approvedBy: currentUser?.id || ''
+              });
+              const response = await apiService.updateCoordinatorPartnershipStatus(
+                coordinator.id,
+                'rejected',
+                currentUser?.id || ''
+              );
+              console.log('📥 API Response:', response);
+              console.log('📥 API Response Success:', response.success);
+              console.log('📥 API Response Message:', response.message);
+
+              if (response.success) {
+                // Refresh the coordinators list to get updated data from database
+                console.log('✅ Partnership denied successfully, refreshing coordinators list...');
+                await fetchCoordinators();
+                Alert.alert('Success', 'Partnership denied. The coordinator has been removed from the pending list.');
+              } else {
+                console.error('❌ Failed to deny partnership:', response.message);
+                Alert.alert('Error', response.message || 'Failed to deny partnership');
+              }
+            } catch (error) {
+              console.error('❌ Error denying partnership:', error);
+              console.error('❌ Error details:', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+                name: error instanceof Error ? error.name : 'Unknown'
+              });
+              Alert.alert('Error', `Failed to deny partnership: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const getMOAStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return '#34a853';
+      case 'approved': return '#34a853';
+      case 'received': return '#4285f4';
+      case 'sent': return '#fbbc04';
+      case 'pending': return '#fbbc04';
+      case 'rejected': return '#ea4335';
+      case 'expired': return '#666';
+      case 'none': return '#999';
+      default: return '#666';
+    }
+  };
+
+  const getMOAStatusText = (status: string) => {
+    switch (status) {
+      case 'active': return 'Active';
+      case 'approved': return 'Approved';
+      case 'received': return 'Received';
+      case 'sent': return 'Sent';
+      case 'pending': return 'Pending';
+      case 'rejected': return 'Rejected';
+      case 'expired': return 'Expired';
+      case 'none': return 'No MOA';
+      default: return 'Unknown';
+    }
+  };
+
+  const getPartnershipStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return '#34a853';
+      case 'pending': return '#fbbc04';
+      case 'rejected': return '#ea4335';
+      default: return '#666';
+    }
+  };
+
+  const getPartnershipStatusText = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Partner';
+      case 'pending': return 'Pending';
+      case 'rejected': return 'Rejected';
+      default: return 'Unknown';
+    }
+  };
+
+  const CoordinatorCard = ({ coordinator }: { coordinator: Coordinator }) => {
+    console.log('🎴 Rendering CoordinatorCard for:', {
+      id: coordinator.id,
+      name: `${coordinator.firstName} ${coordinator.lastName}`,
+      partnershipStatus: coordinator.partnershipStatus
+    });
+    return (
+    <View style={styles.coordinatorCard}>
+      <View style={styles.coordinatorHeader}>
+        <View style={styles.profileContainer}>
+          {coordinator.profilePicture ? (
+            <Image source={{ uri: coordinator.profilePicture }} style={styles.profileImage} />
+          ) : (
+            <View style={styles.profilePlaceholder}>
+              <Text style={styles.profileText}>
+                {coordinator.firstName.charAt(0)}{coordinator.lastName.charAt(0)}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.coordinatorInfo}>
+          <Text style={styles.coordinatorName}>
+            {coordinator.firstName} {coordinator.lastName}
+          </Text>
+          <Text style={styles.coordinatorPosition}>{coordinator.position}</Text>
+          <Text style={styles.coordinatorDepartment}>{coordinator.department}</Text>
+          <Text style={styles.coordinatorEmail}>{coordinator.email}</Text>
+        </View>
+        <View style={styles.statusContainer}>
+          <View style={[styles.partnershipBadge, { backgroundColor: getPartnershipStatusColor(coordinator.partnershipStatus) }]}>
+            <Text style={styles.partnershipText}>{getPartnershipStatusText(coordinator.partnershipStatus)}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.coordinatorDetails}>
+        <View style={styles.moaContainer}>
+          <View style={styles.moaHeader}>
+            <Text style={styles.moaLabel}>MOA Status:</Text>
+            <View style={[styles.moaStatusBadge, { backgroundColor: getMOAStatusColor(coordinator.moaStatus) }]}>
+              <Text style={styles.moaStatusText}>{getMOAStatusText(coordinator.moaStatus)}</Text>
+            </View>
+          </View>
+          
+          {coordinator.moaSentDate && (
+            <Text style={styles.moaDate}>Sent: {coordinator.moaSentDate}</Text>
+          )}
+          {coordinator.moaReceivedDate && (
+            <Text style={styles.moaDate}>Received: {coordinator.moaReceivedDate}</Text>
+          )}
+          {coordinator.moaExpiryDate && (
+            <Text style={styles.moaDate}>Expires: {coordinator.moaExpiryDate}</Text>
+          )}
+        </View>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{coordinator.assignedInterns}</Text>
+            <Text style={styles.statLabel}>Assigned Interns</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {Math.floor((new Date().getTime() - new Date(coordinator.lastContact).getTime()) / (1000 * 60 * 60 * 24))}
+            </Text>
+            <Text style={styles.statLabel}>Days Since Contact</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.actionButtons}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.viewButton]} 
+          onPress={() => handleViewDetails(coordinator)}
+        >
+          <MaterialIcons name="visibility" size={16} color="#fff" />
+          <Text style={styles.actionButtonText}>View Details</Text>
+        </TouchableOpacity>
+        
+        {coordinator.moaUrl && (
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.downloadButton]} 
+            onPress={() => {
+              console.log('📥 Direct file download pressed');
+              directFileDownload(coordinator);
+            }}
+          >
+            <MaterialIcons name="download" size={16} color="#fff" />
+            <Text style={styles.actionButtonText}>Download MOA</Text>
+          </TouchableOpacity>
+        )}
+        
+        {coordinator.partnershipStatus === 'pending' && (
+          <>
+            {console.log('🔥 RENDERING ACCEPT/DENY BUTTONS for coordinator:', coordinator.id, 'status:', coordinator.partnershipStatus)}
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.acceptButton]} 
+              onPress={() => {
+                console.log('🔥 ACCEPT BUTTON CLICKED!', coordinator.id);
+                // Test direct API call without Alert dialog
+                console.log('🧪 Testing direct API call...');
+                handleAcceptPartnershipDirect(coordinator);
+              }}
+            >
+              <MaterialIcons name="check" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Accept</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.denyButton]} 
+              onPress={() => {
+                console.log('🔥 DENY BUTTON CLICKED!', coordinator.id);
+                // Test direct API call without Alert dialog
+                console.log('🧪 Testing direct DENY API call...');
+                handleDenyPartnershipDirect(coordinator);
+              }}
+            >
+              <MaterialIcons name="close" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Deny</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </View>
+  );
+  };
+
+  console.log('🔄 Render state:', {
+    loading,
+    coordinatorsCount: coordinators.length,
+    filteredCount: filteredCoordinators.length,
+    filter,
+    searchQuery
+  });
+
+  if (loading) {
+    console.log('⏳ Showing loading screen...');
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4285f4" />
+        <Text style={styles.loadingText}>Loading coordinators...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Coordinators & MOA Management</Text>
+      </View>
+
+      {/* Search and Filter Section */}
+      <View style={styles.searchSection}>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputContainer}>
+            <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search coordinators..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#999"
+            />
+          </View>
+        </View>
+        
+        <View style={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'all' && styles.activeFilterTab]}
+              onPress={() => setFilter('all')}
+            >
+              <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
+                All ({coordinators.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'partners' && styles.activeFilterTab]}
+              onPress={() => setFilter('partners')}
+            >
+              <Text style={[styles.filterText, filter === 'partners' && styles.activeFilterText]}>
+                Partners ({coordinators.filter(c => c.partnershipStatus === 'approved').length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterTab, filter === 'pending' && styles.activeFilterTab]}
+              onPress={() => setFilter('pending')}
+            >
+              <Text style={[styles.filterText, filter === 'pending' && styles.activeFilterText]}>
+                Pending ({coordinators.filter(c => c.partnershipStatus === 'pending').length})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{filteredCoordinators.length}</Text>
+          <Text style={styles.statLabel}>Total Coordinators</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={[styles.statNumber, { color: '#34a853' }]}>
+            {filteredCoordinators.filter(c => c.partnershipStatus === 'approved').length}
+          </Text>
+          <Text style={styles.statLabel}>Partners</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
+            {filteredCoordinators.filter(c => c.partnershipStatus === 'pending').length}
+          </Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={[styles.statNumber, { color: '#4285f4' }]}>
+            {filteredCoordinators.filter(c => c.moaStatus === 'active' || c.moaStatus === 'approved').length}
+          </Text>
+          <Text style={styles.statLabel}>MOA Active</Text>
+        </View>
+      </View>
+
+      {/* Coordinators List */}
+      <ScrollView style={styles.coordinatorsList} showsVerticalScrollIndicator={false}>
+        {(() => {
+          console.log('📋 Rendering coordinators list:', {
+            filteredCount: filteredCoordinators.length,
+            hasSearchQuery: !!searchQuery,
+            coordinators: filteredCoordinators.map(c => ({
+              id: c.id,
+              name: `${c.firstName} ${c.lastName}`,
+              partnershipStatus: c.partnershipStatus
+            }))
+          });
+          console.log('📋 Full coordinators data:', filteredCoordinators);
+          
+          return filteredCoordinators.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="supervisor-account" size={64} color="#ccc" />
+            <Text style={styles.emptyStateTitle}>No coordinators found</Text>
+            <Text style={styles.emptyStateText}>
+              {searchQuery 
+                ? 'Try adjusting your search criteria'
+                : 'No coordinators available at the moment'
+              }
+            </Text>
+          </View>
+        ) : (
+          filteredCoordinators.map((coordinator) => (
+            <CoordinatorCard key={coordinator.id} coordinator={coordinator} />
+          ))
+          );
+        })()}
+      </ScrollView>
+
+      {/* Coordinator Details Modal */}
+      {selectedCoordinator && (
+        <Modal
+          visible={showDetailsModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowDetailsModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Coordinator Details</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowDetailsModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {/* Profile Section */}
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>Profile Information</Text>
+                <View style={styles.profileSection}>
+                  {selectedCoordinator.profilePicture ? (
+                    <Image 
+                      source={{ uri: selectedCoordinator.profilePicture }} 
+                      style={styles.modalProfileImage} 
+                    />
+                  ) : (
+                    <View style={styles.modalProfilePlaceholder}>
+                      <Text style={styles.modalProfileText}>
+                        {selectedCoordinator.firstName.charAt(0)}{selectedCoordinator.lastName.charAt(0)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.coordinatorName}>
+                      {selectedCoordinator.firstName} {selectedCoordinator.lastName}
+                    </Text>
+                    <Text style={styles.coordinatorPosition}>{selectedCoordinator.position}</Text>
+                    <Text style={styles.coordinatorDepartment}>{selectedCoordinator.department}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Contact Information */}
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>Contact Information</Text>
+                <View style={styles.detailRow}>
+                  <MaterialIcons name="email" size={20} color="#666" />
+                  <Text style={styles.detailLabel}>Email:</Text>
+                  <Text style={styles.detailValue}>{selectedCoordinator.email}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <MaterialIcons name="phone" size={20} color="#666" />
+                  <Text style={styles.detailLabel}>Phone:</Text>
+                  <Text style={styles.detailValue}>{selectedCoordinator.phoneNumber}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <MaterialIcons name="location-on" size={20} color="#666" />
+                  <Text style={styles.detailLabel}>Office:</Text>
+                  <Text style={styles.detailValue}>{selectedCoordinator.officeLocation}</Text>
+                </View>
+              </View>
+
+              {/* University Information */}
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>University Information</Text>
+                <View style={styles.detailRow}>
+                  <MaterialIcons name="school" size={20} color="#666" />
+                  <Text style={styles.detailLabel}>University:</Text>
+                  <Text style={styles.detailValue}>{selectedCoordinator.university}</Text>
+                </View>
+              </View>
+
+              {/* Status Information */}
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>Status Information</Text>
+                <View style={styles.statusRow}>
+                  <Text style={styles.detailLabel}>Partnership Status:</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getPartnershipStatusColor(selectedCoordinator.partnershipStatus) }]}>
+                    <Text style={styles.statusText}>{getPartnershipStatusText(selectedCoordinator.partnershipStatus)}</Text>
+                  </View>
+                </View>
+                <View style={styles.statusRow}>
+                  <Text style={styles.detailLabel}>MOA Status:</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getMOAStatusColor(selectedCoordinator.moaStatus) }]}>
+                    <Text style={styles.statusText}>{getMOAStatusText(selectedCoordinator.moaStatus)}</Text>
+                  </View>
+                </View>
+                <View style={styles.statusRow}>
+                  <Text style={styles.detailLabel}>Account Status:</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: selectedCoordinator.status === 'active' ? '#34a853' : '#ea4335' }]}>
+                    <Text style={styles.statusText}>{selectedCoordinator.status}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* MOA Information */}
+              {selectedCoordinator.moaUrl && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionTitle}>MOA Information</Text>
+                  <View style={styles.detailRow}>
+                    <MaterialIcons name="description" size={20} color="#666" />
+                    <Text style={styles.detailLabel}>MOA Document:</Text>
+                    <Text style={styles.detailValue}>Available</Text>
+                  </View>
+                  {selectedCoordinator.moaSentDate && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="schedule" size={20} color="#666" />
+                      <Text style={styles.detailLabel}>Sent Date:</Text>
+                      <Text style={styles.detailValue}>{selectedCoordinator.moaSentDate}</Text>
+                    </View>
+                  )}
+                  {selectedCoordinator.moaReceivedDate && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="check-circle" size={20} color="#666" />
+                      <Text style={styles.detailLabel}>Received Date:</Text>
+                      <Text style={styles.detailValue}>{selectedCoordinator.moaReceivedDate}</Text>
+                    </View>
+                  )}
+                  {selectedCoordinator.moaExpiryDate && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="event" size={20} color="#666" />
+                      <Text style={styles.detailLabel}>Expiry Date:</Text>
+                      <Text style={styles.detailValue}>{selectedCoordinator.moaExpiryDate}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Statistics */}
+              <View style={styles.detailSection}>
+                <Text style={styles.sectionTitle}>Statistics</Text>
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statNumber}>{selectedCoordinator.assignedInterns}</Text>
+                    <Text style={styles.statLabel}>Assigned Interns</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statNumber}>
+                      {Math.floor((new Date().getTime() - new Date(selectedCoordinator.lastContact).getTime()) / (1000 * 60 * 60 * 24))}
+                    </Text>
+                    <Text style={styles.statLabel}>Days Since Contact</Text>
+                  </View>
+                </View>
+              </View>
+      </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.locationButton}
+                onPress={() => handleViewLocation(selectedCoordinator)}
+              >
+                <MaterialIcons name="location-on" size={16} color="#fff" />
+                <Text style={styles.locationButtonText}>View Location</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </Modal>
+      )}
+
+      {/* Coordinator Location Map */}
+        <CompanyLocationMap
+          visible={showLocationMap}
+          onClose={closeLocationMap}
+          companies={[]}
+          currentUserLocation={currentUserLocation || undefined}
+          selectedCompany={selectedCoordinator ? {
+            id: selectedCoordinator.id,
+            name: `${selectedCoordinator.firstName} ${selectedCoordinator.lastName}`,
+            address: selectedCoordinator.officeLocation || 'Office location not specified',
+            industry: 'Education',
+            availableSlots: 0,
+            totalSlots: 0,
+            latitude: selectedCoordinator.latitude || 0,
+            longitude: selectedCoordinator.longitude || 0
+          } : undefined}
+          selectedCoordinatorUserId={selectedCoordinator?.userId}
+          onViewPictures={(coordinatorId) => {
+            console.log('📸 View Pictures clicked from map for coordinator:', coordinatorId);
+            handleViewPictures(selectedCoordinator!);
+          }}
+        />
+
+      {/* Location Pictures Modal */}
+      {selectedCoordinator && (
+        <Modal
+          visible={showLocationPictures}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={closeLocationPictures}
+        >
+          <View style={styles.picturesModalContainer}>
+            <View style={styles.picturesModalHeader}>
+              <Text style={styles.picturesModalTitle}>
+                Location Pictures - {selectedCoordinator.firstName} {selectedCoordinator.lastName}
+              </Text>
+              <TouchableOpacity
+                style={styles.picturesCloseButton}
+                onPress={closeLocationPictures}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.picturesModalContent} showsVerticalScrollIndicator={false}>
+              {picturesLoading ? (
+                <View style={styles.picturesLoadingContainer}>
+                  <ActivityIndicator size="large" color="#4285f4" />
+                  <Text style={styles.picturesLoadingText}>Loading pictures...</Text>
+                </View>
+              ) : coordinatorPictures.length === 0 ? (
+                <View style={styles.picturesEmptyState}>
+                  <MaterialIcons name="photo-camera" size={64} color="#ccc" />
+                  <Text style={styles.picturesEmptyTitle}>No Pictures Available</Text>
+                  <Text style={styles.picturesEmptyText}>
+                    This coordinator hasn't uploaded any location pictures yet.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.picturesGrid}>
+                  {coordinatorPictures.map((picture, index) => (
+                    <View key={picture.id || index} style={styles.pictureCard}>
+                      <Image 
+                        source={{ uri: picture.url }} 
+                        style={styles.pictureImage}
+                        onError={(error) => {
+                          console.error('Image load error:', error);
+                        }}
+                      />
+                      {picture.description && (
+                        <Text style={styles.pictureDescription} numberOfLines={2}>
+                          {picture.description}
+                        </Text>
+                      )}
+                      <Text style={styles.pictureDate}>
+                        {new Date(picture.uploaded_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+  },
+  searchSection: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  searchContainer: {
+    marginBottom: 15,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1a1a2e',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+  },
+  filterTab: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginHorizontal: 5,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  activeFilterTab: {
+    backgroundColor: '#4285f4',
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  activeFilterText: {
+    color: '#fff',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 15,
+  },
+  statItem: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  coordinatorsList: {
+    flex: 1,
+    padding: 20,
+  },
+  coordinatorCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 15,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  coordinatorHeader: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  profileContainer: {
+    marginRight: 15,
+  },
+  profileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  profilePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  coordinatorInfo: {
+    flex: 1,
+  },
+  coordinatorName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 4,
+  },
+  coordinatorPosition: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  coordinatorDepartment: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  coordinatorEmail: {
+    fontSize: 12,
+    color: '#999',
+  },
+  statusContainer: {
+    alignItems: 'flex-end',
+  },
+  partnershipBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  partnershipText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  coordinatorDetails: {
+    marginBottom: 15,
+  },
+  moaContainer: {
+    marginBottom: 15,
+  },
+  moaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  moaLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  moaStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  moaStatusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  moaDate: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    flex: 1,
+    minWidth: '45%',
+    justifyContent: 'center',
+  },
+  viewButton: {
+    backgroundColor: '#4285f4',
+  },
+  downloadButton: {
+    backgroundColor: '#34a853',
+  },
+  acceptButton: {
+    backgroundColor: '#34a853',
+  },
+  denyButton: {
+    backgroundColor: '#ea4335',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  detailSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 12,
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalProfileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+  },
+  modalProfilePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  modalProfileText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginLeft: 8,
+    minWidth: 80,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#1a1a2e',
+    flex: 1,
+    marginLeft: 8,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+  },
+  modalActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  downloadActionButton: {
+    backgroundColor: '#34a853',
+  },
+  acceptActionButton: {
+    backgroundColor: '#34a853',
+  },
+  denyActionButton: {
+    backgroundColor: '#ea4335',
+  },
+  modalActionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  locationButton: {
+    flex: 1,
+    backgroundColor: '#4285f4',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Location Pictures Modal Styles
+  picturesModalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  picturesModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+  },
+  picturesModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    flex: 1,
+  },
+  picturesCloseButton: {
+    padding: 8,
+  },
+  picturesModalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  picturesLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  picturesLoadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  picturesEmptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  picturesEmptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  picturesEmptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  picturesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 15,
+  },
+  pictureCard: {
+    width: '48%',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  pictureImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  pictureDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  pictureDate: {
+    fontSize: 10,
+    color: '#999',
+  },
+});

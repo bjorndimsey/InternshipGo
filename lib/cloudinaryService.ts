@@ -1,0 +1,441 @@
+export interface CloudinaryUploadResult {
+  success: boolean;
+  url?: string;
+  public_id?: string;
+  error?: string;
+}
+
+export class CloudinaryService {
+  private static readonly CLOUD_NAME = 'dxrj2nmvv';
+  private static readonly API_KEY = '521782871565753';
+  private static readonly API_SECRET = 'H-Bu741Ogw6q9917WQvXlMN8MUg';
+  
+
+  /**
+   * Upload image to Cloudinary using unsigned uploads with preset
+   */
+  static async uploadImage(
+    file: File | Blob,
+    folder: string = 'internship-avatars',
+    options: any = {}
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('☁️ Uploading image to Cloudinary...');
+      
+      // Convert file to base64
+      const base64 = await this.fileToBase64(file);
+      
+      // Create form data for unsigned upload
+      const formData = new FormData();
+      formData.append('file', `data:${file.type};base64,${base64}`);
+      formData.append('cloud_name', this.CLOUD_NAME);
+      formData.append('api_key', this.API_KEY);
+      formData.append('upload_preset', 'ml_default');
+      formData.append('folder', folder);
+      
+      console.log('📤 Uploading with preset:', 'ml_default');
+      console.log('📁 Folder:', folder);
+
+      // Upload to Cloudinary
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('📊 Upload response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+
+      console.log('✅ Image uploaded successfully:', result.secure_url);
+      
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+      };
+    } catch (error) {
+      console.error('❌ Cloudinary upload error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  /**
+   * Upload PDF or raw file to Cloudinary using unsigned uploads with preset
+   */
+  static async uploadPDF(
+    file: File | Blob,
+    folder: string = 'MOAs',
+    companyId: string = ''
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('☁️ Uploading PDF to Cloudinary...');
+      
+      // Convert file to base64
+      const base64 = await this.fileToBase64(file);
+      
+      // Create form data for unsigned upload
+      const formData = new FormData();
+      formData.append('file', `data:${file.type};base64,${base64}`);
+      formData.append('cloud_name', this.CLOUD_NAME);
+      formData.append('api_key', this.API_KEY);
+      formData.append('upload_preset', 'ml_default');
+      formData.append('folder', folder);
+      formData.append('resource_type', 'raw');
+      
+      // Set public_id without folder prefix (Cloudinary handles folder automatically)
+      if (companyId) {
+        formData.append('public_id', `${companyId}_${Date.now()}`);
+      }
+      
+      console.log('📤 Uploading PDF with preset:', 'ml_default');
+      console.log('📁 Folder:', folder);
+      console.log('📄 Resource type: raw');
+      console.log('🏢 Company ID:', companyId);
+
+      // Upload to Cloudinary
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/raw/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('📊 Upload response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+
+      console.log('✅ PDF uploaded successfully:', result.secure_url);
+      
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+      };
+    } catch (error) {
+      console.error('❌ Cloudinary PDF upload error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  /**
+   * Delete image from Cloudinary using direct API calls
+   */
+  static async deleteImage(publicId: string): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('🗑️ Deleting image from Cloudinary:', publicId);
+      
+      // Create signature for authenticated request
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const signature = await this.generateSignature(publicId, timestamp);
+      
+      const formData = new FormData();
+      formData.append('public_id', publicId);
+      formData.append('timestamp', timestamp.toString());
+      formData.append('api_key', this.API_KEY);
+      formData.append('signature', signature);
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/image/destroy`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      if (result.result === 'ok') {
+        console.log('✅ Image deleted successfully');
+        return { success: true };
+      } else {
+        console.log('❌ Failed to delete image:', result.result);
+        return { success: false, error: 'Delete failed' };
+      }
+    } catch (error) {
+      console.error('❌ Cloudinary delete error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Delete failed',
+      };
+    }
+  }
+
+  /**
+   * Delete PDF or raw file from Cloudinary using direct API calls
+   */
+  static async deletePDF(publicId: string): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('🗑️ Deleting PDF from Cloudinary:', publicId);
+      
+      // Create signature for authenticated request
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const signature = await this.generateSignature(publicId, timestamp);
+      
+      const formData = new FormData();
+      formData.append('public_id', publicId);
+      formData.append('timestamp', timestamp.toString());
+      formData.append('api_key', this.API_KEY);
+      formData.append('signature', signature);
+      formData.append('resource_type', 'raw');
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/raw/destroy`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      if (result.result === 'ok') {
+        console.log('✅ PDF deleted successfully');
+        return { success: true };
+      } else {
+        console.log('❌ Failed to delete PDF:', result.result);
+        return { success: false, error: 'Delete failed' };
+      }
+    } catch (error) {
+      console.error('❌ Cloudinary PDF delete error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Delete failed',
+      };
+    }
+  }
+
+  /**
+   * Convert file to base64
+   */
+  private static fileToBase64(file: File | Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data:image/...;base64, prefix
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  }
+
+  /**
+   * Generate signature for upload requests
+   */
+  private static async generateUploadSignature(publicId: string, timestamp: number, folder: string, transformation: string): Promise<string> {
+    // Create the string to sign in the correct order (without API secret)
+    const params = [
+      `folder=${folder}`,
+      `public_id=${publicId}`,
+      `timestamp=${timestamp}`,
+      `transformation=${transformation}`
+    ].join('&');
+    
+    console.log('🔐 String to sign:', params);
+    console.log('🔐 API Secret:', this.API_SECRET);
+    
+    // Use Web Crypto API for HMAC-SHA1
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(this.API_SECRET),
+      { name: 'HMAC', hash: 'SHA-1' },
+      false,
+      ['sign']
+    );
+    
+    // Sign the parameters string (without API secret)
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(params));
+    const hashArray = Array.from(new Uint8Array(signature));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    console.log('🔑 Generated signature:', hashHex);
+    
+    return hashHex;
+  }
+
+  /**
+   * Generate signature for authenticated requests (delete)
+   */
+  private static async generateSignature(publicId: string, timestamp: number): Promise<string> {
+    const message = `public_id=${publicId}&timestamp=${timestamp}${this.API_SECRET}`;
+    
+    // Use Web Crypto API for HMAC-SHA1
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(this.API_SECRET),
+      { name: 'HMAC', hash: 'SHA-1' },
+      false,
+      ['sign']
+    );
+    
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+    const hashArray = Array.from(new Uint8Array(signature));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
+  }
+
+  /**
+   * Generate Cloudinary URL with transformations
+   */
+  static getImageUrl(publicId: string, transformations: any = {}): string {
+    const baseUrl = `https://res.cloudinary.com/${this.CLOUD_NAME}/image/upload`;
+    // Default transformations for avatar display
+    const transformString = 'w_300,h_300,c_fill,g_face,q_auto,f_auto';
+    return `${baseUrl}/${transformString}/${publicId}`;
+  }
+
+  /**
+   * Generate Cloudinary URL for PDF files
+   */
+  static getPDFUrl(publicId: string): string {
+    return `https://res.cloudinary.com/${this.CLOUD_NAME}/raw/upload/${publicId}`;
+  }
+
+  /**
+   * Upload location picture to Cloudinary
+   */
+  static async uploadLocationPicture(
+    file: File | Blob,
+    userId: string
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('☁️ Uploading location picture to Cloudinary...');
+      
+      // Convert file to base64
+      const base64 = await this.fileToBase64(file);
+      
+      // Create form data for unsigned upload
+      const formData = new FormData();
+      formData.append('file', `data:${file.type};base64,${base64}`);
+      formData.append('cloud_name', this.CLOUD_NAME);
+      formData.append('api_key', this.API_KEY);
+      formData.append('upload_preset', 'ml_default');
+      formData.append('folder', 'internship-avatars/location-pictures');
+      formData.append('public_id', `location-pictures/${userId}_${Date.now()}`);
+      
+      console.log('📤 Uploading location picture with preset:', 'ml_default');
+      console.log('📁 Folder: internship-avatars/location-pictures');
+      console.log('👤 User ID:', userId);
+
+      // Upload to Cloudinary
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('📊 Upload response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+
+      console.log('✅ Location picture uploaded successfully:', result.secure_url);
+      
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+      };
+    } catch (error) {
+      console.error('❌ Cloudinary location picture upload error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  /**
+   * Generate Cloudinary URL for location pictures
+   */
+  static getLocationPictureUrl(publicId: string, transformations: any = {}): string {
+    const baseUrl = `https://res.cloudinary.com/${this.CLOUD_NAME}/image/upload`;
+    // Default transformations for location picture display
+    const transformString = 'w_400,h_300,c_fill,q_auto,f_auto';
+    return `${baseUrl}/${transformString}/${publicId}`;
+  }
+
+  /**
+   * Upload any file type to Cloudinary with automatic resource type detection
+   */
+  static async uploadFile(
+    file: File | Blob,
+    folder: string = 'documents',
+    fileName?: string,
+    options: any = {}
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('☁️ Uploading file to Cloudinary...');
+      
+      // Convert file to base64
+      const base64 = await this.fileToBase64(file);
+      
+      // Determine resource type based on file type
+      const isImage = file.type.startsWith('image/');
+      const isPDF = file.type === 'application/pdf';
+      const resourceType = isImage ? 'image' : 'raw';
+      
+      // Create form data for unsigned upload
+      const formData = new FormData();
+      formData.append('file', `data:${file.type};base64,${base64}`);
+      formData.append('cloud_name', this.CLOUD_NAME);
+      formData.append('api_key', this.API_KEY);
+      formData.append('upload_preset', 'ml_default');
+      formData.append('folder', folder);
+      formData.append('resource_type', resourceType);
+      
+      // Set public_id if provided
+      if (fileName) {
+        formData.append('public_id', fileName);
+      }
+      
+      console.log('📤 Uploading file with preset:', 'ml_default');
+      console.log('📁 Folder:', folder);
+      console.log('📄 Resource type:', resourceType);
+      console.log('📝 File type:', file.type);
+
+      // Upload to Cloudinary
+      const endpoint = isImage 
+        ? `https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/image/upload`
+        : `https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/raw/upload`;
+        
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('📊 Upload response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+
+      console.log('✅ File uploaded successfully:', result.secure_url);
+      
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+      };
+    } catch (error) {
+      console.error('❌ Cloudinary file upload error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+}
+
+export default CloudinaryService;

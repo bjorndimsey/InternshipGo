@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "InternshipGo",
+    "slug": "InternshipGo",
+    "owner": "bjorn12",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.internshipgo.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.internshipgo.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "internshipgo",
+    "plugins": [
+      "expo-web-browser",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8c60ba13-9969-490a-9b2d-fde3eda3ca86"
+      },
+      "googleWebClientId": "391898143612-s8cfb237vai5h6nj7nrjn4k1g0dqrqjs.apps.googleusercontent.com",
+      "googleAndroidClientId": "391898143612-vctcnupvq8q0sl3mu4tb67bu1or9jnv0.apps.googleusercontent.com"
+    }
+  }
+}
