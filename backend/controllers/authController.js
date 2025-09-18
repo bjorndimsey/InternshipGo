@@ -22,6 +22,7 @@ function normalizeUserResponse(user) {
     case 'Student':
       return {
         ...baseUser,
+        student_id: user.student_id, // Add the student table ID
         id_number: user.id_number,
         first_name: user.first_name,
         last_name: user.last_name,

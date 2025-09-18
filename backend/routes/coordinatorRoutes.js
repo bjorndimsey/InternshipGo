@@ -17,6 +17,9 @@ router.get('/with-moa', CoordinatorController.getCoordinatorsWithMOA);
 // GET /api/coordinators/:id - Get coordinator by ID
 router.get('/:id', CoordinatorController.getCoordinatorById);
 
+// GET /api/coordinators/profile/:id - Get coordinator profile by coordinators.id
+router.get('/profile/:id', CoordinatorController.getCoordinatorProfile);
+
 // POST /api/coordinators - Create new coordinator
 router.post('/', CoordinatorController.createCoordinator);
 

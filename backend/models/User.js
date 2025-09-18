@@ -369,6 +369,7 @@ class User {
             const profile = profileResult.data[0];
             return {
               ...user,
+              student_id: profile.id, // Add the student table ID
               id_number: profile.id_number,
               first_name: profile.first_name,
               last_name: profile.last_name,

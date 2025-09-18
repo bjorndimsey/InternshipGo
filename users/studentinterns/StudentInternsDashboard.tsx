@@ -21,6 +21,7 @@ import FavoritesPage from './pages/FavoritesPage';
 import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
+import RequirementsPage from './pages/RequirementsPage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -43,6 +44,7 @@ type MenuItem = {
 
 const navigationItems: MenuItem[] = [
   { id: 'home', title: 'Dashboard', icon: 'home-outline', component: DashboardHome },
+  { id: 'requirements', title: 'Requirements', icon: 'document-text-outline', component: RequirementsPage },
   { id: 'events', title: 'Events', icon: 'calendar-outline', component: EventsPage },
   { id: 'companies', title: 'Companies', icon: 'business-outline', component: CompaniesPage },
   { id: 'favorites', title: 'Favorites', icon: 'heart-outline', component: FavoritesPage },
@@ -123,6 +125,8 @@ export default function StudentInternsDashboard({ onLogout, currentUser }: Stude
             <ProfilePage currentUser={currentUser} />
           ) : activeScreen === 'home' ? (
             <DashboardHome currentUser={currentUser} />
+          ) : activeScreen === 'requirements' ? (
+            <RequirementsPage currentUser={currentUser} />
           ) : (
             <ActiveComponent currentUser={currentUser} />
           )}

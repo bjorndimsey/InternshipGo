@@ -12,6 +12,8 @@ interface ApiResponse<T = any> {
   student?: T;
   interns?: T;
   events?: T;
+  requirements?: T;
+  requirement?: T;
   event?: T;
   data?: T;
   errors?: string[];
@@ -230,6 +232,12 @@ class ApiService {
     return this.makeRequest(`/interns/coordinator/${coordinatorId}`);
   }
 
+  async deleteIntern(internId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/interns/${internId}`, {
+      method: 'DELETE'
+    });
+  }
+
   async getCompany(id: string): Promise<ApiResponse> {
     return this.makeRequest(`/companies/${id}`);
   }
@@ -414,6 +422,155 @@ class ApiService {
     return this.makeRequest(`/users/location-pictures/${pictureId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Requirements Management API
+  async getStudentRequirements(studentId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/student/${studentId}`);
+  }
+
+  async createRequirement(requirementData: {
+    name: string;
+    description?: string;
+    isRequired: boolean;
+    dueDate?: string | null;
+    coordinatorId: string;
+    fileUrl?: string;
+    fileName?: string;
+  }): Promise<ApiResponse> {
+    return this.makeRequest('/requirements', {
+      method: 'POST',
+      body: JSON.stringify(requirementData),
+    });
+  }
+
+  async updateRequirement(requirementId: string, requirementData: {
+    name?: string;
+    description?: string;
+    isRequired?: boolean;
+    dueDate?: string | null;
+    fileUrl?: string;
+    fileName?: string;
+  }): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/${requirementId}`, {
+      method: 'PUT',
+      body: JSON.stringify(requirementData),
+    });
+  }
+
+  async deleteRequirement(requirementId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/${requirementId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateStudentRequirement(studentId: string, requirementId: string, data: {
+    completed?: boolean;
+    fileUrl?: string;
+    filePublicId?: string;
+    notes?: string;
+    coordinatorId?: string;
+  }): Promise<ApiResponse> {
+    const endpoint = `/requirements/student/${studentId}/${requirementId}`;
+    console.log('🌐 API Call:', {
+      endpoint,
+      fullUrl: `${this.baseURL}${endpoint}`,
+      method: 'PUT',
+      data
+    });
+    
+    return this.makeRequest(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadRequirementFile(studentId: string, requirementId: string, formData: FormData): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/student/${studentId}/${requirementId}/upload`, {
+      method: 'POST',
+      body: formData,
+    }, true);
+  }
+
+  async downloadRequirementFile(studentId: string, requirementId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/student/${studentId}/${requirementId}/download`);
+  }
+
+  async sendRequirementReminder(studentId: string, requirementId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/student/${studentId}/${requirementId}/remind`, {
+      method: 'POST',
+    });
+  }
+
+  async getRequirementsReport(coordinatorId: string, filters?: {
+    studentId?: string;
+    completed?: boolean;
+    dueDateFrom?: string;
+    dueDateTo?: string;
+  }): Promise<ApiResponse> {
+    const params = new URLSearchParams({ coordinatorId });
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined) params.append(key, value.toString());
+      });
+    }
+    return this.makeRequest(`/requirements/report?${params.toString()}`);
+  }
+
+  // Student Submission API
+  async submitRequirement(data: {
+    studentId: string;
+    requirementId: string;
+    requirementName: string;
+    requirementDescription?: string;
+    isRequired: boolean;
+    dueDate?: string;
+    submittedFileUrl: string;
+    submittedFilePublicId: string;
+    submittedFileName: string;
+    submittedFileSize: number;
+    coordinatorId: string;
+  }): Promise<ApiResponse> {
+    return this.makeRequest('/submissions/submit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getStudentSubmissions(studentId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/submissions/student/${studentId}`);
+  }
+
+  async getCoordinatorSubmissions(coordinatorId: string, status?: string): Promise<ApiResponse> {
+    const endpoint = status 
+      ? `/submissions/coordinator/${coordinatorId}?status=${status}`
+      : `/submissions/coordinator/${coordinatorId}`;
+    return this.makeRequest(endpoint);
+  }
+
+  async getSubmissionStats(coordinatorId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/submissions/coordinator/${coordinatorId}/stats`);
+  }
+
+  async getSubmissionDetails(submissionId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/submissions/${submissionId}`);
+  }
+
+  async updateSubmissionStatus(submissionId: string, status: string, feedback?: string): Promise<ApiResponse> {
+    return this.makeRequest(`/submissions/${submissionId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, feedback }),
+    });
+  }
+
+  // Get requirements by coordinator
+  async getCoordinatorRequirements(coordinatorId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/requirements/coordinator/${coordinatorId}`);
+  }
+
+  // Get coordinator profile by coordinators.id
+  async getCoordinatorProfile(coordinatorId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/coordinators/profile/${coordinatorId}`);
   }
 }
 

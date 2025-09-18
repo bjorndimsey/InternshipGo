@@ -14,6 +14,8 @@ const studentRoutes = require('./routes/studentRoutes');
 const internRoutes = require('./routes/internRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const locationPictureRoutes = require('./routes/locationPictureRoutes');
+const requirementRoutes = require('./routes/requirementRoutes');
+const studentSubmissionRoutes = require('./routes/studentSubmissionRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,6 +59,8 @@ app.use('/api/students', studentRoutes);
 app.use('/api/interns', internRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/users', locationPictureRoutes);
+app.use('/api/requirements', requirementRoutes);
+app.use('/api/submissions', studentSubmissionRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

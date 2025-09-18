@@ -866,6 +866,67 @@ class CoordinatorController {
       });
     }
   }
+
+  // Get coordinator profile by coordinators.id (returns user_id)
+  static async getCoordinatorProfile(req, res) {
+    try {
+      const { id } = req.params;
+      console.log('👨‍🏫 Fetching coordinator profile for coordinators.id:', id);
+
+      // Get coordinator by coordinators.id
+      const coordinatorResult = await query('coordinators', 'select', null, { id: id });
+      const coordinator = coordinatorResult.data && coordinatorResult.data.length > 0 ? coordinatorResult.data[0] : null;
+      
+      if (!coordinator) {
+        console.log('❌ Coordinator not found for coordinators.id:', id);
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      // Get user details
+      const userResult = await query('users', 'select', null, { id: coordinator.user_id });
+      const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
+
+      if (!user) {
+        console.log('❌ User not found for coordinator user_id:', coordinator.user_id);
+        return res.status(404).json({
+          success: false,
+          message: 'User not found for coordinator'
+        });
+      }
+
+      console.log('✅ Found coordinator profile:', {
+        coordinators_id: coordinator.id,
+        user_id: user.id,
+        email: user.email
+      });
+
+      res.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          user_type: user.user_type,
+          google_id: user.google_id,
+          profile_picture: user.profile_picture,
+          first_name: coordinator.first_name,
+          last_name: coordinator.last_name,
+          program: coordinator.program,
+          phone_number: coordinator.phone_number,
+          address: coordinator.address
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching coordinator profile:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch coordinator profile',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = CoordinatorController;

@@ -21,6 +21,7 @@ import EventsPage from './pages/EventsPage';
 import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
+import SubmissionsPage from './pages/SubmissionsPage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,6 +49,7 @@ const navigationItems: MenuItem[] = [
   { name: 'Interns', screen: 'Interns', icon: 'school-outline' },
   { name: 'Companies', screen: 'Companies', icon: 'business-outline' },
   { name: 'Events', screen: 'Events', icon: 'calendar-outline' },
+  { name: 'Submissions', screen: 'Submissions', icon: 'document-text-outline' },
   { name: 'Messages', screen: 'Messages', icon: 'chatbubbles-outline' },
   { name: 'Notifications', screen: 'Notifications', icon: 'notifications-outline' },
   { name: 'Profile', screen: 'Profile', icon: 'person-outline' },
@@ -92,6 +94,8 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
         return <CompaniesPage />;
       case 'Events':
         return <EventsPage currentUser={currentUser} />;
+      case 'Submissions':
+        return <SubmissionsPage currentUser={currentUser} />;
       case 'Messages':
         return <MessagesPage />;
       case 'Notifications':
