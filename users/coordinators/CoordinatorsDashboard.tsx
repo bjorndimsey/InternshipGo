@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
 import SubmissionsPage from './pages/SubmissionsPage';
+import AttendanceTimeline from './pages/AttendanceTimeline';
 import { apiService } from '../../lib/api';
 
 const { width, height } = Dimensions.get('window');
@@ -57,11 +58,25 @@ const navigationItems: MenuItem[] = [
   { name: 'Profile', screen: 'Profile', icon: 'person-outline' },
 ];
 
+type SubMenuItem = {
+  name: string;
+  screen: string;
+  icon: string;
+  parent: string;
+};
+
+const subMenuItems: SubMenuItem[] = [
+  { name: 'Interns List', screen: 'Interns', icon: 'people-outline', parent: 'Interns' },
+  { name: 'Attendance Timeline', screen: 'AttendanceTimeline', icon: 'calendar-outline', parent: 'Interns' },
+];
+
 export default function CoordinatorsDashboard({ onLogout, currentUser }: CoordinatorsDashboardProps) {
   const [activeScreen, setActiveScreen] = useState('Dashboard');
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [sidebarAnimation] = useState(new Animated.Value(0));
+  const [expandedMenus, setExpandedMenus] = useState<{[key: string]: boolean}>({});
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const navigationScrollRef = useRef<ScrollView>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [userProfile, setUserProfile] = useState<{
     first_name?: string;
@@ -228,10 +243,33 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
     }).start();
   };
 
+  const toggleMenuExpansion = (menuName: string) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [menuName]: !prev[menuName]
+    }));
+    
+    // Scroll to the expanded menu after a short delay to allow for animation
+    setTimeout(() => {
+      if (navigationScrollRef.current) {
+        navigationScrollRef.current.scrollToEnd({ animated: true });
+      }
+    }, 100);
+  };
+
   const handleNavigation = (screenName: string) => {
     setActiveScreen(screenName);
     if (sidebarVisible) {
       toggleSidebar();
+    }
+    
+    // Scroll to the active item when navigating to a submenu
+    if (screenName === 'AttendanceTimeline') {
+      setTimeout(() => {
+        if (navigationScrollRef.current) {
+          navigationScrollRef.current.scrollToEnd({ animated: true });
+        }
+      }, 100);
     }
     
     // Refresh unread counts when navigating to messages or notifications
@@ -387,6 +425,8 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
         return <DashboardHome currentUser={currentUser} />;
       case 'Interns':
         return <InternsPage currentUser={currentUser} />;
+      case 'AttendanceTimeline':
+        return currentUser ? <AttendanceTimeline currentUser={currentUser} /> : <DashboardHome currentUser={currentUser} />;
       case 'Companies':
         return <CompaniesPage />;
       case 'Events':
@@ -487,40 +527,89 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
           <Text style={styles.sidebarSubtitle}>Coordinator Dashboard</Text>
         </View>
 
-        <View style={styles.navigation}>
-          {navigationItems.map((item) => (
-            <TouchableOpacity
-              key={item.name}
-              style={[
-                styles.navItem,
-                activeScreen === item.screen && styles.activeNavItem
-              ]}
-              onPress={() => handleNavigation(item.screen)}
-            >
-              <Ionicons 
-                name={item.icon as any} 
-                size={20} 
-                color={activeScreen === item.screen ? '#FF8400' : '#666'} 
-              />
-              <Text style={[
-                styles.navText,
-                activeScreen === item.screen && styles.activeNavText
-              ]}>
-                {item.name}
-              </Text>
-              {item.name === 'Messages' && unreadMessageCount > 0 && (
-                <View style={styles.messageBadge}>
-                  <Text style={styles.messageBadgeText}>{unreadMessageCount}</Text>
-                </View>
-              )}
-              {item.name === 'Notifications' && unreadNotificationCount > 0 && (
-                <View style={styles.notificationSidebarBadge}>
-                  <Text style={styles.notificationSidebarText}>{unreadNotificationCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+        <ScrollView 
+          ref={navigationScrollRef}
+          style={styles.navigation}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.navigationContent}
+        >
+          {navigationItems.map((item) => {
+            const hasSubMenu = subMenuItems.some(subItem => subItem.parent === item.name);
+            const isExpanded = expandedMenus[item.name];
+            
+            return (
+              <View key={item.name}>
+                <TouchableOpacity
+                  style={[
+                    styles.navItem,
+                    activeScreen === item.screen && styles.activeNavItem
+                  ]}
+                  onPress={() => hasSubMenu ? toggleMenuExpansion(item.name) : handleNavigation(item.screen)}
+                >
+                  <Ionicons 
+                    name={item.icon as any} 
+                    size={20} 
+                    color={activeScreen === item.screen ? '#FF8400' : '#666'} 
+                  />
+                  <Text style={[
+                    styles.navText,
+                    activeScreen === item.screen && styles.activeNavText
+                  ]}>
+                    {item.name}
+                  </Text>
+                  {hasSubMenu && (
+                    <Ionicons 
+                      name={isExpanded ? "chevron-down" : "chevron-forward"} 
+                      size={16} 
+                      color={activeScreen === item.screen ? '#FF8400' : '#666'} 
+                      style={styles.subMenuIcon}
+                    />
+                  )}
+                  {item.name === 'Messages' && unreadMessageCount > 0 && (
+                    <View style={styles.messageBadge}>
+                      <Text style={styles.messageBadgeText}>{unreadMessageCount}</Text>
+                    </View>
+                  )}
+                  {item.name === 'Notifications' && unreadNotificationCount > 0 && (
+                    <View style={styles.notificationSidebarBadge}>
+                      <Text style={styles.notificationSidebarText}>{unreadNotificationCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                
+                {/* Sub Menu Items */}
+                {hasSubMenu && isExpanded && (
+                  <View style={styles.subMenu}>
+                    {subMenuItems
+                      .filter(subItem => subItem.parent === item.name)
+                      .map((subItem) => (
+                        <TouchableOpacity
+                          key={subItem.name}
+                          style={[
+                            styles.subNavItem,
+                            activeScreen === subItem.screen && styles.activeSubNavItem
+                          ]}
+                          onPress={() => handleNavigation(subItem.screen)}
+                        >
+                          <Ionicons 
+                            name={subItem.icon as any} 
+                            size={16} 
+                            color={activeScreen === subItem.screen ? '#FF8400' : '#999'} 
+                          />
+                          <Text style={[
+                            styles.subNavText,
+                            activeScreen === subItem.screen && styles.activeSubNavText
+                          ]}>
+                            {subItem.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
 
         <View style={styles.sidebarFooter}>
           <View style={styles.userInfo}>
@@ -1043,6 +1132,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 8,
   },
+  navigationContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
+  },
   navItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -1066,6 +1159,36 @@ const styles = StyleSheet.create({
   activeNavText: {
     color: '#F4D03F',
     fontWeight: 'bold' as const,
+  },
+  subMenuIcon: {
+    marginLeft: 'auto',
+  },
+  subMenu: {
+    backgroundColor: 'rgba(244, 208, 63, 0.05)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#F4D03F',
+    marginLeft: 20,
+  },
+  subNavItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  activeSubNavItem: {
+    backgroundColor: 'rgba(244, 208, 63, 0.1)',
+  },
+  subNavText: {
+    marginLeft: 12,
+    fontSize: 15,
+    color: '#ccc',
+    fontWeight: '400',
+  },
+  activeSubNavText: {
+    color: '#F4D03F',
+    fontWeight: '600' as const,
   },
   messageBadge: {
     backgroundColor: '#2D5A3D', // Forest green

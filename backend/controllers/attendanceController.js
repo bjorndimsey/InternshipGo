@@ -454,6 +454,52 @@ const saveAttendanceRecord = async (req, res) => {
       }
     });
 
+    // Trigger attendance notification for coordinators
+    try {
+      console.log('🔔 Triggering attendance notification for coordinators');
+      // Import the notification controller
+      const CoordinatorNotificationController = require('./coordinatorNotificationController');
+      
+      // Get the student's coordinator
+      const studentResult = await query('students', 'select', ['id'], { user_id: parseInt(userId) });
+      if (studentResult.data && studentResult.data.length > 0) {
+        const studentId = studentResult.data[0].id;
+        
+        // Get the intern record to find the coordinator
+        const internResult = await query('interns', 'select', ['coordinator_id'], { student_id: studentId });
+        if (internResult.data && internResult.data.length > 0) {
+          const coordinatorId = internResult.data[0].coordinator_id;
+          console.log('👨‍🏫 Found coordinator ID for notification:', coordinatorId);
+          
+          // The notification will be created when the coordinator checks their notifications
+          // No need to create it here as it's generated on-demand
+        }
+      }
+    } catch (notificationError) {
+      console.error('⚠️ Error triggering attendance notification:', notificationError);
+      // Don't fail the attendance save if notification fails
+    }
+
+    // Trigger attendance notification for the student
+    try {
+      console.log('🔔 Triggering attendance notification for student');
+      // Import the notification controller
+      const NotificationController = require('./notificationController');
+      
+      // Get the student's ID from the user_id
+      const studentResult = await query('students', 'select', ['id'], { user_id: actualUserId });
+      if (studentResult.data && studentResult.data.length > 0) {
+        const studentId = studentResult.data[0].id;
+        console.log('👨‍🎓 Found student ID for notification:', studentId);
+        
+        // The notification will be created when the student checks their notifications
+        // No need to create it here as it's generated on-demand
+      }
+    } catch (studentNotificationError) {
+      console.error('⚠️ Error triggering student attendance notification:', studentNotificationError);
+      // Don't fail the attendance save if notification fails
+    }
+
     res.json({
       success: true,
       data: result,

@@ -23,7 +23,7 @@ interface Notification {
   timestamp: string;
   isRead: boolean;
   isImportant: boolean;
-  category: 'moa' | 'requirement' | 'application' | 'internship' | 'company' | 'system' | 'event';
+  category: 'moa' | 'requirement' | 'application' | 'internship' | 'company' | 'system' | 'event' | 'attendance';
   action?: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   data?: any;
@@ -48,7 +48,7 @@ interface NotificationsPageProps {
 export default function NotificationsPage({ currentUser, onUnreadCountChange }: NotificationsPageProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'unread' | 'important' | 'urgent'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'important'>('all');
   const [showSkeleton, setShowSkeleton] = useState(true);
   
   // Animation values
@@ -232,6 +232,19 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
         
         Alert.alert('Requirement Submission Details', details);
         handleMarkAsRead(notification.id);
+      } else if (notification.category === 'attendance') {
+        // Enhanced attendance details
+        let details = `Student: ${notification.data?.studentName}\n`;
+        details += `Status: ${notification.data?.status.toUpperCase()}\n`;
+        details += `Date: ${notification.data?.attendanceDate}\n`;
+        details += `AM Time In: ${notification.data?.amTimeIn || '--:--'}\n`;
+        details += `AM Time Out: ${notification.data?.amTimeOut || '--:--'}\n`;
+        details += `PM Time In: ${notification.data?.pmTimeIn || '--:--'}\n`;
+        details += `PM Time Out: ${notification.data?.pmTimeOut || '--:--'}\n`;
+        details += `Total Hours: ${notification.data?.totalHours ? `${notification.data.totalHours.toFixed(2)}h` : '0h'}`;
+        
+        Alert.alert('Attendance Details', details);
+        handleMarkAsRead(notification.id);
       } else {
         Alert.alert('Success', `Action completed: ${notification.action}`);
         handleMarkAsRead(notification.id);
@@ -247,8 +260,6 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
         return notifications.filter(n => !n.isRead);
       case 'important':
         return notifications.filter(n => n.isImportant);
-      case 'urgent':
-        return notifications.filter(n => n.priority === 'urgent');
       default:
         return notifications;
     }
@@ -285,6 +296,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
       case 'company': return 'business-center';
       case 'system': return 'settings';
       case 'event': return 'event';
+      case 'attendance': return 'schedule';
       default: return 'notifications';
     }
   };
@@ -407,53 +419,43 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Header */}
+      {/* Header with integrated filter tabs */}
       <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
-        <View style={styles.headerGradient}>
-          <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerContent}>
+          <View style={styles.titleRow}>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'all' && styles.activeFilterTab]}
+                onPress={() => setFilter('all')}
+              >
+                <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
+                  All ({notifications.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'unread' && styles.activeFilterTab]}
+                onPress={() => setFilter('unread')}
+              >
+                <Text style={[styles.filterText, filter === 'unread' && styles.activeFilterText]}>
+                  Unread ({notifications.filter(n => !n.isRead).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'important' && styles.activeFilterTab]}
+                onPress={() => setFilter('important')}
+              >
+                <Text style={[styles.filterText, filter === 'important' && styles.activeFilterText]}>
+                  Important ({notifications.filter(n => n.isImportant).length})
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
           <Text style={styles.headerSubtitle}>
             {notifications.filter(n => !n.isRead).length} unread notifications
           </Text>
         </View>
       </Animated.View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'all' && styles.activeFilterTab]}
-            onPress={() => setFilter('all')}
-          >
-            <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
-              All ({notifications.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'unread' && styles.activeFilterTab]}
-            onPress={() => setFilter('unread')}
-          >
-            <Text style={[styles.filterText, filter === 'unread' && styles.activeFilterText]}>
-              Unread ({notifications.filter(n => !n.isRead).length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'important' && styles.activeFilterTab]}
-            onPress={() => setFilter('important')}
-          >
-            <Text style={[styles.filterText, filter === 'important' && styles.activeFilterText]}>
-              Important ({notifications.filter(n => n.isImportant).length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'urgent' && styles.activeFilterTab]}
-            onPress={() => setFilter('urgent')}
-          >
-            <Text style={[styles.filterText, filter === 'urgent' && styles.activeFilterText]}>
-              Urgent ({notifications.filter(n => n.priority === 'urgent').length})
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
 
       {/* Actions */}
       <View style={styles.actionsContainer}>
@@ -520,45 +522,49 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#1E3A5F', // Deep navy blue
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  headerGradient: {
-    position: 'relative',
+  headerContent: {
+    flexDirection: 'column',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginRight: 16,
     fontFamily: 'System',
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#F4D03F', // Bright yellow
     fontWeight: '500',
   },
-  filterContainer: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+  filterScrollView: {
+    flex: 1,
   },
   filterTab: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    marginHorizontal: 6,
-    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 2,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   activeFilterTab: {
     backgroundColor: '#F4D03F', // Bright yellow
   },
   filterText: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: '600',
     color: '#fff',
   },
@@ -568,7 +574,8 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     backgroundColor: '#2D5A3D', // Forest green
-    padding: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -576,15 +583,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   actionButtonText: {
-    fontSize: 15,
+    fontSize: 13,
     color: '#fff',
-    marginLeft: 8,
+    marginLeft: 6,
     fontWeight: '600',
   },
   notificationsList: {

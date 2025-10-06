@@ -144,12 +144,23 @@ class InternController {
           const userResult = await query('users', 'select', null, { id: student.user_id });
           const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
 
+          // Get company assignment from applications table
+          const applicationResult = await query('applications', 'select', ['company_id'], { 
+            student_id: student.user_id, 
+            status: 'approved' 
+          });
+          const company_id = applicationResult.data && applicationResult.data.length > 0 
+            ? applicationResult.data[0].company_id 
+            : null;
+
           return {
             id: intern.id,
             school_year: intern.school_year,
             status: intern.status,
             created_at: intern.created_at,
             student_id: student.id,
+            user_id: student.user_id,
+            company_id: company_id,
             id_number: student.id_number,
             first_name: student.first_name,
             last_name: student.last_name,

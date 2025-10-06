@@ -1,6 +1,219 @@
 const { query } = require('../config/supabase');
 
 class CoordinatorNotificationController {
+  // Get attendance notifications for today
+  static async getAttendanceNotifications(coordinatorUserId) {
+    try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      console.log('📅 Fetching attendance notifications for date:', today);
+      
+      // Get all interns assigned to this coordinator
+      const internsResult = await query('interns', 'select', null, { coordinator_id: coordinatorUserId });
+      
+      if (!internsResult.data || internsResult.data.length === 0) {
+        console.log('👥 No interns found for coordinator');
+        return [];
+      }
+
+      const internIds = internsResult.data.map(intern => intern.student_id);
+      console.log('👥 Found interns for coordinator:', internIds);
+      console.log('👥 Full intern data:', internsResult.data);
+      
+      // Get the user_ids for these interns from the students table
+      const userIds = [];
+      for (const intern of internsResult.data) {
+        const studentResult = await query('students', 'select', ['user_id'], { id: intern.student_id });
+        if (studentResult.data && studentResult.data.length > 0) {
+          userIds.push(studentResult.data[0].user_id);
+        }
+      }
+      console.log('👤 User IDs for coordinator interns:', userIds);
+      
+      // Also check what applications exist for any student_id
+      console.log('🔍 Checking all applications in database...');
+      const allApplicationsResult = await query('applications', 'select', ['student_id', 'company_id', 'status'], {});
+      console.log('📋 All applications in database:', allApplicationsResult.data);
+
+      const notifications = [];
+
+      // Get today's attendance records for all companies where these interns are assigned
+      const companyIds = new Set();
+      
+      // Query applications for each intern individually
+      for (const internId of internIds) {
+        console.log(`🔍 Checking applications for intern student_id: ${internId}`);
+        const applicationsResult = await query('applications', 'select', ['company_id', 'student_id'], { 
+          student_id: internId,
+          status: 'approved'
+        });
+        
+        console.log(`📋 Applications result for student_id ${internId}:`, applicationsResult);
+        
+        if (applicationsResult.data && applicationsResult.data.length > 0) {
+          applicationsResult.data.forEach(app => companyIds.add(app.company_id));
+          console.log(`✅ Found ${applicationsResult.data.length} approved applications for student_id ${internId}`);
+        } else {
+          console.log(`❌ No approved applications found for student_id ${internId}`);
+        }
+      }
+
+      if (companyIds.size === 0) {
+        console.log('🏢 No approved applications found for coordinator interns');
+        console.log('🔄 Trying alternative approach: querying attendance records directly...');
+        
+        // Alternative approach: Query attendance records directly for the coordinator's interns
+        for (const userId of userIds) {
+          const directAttendanceResult = await query('attendance_records', 'select', null, {
+            user_id: userId,
+            attendance_date: today
+          });
+          
+          console.log(`📊 Direct attendance query result for user_id ${userId}:`, directAttendanceResult);
+          
+          if (directAttendanceResult.data && directAttendanceResult.data.length > 0) {
+            console.log(`✅ Found ${directAttendanceResult.data.length} attendance records for user_id ${userId}`);
+            // Process these records directly
+            for (const record of directAttendanceResult.data) {
+              // Get student details
+              const studentResult = await query('students', 'select', ['first_name', 'last_name'], { 
+                user_id: record.user_id 
+              });
+              const student = studentResult.data && studentResult.data.length > 0 ? studentResult.data[0] : null;
+
+              if (student) {
+                const studentName = `${student.first_name} ${student.last_name}`;
+                const status = record.status;
+                
+                let notification = {
+                  id: `attendance_${record.id}_${today}`,
+                  title: `Daily Attendance Update`,
+                  message: `${studentName} is marked as ${status.toUpperCase()} today`,
+                  type: CoordinatorNotificationController.getAttendanceNotificationType(status),
+                  timestamp: new Date().toISOString(),
+                  isRead: false,
+                  isImportant: status === 'absent' || status === 'leave',
+                  category: 'attendance',
+                  action: 'View Attendance Timeline',
+                  priority: CoordinatorNotificationController.getAttendancePriority(status),
+                  data: {
+                    studentName,
+                    studentId: record.user_id,
+                    status,
+                    attendanceDate: today,
+                    companyId: record.company_id,
+                    amTimeIn: record.am_time_in,
+                    amTimeOut: record.am_time_out,
+                    pmTimeIn: record.pm_time_in,
+                    pmTimeOut: record.pm_time_out,
+                    totalHours: record.total_hours
+                  }
+                };
+
+                notifications.push(notification);
+                console.log(`✅ Created direct attendance notification for ${studentName}: ${status}`);
+              }
+            }
+          }
+        }
+        
+        return notifications;
+      }
+
+      const companyIdsArray = Array.from(companyIds);
+      console.log('🏢 Company IDs for attendance check:', companyIdsArray);
+
+      // Fetch attendance records for today from all relevant companies
+      for (const companyId of companyIdsArray) {
+        const attendanceResult = await query('attendance_records', 'select', null, {
+          company_id: companyId,
+          attendance_date: today
+        });
+
+        if (attendanceResult.data && attendanceResult.data.length > 0) {
+          console.log(`📊 Found ${attendanceResult.data.length} attendance records for company ${companyId} on ${today}`);
+          
+          // Filter records for interns assigned to this coordinator
+          const coordinatorInternRecords = attendanceResult.data.filter(record => 
+            internIds.includes(record.user_id)
+          );
+
+          console.log(`👥 Filtered to ${coordinatorInternRecords.length} records for coordinator's interns`);
+
+          // Create notifications for each attendance record
+          for (const record of coordinatorInternRecords) {
+            // Get student details
+            const studentResult = await query('students', 'select', ['first_name', 'last_name'], { 
+              user_id: record.user_id 
+            });
+            const student = studentResult.data && studentResult.data.length > 0 ? studentResult.data[0] : null;
+
+            if (student) {
+              const studentName = `${student.first_name} ${student.last_name}`;
+              const status = record.status;
+              
+              let notification = {
+                id: `attendance_${record.id}_${today}`,
+                title: `Daily Attendance Update`,
+                message: `${studentName} is marked as ${status.toUpperCase()} today`,
+                type: CoordinatorNotificationController.getAttendanceNotificationType(status),
+                timestamp: new Date().toISOString(),
+                isRead: false,
+                isImportant: status === 'absent' || status === 'leave',
+                category: 'attendance',
+                action: 'View Attendance Timeline',
+                priority: CoordinatorNotificationController.getAttendancePriority(status),
+                data: {
+                  studentName,
+                  studentId: record.user_id,
+                  status,
+                  attendanceDate: today,
+                  companyId: record.company_id,
+                  amTimeIn: record.am_time_in,
+                  amTimeOut: record.am_time_out,
+                  pmTimeIn: record.pm_time_in,
+                  pmTimeOut: record.pm_time_out,
+                  totalHours: record.total_hours
+                }
+              };
+
+              notifications.push(notification);
+              console.log(`✅ Created attendance notification for ${studentName}: ${status}`);
+            }
+          }
+        }
+      }
+
+      console.log(`🔔 Generated ${notifications.length} attendance notifications for coordinator`);
+      return notifications;
+
+    } catch (error) {
+      console.error('❌ Error fetching attendance notifications:', error);
+      return [];
+    }
+  }
+
+  // Get notification type based on attendance status
+  static getAttendanceNotificationType(status) {
+    switch (status) {
+      case 'present': return 'success';
+      case 'late': return 'warning';
+      case 'absent': return 'error';
+      case 'leave': return 'info';
+      default: return 'info';
+    }
+  }
+
+  // Get notification priority based on attendance status
+  static getAttendancePriority(status) {
+    switch (status) {
+      case 'absent': return 'high';
+      case 'leave': return 'medium';
+      case 'late': return 'medium';
+      case 'present': return 'low';
+      default: return 'low';
+    }
+  }
+
   // Get notifications for a coordinator
   static async getCoordinatorNotifications(req, res) {
     try {
@@ -36,7 +249,12 @@ class CoordinatorNotificationController {
 
       const notifications = [];
 
-      // 1. Get MOA status notifications (companies that approved/rejected MOAs uploaded by this coordinator)
+      // 1. Get attendance notifications for today
+      console.log('🔍 Fetching attendance notifications for coordinator user_id:', coordinator.user_id);
+      const attendanceNotifications = await CoordinatorNotificationController.getAttendanceNotifications(coordinator.user_id);
+      notifications.push(...attendanceNotifications);
+
+      // 2. Get MOA status notifications (companies that approved/rejected MOAs uploaded by this coordinator)
       console.log('🔍 Fetching MOA status notifications for coordinator user_id:', coordinator.user_id);
       
       const moaCompaniesResult = await query('companies', 'select', null, { 

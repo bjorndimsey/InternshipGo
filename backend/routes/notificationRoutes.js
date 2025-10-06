@@ -7,7 +7,10 @@ const authMiddleware = require('../middleware/authMiddleware');
 router.use(authMiddleware);
 
 // Get notifications for a student
-router.get('/student/:studentId', NotificationController.getStudentNotifications);
+router.get('/student/:userId', NotificationController.getStudentNotifications);
+
+// Debug endpoint to check student data
+router.get('/debug/student/:userId', NotificationController.debugStudentData);
 
 // Mark notification as read
 router.post('/:notificationId/read', NotificationController.markNotificationAsRead);
