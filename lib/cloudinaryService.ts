@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 export interface CloudinaryUploadResult {
   success: boolean;
   url?: string;
@@ -7,19 +9,19 @@ export interface CloudinaryUploadResult {
 
 export class CloudinaryService {
   // Original Cloudinary credentials for images and general files
-  private static readonly CLOUD_NAME = 'dxrj2nmvv';
-  private static readonly API_KEY = '521782871565753';
-  private static readonly API_SECRET = 'H-Bu741Ogw6q9917WQvXlMN8MUg';
+  private static readonly CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dxrj2nmvv';
+  private static readonly API_KEY = process.env.CLOUDINARY_API_KEY || '521782871565753';
+  private static readonly API_SECRET = process.env.CLOUDINARY_API_SECRET || 'H-Bu741Ogw6q9917WQvXlMN8MUg';
   
   // New Cloudinary credentials for PDF requirements
-  private static readonly REQUIREMENTS_CLOUD_NAME = 'dtws4lvdi';
-  private static readonly REQUIREMENTS_API_KEY = '911342496479915';
-  private static readonly REQUIREMENTS_API_SECRET = 'QuiHU1_cooU0ZTrN9nHxxOWDPCQ';
+  private static readonly REQUIREMENTS_CLOUD_NAME = process.env.CLOUDINARY_REQUIREMENTS_CLOUD_NAME || 'dtws4lvdi';
+  private static readonly REQUIREMENTS_API_KEY = process.env.CLOUDINARY_REQUIREMENTS_API_KEY || '911342496479915';
+  private static readonly REQUIREMENTS_API_SECRET = process.env.CLOUDINARY_REQUIREMENTS_API_SECRET || 'QuiHU1_cooU0ZTrN9nHxxOWDPCQ';
   
   // Cloudinary credentials for evidence images (journal pictures)
-  private static readonly EVIDENCE_CLOUD_NAME = 'dbdhg43de';
-  private static readonly EVIDENCE_API_KEY = '638252629651465';
-  private static readonly EVIDENCE_API_SECRET = 'Yn2N0LUuWi59FV4PXlnC1YpWyQ8';
+  private static readonly EVIDENCE_CLOUD_NAME = process.env.CLOUDINARY_EVIDENCE_CLOUD_NAME || 'dbdhg43de';
+  private static readonly EVIDENCE_API_KEY = process.env.CLOUDINARY_EVIDENCE_API_KEY || '638252629651465';
+  private static readonly EVIDENCE_API_SECRET = process.env.CLOUDINARY_EVIDENCE_API_SECRET || 'Yn2N0LUuWi59FV4PXlnC1YpWyQ8';
   
 
   /**
