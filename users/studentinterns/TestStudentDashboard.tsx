@@ -7,9 +7,17 @@ export default function TestStudentDashboard() {
     Alert.alert('Logout', 'Logout functionality will be implemented');
   };
 
+  // Mock user data for testing
+  const currentUser = {
+    id: 'test-student-id',
+    email: 'test@student.com',
+    user_type: 'student',
+    google_id: 'test-google-id'
+  };
+
   return (
     <View style={styles.container}>
-      <StudentInternsDashboard onLogout={handleLogout} />
+      <StudentInternsDashboard onLogout={handleLogout} currentUser={currentUser} />
     </View>
   );
 }

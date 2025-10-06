@@ -114,6 +114,12 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
         mapRef.current = null;
       }
       
+      // Clean up SVG elements
+      if (mapContainerRef.current) {
+        const existingSvgs = mapContainerRef.current.querySelectorAll('svg');
+        existingSvgs.forEach(svg => svg.remove());
+      }
+      
       // Clean up global function
       if ((window as any).viewPictures) {
         delete (window as any).viewPictures;
@@ -166,22 +172,25 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
       await loadLeaflet();
       console.log('Leaflet loaded, initializing company map...');
       
-       setTimeout(() => {
+       setTimeout(async () => {
          if (mapContainerRef.current && window.L) {
            console.log('Creating company map...');
            console.log('Selected company:', selectedCompany);
            
-           // Clean up existing map if it exists
-           if (mapRef.current) {
-             console.log('Cleaning up existing map...');
-             mapRef.current.remove();
-             mapRef.current = null;
-           }
-           
-           // Clear the container
-           if (mapContainerRef.current) {
-             mapContainerRef.current.innerHTML = '';
-           }
+          // Clean up existing map if it exists
+          if (mapRef.current) {
+            console.log('Cleaning up existing map...');
+            mapRef.current.remove();
+            mapRef.current = null;
+          }
+          
+          // Clear the container and remove any existing SVG elements
+          if (mapContainerRef.current) {
+            mapContainerRef.current.innerHTML = '';
+            // Remove any existing SVG elements
+            const existingSvgs = mapContainerRef.current.querySelectorAll('svg');
+            existingSvgs.forEach(svg => svg.remove());
+          }
            
            // Check if selected company has location data
            if (!selectedCompany) {
@@ -319,13 +328,39 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
             `);
           }
 
-          // Add selected company marker
-          const distance = currentUserLocation ? calculateDistance(
-            currentUserLocation.latitude,
-            currentUserLocation.longitude,
-            selectedCompany.latitude!,
-            selectedCompany.longitude!
-          ) : 0;
+          // Calculate road distance and route
+          let roadDistance = 0;
+          let roadDuration = 0;
+          let routeCoordinates: any[] = [];
+          
+          if (currentUserLocation) {
+            try {
+              const roadData = await calculateRoadDistance(
+                currentUserLocation.latitude,
+                currentUserLocation.longitude,
+                selectedCompany.latitude!,
+                selectedCompany.longitude!
+              );
+              roadDistance = roadData.distance;
+              roadDuration = roadData.duration;
+              routeCoordinates = roadData.route;
+              console.log('🛣️ Road route calculated:', routeCoordinates.length, 'points');
+            } catch (error) {
+              console.error('❌ Error calculating road distance:', error);
+              // Fallback to straight-line distance
+              roadDistance = calculateDistance(
+                currentUserLocation.latitude,
+                currentUserLocation.longitude,
+                selectedCompany.latitude!,
+                selectedCompany.longitude!
+              );
+              roadDuration = roadDistance * 1.5; // Rough estimate
+              routeCoordinates = [
+                [currentUserLocation.latitude, currentUserLocation.longitude],
+                [selectedCompany.latitude!, selectedCompany.longitude!]
+              ];
+            }
+          }
 
           const companyIcon = window.L.divIcon({
             className: 'custom-div-icon',
@@ -350,7 +385,7 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
                 ">
                   ${!selectedCompany.profilePicture ? selectedCompany.name.charAt(0) : ''}
                 </div>
-                ${distance > 0 ? `<div style="position: absolute; top: -30px; left: 50%; transform: translateX(-50%); background-color: #34a853; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${distance.toFixed(1)}km</div>` : ''}
+                ${roadDistance > 0 ? `<div style="position: absolute; top: -30px; left: 50%; transform: translateX(-50%); background-color: #34a853; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${roadDistance.toFixed(1)}km</div>` : ''}
               </div>
             `,
             iconSize: [40, 40],
@@ -381,7 +416,14 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
                 <p style="margin: 0 0 4px 0; color: #4285f4; font-size: 12px; display: flex; align-items: center;">
                   <span style="margin-right: 6px;">👥</span> ${selectedCompany.availableSlots}/${selectedCompany.totalSlots} slots available
                 </p>
-                ${distance > 0 ? `<p style="margin: 0; color: #34a853; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><span style="margin-right: 6px;">📏</span> ${distance.toFixed(1)} km away</p>` : ''}
+                ${roadDistance > 0 ? `
+                  <p style="margin: 0 0 4px 0; color: #34a853; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
+                    <span style="margin-right: 6px;">🛣️</span> ${roadDistance.toFixed(1)} km by road
+                  </p>
+                  <p style="margin: 0; color: #fbbc04; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
+                    <span style="margin-right: 6px;">⏱️</span> ${roadDuration.toFixed(0)} min drive
+                  </p>
+                ` : ''}
               </div>
               <div style="margin-top: 12px; display: flex; gap: 8px;">
                 <button onclick="window.viewPictures('${selectedCompany.id}')" style="
@@ -405,47 +447,89 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
             </div>
           `);
 
-          // Add connection line between user and company if both have locations
-          if (currentUserLocation) {
-            const connectionLine = window.L.polyline([
-              [currentUserLocation.latitude, currentUserLocation.longitude],
-              [selectedCompany.latitude!, selectedCompany.longitude!]
-            ], {
+          // Add road route line between user and company if both have locations
+          if (currentUserLocation && routeCoordinates.length > 0) {
+            // Draw the actual road route
+            const roadRoute = window.L.polyline(routeCoordinates, {
               color: '#4285f4',
-              weight: 3,
-              opacity: 0.8,
-              dashArray: '10, 10',
-              className: 'connection-line'
+              weight: 4,
+              opacity: 0.9,
+              dashArray: '15, 10',
+              className: 'road-route-line'
             }).addTo(mapRef.current);
 
-            // Add connection label at the midpoint
-            const midLat = (currentUserLocation.latitude + selectedCompany.latitude!) / 2;
-            const midLng = (currentUserLocation.longitude + selectedCompany.longitude!) / 2;
+            // Create SVG path for text to follow the road
+            const createPathText = () => {
+              if (routeCoordinates.length < 2) return;
+              
+              // Create SVG path from route coordinates
+              let pathData = `M ${routeCoordinates[0][1]},${routeCoordinates[0][0]}`;
+              for (let i = 1; i < routeCoordinates.length; i++) {
+                pathData += ` L ${routeCoordinates[i][1]},${routeCoordinates[i][0]}`;
+              }
+              
+              // Create SVG element
+              const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+              svg.setAttribute('width', '100%');
+              svg.setAttribute('height', '100%');
+              svg.setAttribute('style', 'position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1000;');
+              
+              // Create path element
+              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+              path.setAttribute('d', pathData);
+              path.setAttribute('fill', 'none');
+              path.setAttribute('stroke', 'none');
+              path.setAttribute('id', 'route-path');
+              
+              // Create text element that follows the path
+              const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              text.setAttribute('fill', '#4285f4');
+              text.setAttribute('font-size', '14');
+              text.setAttribute('font-weight', 'bold');
+              text.setAttribute('text-anchor', 'middle');
+              text.setAttribute('stroke', 'white');
+              text.setAttribute('stroke-width', '3');
+              text.setAttribute('paint-order', 'stroke');
+              text.setAttribute('style', 'filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));');
+              
+              // Create textPath element
+              const textPath = document.createElementNS('http://www.w3.org/2000/svg', 'textPath');
+              textPath.setAttribute('href', '#route-path');
+              textPath.setAttribute('startOffset', '50%');
+              textPath.textContent = `🛣️ ${roadDistance.toFixed(1)} km (${roadDuration.toFixed(0)} min)`;
+              
+              text.appendChild(textPath);
+              svg.appendChild(path);
+              svg.appendChild(text);
+              
+              return svg;
+            };
+
+            // Add the path-following text to the map
+            const pathTextSvg = createPathText();
+            if (pathTextSvg && mapContainerRef.current) {
+              mapContainerRef.current.appendChild(pathTextSvg);
+            }
+
+            // Also add a small marker at the midpoint for better visibility
+            const midPointIndex = Math.floor(routeCoordinates.length / 2);
+            const midPoint = routeCoordinates[midPointIndex];
             
-            const connectionLabel = window.L.marker([midLat, midLng], {
+            const routeMarker = window.L.marker(midPoint, {
               icon: window.L.divIcon({
-                className: 'connection-label',
+                className: 'route-marker',
                 html: `
                   <div style="
+                    width: 8px;
+                    height: 8px;
                     background-color: #4285f4;
-                    color: white;
-                    padding: 6px 12px;
-                    border-radius: 15px;
-                    font-size: 11px;
-                    font-weight: bold;
-                    text-align: center;
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
                     border: 2px solid white;
-                    white-space: nowrap;
-                    min-width: 60px;
-                    display: inline-block;
-                    line-height: 1.2;
-                  ">
-                    ${distance.toFixed(1)} km
-                  </div>
+                    border-radius: 50%;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                  "></div>
                 `,
-                iconSize: [0, 0],
-                iconAnchor: [0, 0]
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
               })
             }).addTo(mapRef.current);
           }
@@ -517,6 +601,48 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+  };
+
+  // Calculate road distance using OpenRouteService API
+  const calculateRoadDistance = async (lat1: number, lon1: number, lat2: number, lon2: number): Promise<{ distance: number; duration: number; route: any[] }> => {
+    try {
+      console.log('🛣️ Calculating road distance from', lat1, lon1, 'to', lat2, lon2);
+      
+      // Using OpenRouteService API (free tier available)
+      const response = await fetch(`https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf6248a8b8b8b8&start=${lon1},${lat1}&end=${lon2},${lat2}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const feature = data.features[0];
+        const distance = feature.properties.summary.distance / 1000; // Convert to kilometers
+        const duration = feature.properties.summary.duration / 60; // Convert to minutes
+        const coordinates = feature.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]); // Convert [lng, lat] to [lat, lng]
+        
+        console.log('✅ Road distance calculated:', { distance: distance.toFixed(1), duration: duration.toFixed(1) });
+        
+        return {
+          distance: distance,
+          duration: duration,
+          route: coordinates
+        };
+      } else {
+        throw new Error('No route found');
+      }
+    } catch (error) {
+      console.error('❌ Error calculating road distance:', error);
+      // Fallback to straight-line distance
+      const straightDistance = calculateDistance(lat1, lon1, lat2, lon2);
+      return {
+        distance: straightDistance,
+        duration: straightDistance * 1.5, // Rough estimate: 1.5 minutes per km
+        route: [[lat1, lon1], [lat2, lon2]]
+      };
+    }
   };
 
   if (!visible) return null;
@@ -710,18 +836,26 @@ export default function CompanyLocationMap({ visible, onClose, companies, curren
             100% { transform: rotate(360deg); }
           }
           
-          .connection-line {
-            animation: dash 2s linear infinite;
+          .road-route-line {
+            animation: dash 3s linear infinite;
           }
           
           @keyframes dash {
             to {
-              stroke-dashoffset: -20;
+              stroke-dashoffset: -25;
             }
           }
           
-          .connection-label {
+          .route-label {
             z-index: 1000 !important;
+          }
+          
+          .route-marker {
+            z-index: 1001 !important;
+          }
+          
+          svg text {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           }
         `}</style>
       </View>

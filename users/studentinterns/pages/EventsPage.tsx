@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
@@ -53,14 +54,67 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchEvents();
+    
+    // Animate on mount
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
+      setShowSkeleton(true);
       
       if (!currentUser) {
         console.log('No current user found');
@@ -85,6 +139,10 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
       Alert.alert('Error', 'Failed to fetch events. Please try again.');
     } finally {
       setLoading(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
@@ -105,12 +163,12 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
 
   const getEventTypeColor = (type: string) => {
     switch (type) {
-      case 'meeting': return '#4285f4';
-      case 'workshop': return '#34a853';
-      case 'orientation': return '#fbbc04';
-      case 'deadline': return '#ea4335';
-      case 'other': return '#9c27b0';
-      default: return '#666';
+      case 'meeting': return '#1E3A5F'; // Deep navy blue
+      case 'workshop': return '#2D5A3D'; // Forest green
+      case 'orientation': return '#F4D03F'; // Bright yellow
+      case 'deadline': return '#E8A598'; // Soft coral
+      case 'other': return '#1E3A5F'; // Deep navy blue
+      default: return '#1E3A5F';
     }
   };
 
@@ -127,11 +185,11 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'upcoming': return '#4285f4';
-      case 'ongoing': return '#34a853';
-      case 'completed': return '#666';
-      case 'cancelled': return '#ea4335';
-      default: return '#666';
+      case 'upcoming': return '#F4D03F'; // Bright yellow
+      case 'ongoing': return '#2D5A3D'; // Forest green
+      case 'completed': return '#1E3A5F'; // Deep navy blue
+      case 'cancelled': return '#E8A598'; // Soft coral
+      default: return '#1E3A5F';
     }
   };
 
@@ -159,69 +217,149 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
     return events.filter(event => event.date >= today && event.status !== 'completed');
   };
 
+  const toggleEventExpansion = (eventId: string) => {
+    setExpandedEvent(expandedEvent === eventId ? null : eventId);
+  };
+
+  // Enhanced Status Badge Component
+  const StatusBadge = ({ status }: { status: string }) => {
+    const getStatusConfig = () => {
+      switch (status) {
+        case 'upcoming': return { color: '#F4D03F', text: 'Upcoming', icon: 'schedule' };
+        case 'ongoing': return { color: '#2D5A3D', text: 'Ongoing', icon: 'play-circle' };
+        case 'completed': return { color: '#1E3A5F', text: 'Completed', icon: 'check-circle' };
+        case 'cancelled': return { color: '#E8A598', text: 'Cancelled', icon: 'cancel' };
+        default: return { color: '#1E3A5F', text: 'Unknown', icon: 'help' };
+      }
+    };
+    
+    const config = getStatusConfig();
+    
+    return (
+      <View style={[styles.enhancedStatusBadge, { backgroundColor: config.color }]}>
+        <MaterialIcons name={config.icon as any} size={14} color="#fff" />
+        <Text style={styles.enhancedStatusText}>{config.text}</Text>
+      </View>
+    );
+  };
+
   const getEventsByDate = (date: string) => {
     return events.filter(event => event.date === date);
   };
 
-  const EventCard = ({ event }: { event: Event }) => (
-    <View style={styles.eventCard}>
-      <View style={styles.eventHeader}>
-        <View style={[styles.eventTypeIcon, { backgroundColor: getEventTypeColor(event.type) }]}>
-          <MaterialIcons 
-            name={getEventTypeIcon(event.type)} 
-            size={20} 
-            color="#fff" 
-          />
+  // Skeleton Components
+  const SkeletonEventCard = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonEventCard}>
+        <View style={styles.skeletonEventHeader}>
+          <Animated.View style={[styles.skeletonEventTypeIcon, { opacity: shimmerOpacity }]} />
+          <View style={styles.skeletonEventInfo}>
+            <View style={styles.skeletonEventTitleRow}>
+              <Animated.View style={[styles.skeletonEventTitle, { opacity: shimmerOpacity }]} />
+              <View style={styles.skeletonEventBadges}>
+                <Animated.View style={[styles.skeletonStatusBadge, { opacity: shimmerOpacity }]} />
+                <Animated.View style={[styles.skeletonCreatorBadge, { opacity: shimmerOpacity }]} />
+              </View>
+            </View>
+            <Animated.View style={[styles.skeletonEventDate, { opacity: shimmerOpacity }]} />
+          </View>
+          <Animated.View style={[styles.skeletonExpandIcon, { opacity: shimmerOpacity }]} />
         </View>
-        <View style={styles.eventInfo}>
-          <View style={styles.eventTitleRow}>
-            <Text style={styles.eventTitle}>{event.title}</Text>
-            <View style={[
-              styles.eventCreatorBadge, 
-              { backgroundColor: event.createdBy === 'Coordinator' ? '#4285f4' : '#34a853' }
-            ]}>
+      </View>
+    );
+  };
+
+  const EventCard = ({ event }: { event: Event }) => {
+    const isExpanded = expandedEvent === event.id;
+    
+    return (
+      <Animated.View 
+        style={[
+          styles.enhancedEventCard,
+          { 
+            transform: [{ scale: isExpanded ? 1.02 : 1 }],
+            elevation: isExpanded ? 12 : 6,
+          }
+        ]}
+      >
+        <TouchableOpacity 
+          onPress={() => toggleEventExpansion(event.id)}
+          style={styles.cardTouchable}
+        >
+          <View style={styles.eventHeader}>
+            <View style={[styles.eventTypeIcon, { backgroundColor: getEventTypeColor(event.type) }]}>
               <MaterialIcons 
-                name={event.createdBy === 'Coordinator' ? 'school' : 'business'} 
-                size={12} 
+                name={getEventTypeIcon(event.type)} 
+                size={24} 
                 color="#fff" 
               />
-              <Text style={styles.eventCreatorText}>{event.createdByName}</Text>
             </View>
+            <View style={styles.eventInfo}>
+              <View style={styles.eventTitleRow}>
+                <Text style={styles.eventTitle}>{event.title}</Text>
+                <View style={styles.eventBadges}>
+                  <StatusBadge status={event.status} />
+                  <View style={[
+                    styles.eventCreatorBadge, 
+                    { backgroundColor: event.createdBy === 'Coordinator' ? '#2D5A3D' : '#E8A598' }
+                  ]}>
+                    <MaterialIcons 
+                      name={event.createdBy === 'Coordinator' ? 'school' : 'business'} 
+                      size={12} 
+                      color="#fff" 
+                    />
+                    <Text style={styles.eventCreatorText}>{event.createdByName}</Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={styles.eventDate}>
+                {formatDate(event.date)} at {event.time}
+              </Text>
+            </View>
+            <MaterialIcons 
+              name={isExpanded ? "expand-less" : "expand-more"} 
+              size={24} 
+              color="#F4D03F" 
+            />
           </View>
-          <Text style={styles.eventDate}>
-            {formatDate(event.date)} at {event.time}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.eventDetails}>
-        <Text style={styles.eventDescription}>{event.description}</Text>
-        
-        <View style={styles.eventMeta}>
-          <View style={styles.metaItem}>
-            <MaterialIcons name="location-on" size={16} color="#666" />
-            <Text style={styles.metaText}>{event.location}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <MaterialIcons name="people" size={16} color="#666" />
-            <Text style={styles.metaText}>
-              {event.attendees}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attendees
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.eventActions}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewEvent(event)}
-        >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View Details</Text>
         </TouchableOpacity>
-      </View>
-    </View>
-  );
+
+        {isExpanded && (
+          <Animated.View style={styles.expandedContent}>
+            <Text style={styles.eventDescription}>{event.description}</Text>
+            
+            <View style={styles.eventMeta}>
+              <View style={styles.metaItem}>
+                <MaterialIcons name="location-on" size={18} color="#F4D03F" />
+                <Text style={styles.metaText}>{event.location}</Text>
+              </View>
+              <View style={styles.metaItem}>
+                <MaterialIcons name="people" size={18} color="#F4D03F" />
+                <Text style={styles.metaText}>
+                  {event.attendees}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attendees
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.eventActions}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewEvent(event)}
+              >
+                <MaterialIcons name="visibility" size={18} color="#fff" />
+                <Text style={styles.actionButtonText}>View Details</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
+      </Animated.View>
+    );
+  };
 
   const CalendarView = () => {
     const today = new Date();
@@ -329,28 +467,37 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading events...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.contentWrapper}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Events</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              style={styles.calendarButton}
-              onPress={() => setShowCalendar(!showCalendar)}
-            >
-              <MaterialIcons name="calendar-today" size={20} color="#4285f4" />
-              <Text style={styles.calendarButtonText}>Calendar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <Animated.ScrollView 
+        style={[styles.scrollView, { transform: [{ scale: scaleAnim }] }]} 
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.contentWrapper}>
+          {/* Header */}
+          <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.headerGradient}>
+              <Text style={styles.headerTitle}>Events</Text>
+              <Text style={styles.headerSubtitle}>
+                {getUpcomingEvents().length} upcoming {getUpcomingEvents().length === 1 ? 'event' : 'events'}
+              </Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity 
+                  style={styles.calendarButton}
+                  onPress={() => setShowCalendar(!showCalendar)}
+                >
+                  <MaterialIcons name="calendar-today" size={20} color="#F4D03F" />
+                  <Text style={styles.calendarButtonText}>Calendar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
 
         {/* Calendar View */}
         {showCalendar && (
@@ -359,30 +506,37 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
           </View>
         )}
 
-        {/* Events List */}
-        <View style={styles.eventsList}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming Events</Text>
-            <Text style={styles.sectionSubtitle}>
-              {getUpcomingEvents().length} {getUpcomingEvents().length === 1 ? 'event' : 'events'} scheduled
-            </Text>
-          </View>
-
-          {getUpcomingEvents().length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="event" size={64} color="#ccc" />
-              <Text style={styles.emptyStateTitle}>No upcoming events</Text>
-              <Text style={styles.emptyStateText}>
-                Events will appear here when your coordinator creates them
+          {/* Events List */}
+          <View style={styles.eventsList}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Upcoming Events</Text>
+              <Text style={styles.sectionSubtitle}>
+                {getUpcomingEvents().length} {getUpcomingEvents().length === 1 ? 'event' : 'events'} scheduled
               </Text>
             </View>
-          ) : (
-            getUpcomingEvents().map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))
-          )}
+
+            {showSkeleton ? (
+              <>
+                <SkeletonEventCard />
+                <SkeletonEventCard />
+                <SkeletonEventCard />
+              </>
+            ) : getUpcomingEvents().length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialIcons name="event" size={64} color="#02050a" />
+                <Text style={styles.emptyStateTitle}>No upcoming events</Text>
+                <Text style={styles.emptyStateText}>
+                  Events will appear here when your coordinator creates them
+                </Text>
+              </View>
+            ) : (
+              getUpcomingEvents().map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))
+            )}
+          </View>
         </View>
-      </View>
+      </Animated.ScrollView>
 
       {/* Event Details Modal */}
       {selectedEvent && (
@@ -485,14 +639,17 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
           </View>
         </Modal>
       )}
-    </ScrollView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
+  },
+  scrollView: {
+    flex: 1,
   },
   contentWrapper: {
     flex: 1,
@@ -505,30 +662,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1E3A5F', // Deep navy blue
     padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  headerGradient: {
+    position: 'relative',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1a1a2e',
-    letterSpacing: -0.5,
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+    fontFamily: 'System',
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '500',
+    marginBottom: 20,
   },
   headerActions: {
     flexDirection: 'row',
@@ -537,22 +702,22 @@ const styles = StyleSheet.create({
   calendarButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(244, 208, 63, 0.2)',
     borderWidth: 2,
-    borderColor: '#4285f4',
-    backgroundColor: '#f8f9fa',
-    shadowColor: '#4285f4',
+    borderColor: '#F4D03F',
+    shadowColor: '#F4D03F',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
   },
   calendarButtonText: {
-    color: '#4285f4',
+    color: '#F4D03F',
     fontSize: 15,
-    fontWeight: '600',
-    marginLeft: 6,
+    fontWeight: 'bold',
+    marginLeft: 8,
     letterSpacing: 0.2,
   },
   calendarSection: {
@@ -786,6 +951,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
+  enhancedEventCard: {
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 24,
+    marginBottom: 20,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    overflow: 'hidden',
+  },
+  cardTouchable: {
+    padding: 24,
+  },
+  expandedContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  eventBadges: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  enhancedStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  enhancedStatusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
   eventHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -813,12 +1015,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   eventTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a2e',
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
     letterSpacing: -0.3,
     flex: 1,
     marginRight: 12,
+    fontFamily: 'System',
   },
   eventCreatorBadge: {
     flexDirection: 'row',
@@ -839,18 +1042,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   eventDate: {
-    fontSize: 15,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '600',
   },
   eventDetails: {
     marginBottom: 15,
   },
   eventDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 10,
+    fontSize: 15,
+    color: '#fff',
+    lineHeight: 22,
+    marginBottom: 16,
+    opacity: 0.9,
+    fontWeight: '400',
   },
   eventMeta: {
     gap: 8,
@@ -860,9 +1065,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metaText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
+    fontSize: 15,
+    color: '#fff',
+    marginLeft: 10,
+    fontWeight: '500',
   },
   eventActions: {
     flexDirection: 'row',
@@ -883,7 +1089,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   viewButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   actionButtonText: {
     color: '#fff',
@@ -897,17 +1103,20 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   emptyStateTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
+    color: '#02050a',
+    marginTop: 20,
+    marginBottom: 12,
+    fontFamily: 'System',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#02050a',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
+    opacity: 0.7,
+    fontWeight: '400',
   },
   // Event Details Modal Styles
   eventDetailsContainer: {
@@ -1035,5 +1244,75 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  // Skeleton Loading Styles
+  skeletonEventCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 24,
+    marginBottom: 20,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    overflow: 'hidden',
+    opacity: 0.7,
+    padding: 24,
+  },
+  skeletonEventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  skeletonEventTypeIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+    marginRight: 16,
+  },
+  skeletonEventInfo: {
+    flex: 1,
+  },
+  skeletonEventTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  skeletonEventTitle: {
+    width: '60%',
+    height: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  skeletonEventBadges: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  skeletonStatusBadge: {
+    width: 80,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+  },
+  skeletonCreatorBadge: {
+    width: 60,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+  },
+  skeletonEventDate: {
+    width: '40%',
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 6,
+  },
+  skeletonExpandIcon: {
+    width: 24,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
   },
 });

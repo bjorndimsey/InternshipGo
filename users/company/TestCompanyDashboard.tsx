@@ -7,9 +7,18 @@ export default function TestCompanyDashboard() {
     Alert.alert('Logout', 'Logout functionality will be implemented soon.');
   };
 
+  // Mock user data for testing
+  const currentUser = {
+    name: 'Test Company',
+    email: 'test@company.com',
+    picture: undefined,
+    id: 'test-company-id',
+    user_type: 'company'
+  };
+
   return (
     <View style={styles.container}>
-      <CompanyDashboard onLogout={handleLogout} />
+      <CompanyDashboard onLogout={handleLogout} currentUser={currentUser} />
     </View>
   );
 }

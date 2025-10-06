@@ -155,6 +155,10 @@ class CoordinatorController {
             
             const isAdminCoordinator = adminResult.data && adminResult.data.length > 0;
             
+            // Get assigned interns count for this coordinator
+            const internsResult = await query('interns', 'select', ['id'], { coordinator_id: coordinator.user_id });
+            const assignedInternsCount = internsResult.data ? internsResult.data.length : 0;
+            
             coordinators.push({
               id: coordinator.id.toString(),
               userId: coordinator.user_id.toString(),
@@ -171,9 +175,12 @@ class CoordinatorController {
               isAdminCoordinator: isAdminCoordinator,
               adminId: isAdminCoordinator ? adminResult.data[0].id.toString() : null,
               adminPermissions: isAdminCoordinator ? adminResult.data[0].permissions : null,
-              assignedInterns: 0, // This would need to be calculated from related tables
+              assignedInterns: assignedInternsCount,
               university: 'University', // This would need to be added to schema or derived
-              department: coordinator.program // Using program as department for now
+              department: coordinator.program, // Using program as department for now
+              campusAssignment: coordinator.campus_assignment,
+              assignedBy: coordinator.assigned_by ? coordinator.assigned_by.toString() : null,
+              assignedAt: coordinator.assigned_at
             });
           }
         }
@@ -923,6 +930,299 @@ class CoordinatorController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch coordinator profile',
+        error: error.message
+      });
+    }
+  }
+
+  // Get coordinator profile by user_id (returns coordinators.id)
+  static async getCoordinatorProfileByUserId(req, res) {
+    try {
+      const { userId } = req.params;
+      console.log('👨‍🏫 Fetching coordinator profile for user_id:', userId);
+
+      // Get coordinator by user_id
+      const coordinatorResult = await query('coordinators', 'select', null, { user_id: parseInt(userId) });
+      const coordinator = coordinatorResult.data && coordinatorResult.data.length > 0 ? coordinatorResult.data[0] : null;
+      
+      if (!coordinator) {
+        console.log('❌ Coordinator not found for user_id:', userId);
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      // Get user details
+      const userResult = await query('users', 'select', null, { id: parseInt(userId) });
+      const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
+
+      if (!user) {
+        console.log('❌ User not found for user_id:', userId);
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      console.log('✅ Found coordinator profile by user_id:', {
+        coordinators_id: coordinator.id,
+        user_id: user.id,
+        email: user.email
+      });
+
+      res.json({
+        success: true,
+        user: {
+          id: coordinator.id, // Return coordinators.id for use in other APIs
+          user_id: user.id,
+          email: user.email,
+          user_type: user.user_type,
+          google_id: user.google_id,
+          profile_picture: user.profile_picture,
+          first_name: coordinator.first_name,
+          last_name: coordinator.last_name,
+          program: coordinator.program,
+          phone_number: coordinator.phone_number,
+          address: coordinator.address
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching coordinator profile by user_id:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch coordinator profile',
+        error: error.message
+      });
+    }
+  }
+
+  // Campus Assignment methods
+  static async assignCampus(req, res) {
+    try {
+      const { id } = req.params;
+      const { campusType, assignedBy } = req.body;
+
+      if (!campusType || !assignedBy) {
+        return res.status(400).json({
+          success: false,
+          message: 'campusType and assignedBy are required'
+        });
+      }
+
+      if (!['in-campus', 'off-campus'].includes(campusType)) {
+        return res.status(400).json({
+          success: false,
+          message: 'campusType must be either "in-campus" or "off-campus"'
+        });
+      }
+
+      // Check if coordinator exists
+      const coordinatorResult = await query('coordinators', 'select', null, { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      // Update coordinator with campus assignment
+      await query('coordinators', 'update', {
+        campus_assignment: campusType,
+        assigned_by: parseInt(assignedBy),
+        assigned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, { id: parseInt(id) });
+
+      // Create notification for the coordinator
+      const CoordinatorNotificationController = require('./coordinatorNotificationController');
+      const notification = await CoordinatorNotificationController.createCampusAssignmentNotification(
+        id, 
+        campusType, 
+        assignedBy
+      );
+      
+      if (notification) {
+        console.log('🔔 Campus assignment notification created successfully');
+      } else {
+        console.log('⚠️ Failed to create campus assignment notification');
+      }
+
+      res.json({
+        success: true,
+        message: `Coordinator assigned to ${campusType} duties successfully`
+      });
+    } catch (error) {
+      console.error('Error assigning campus:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to assign campus',
+        error: error.message
+      });
+    }
+  }
+
+  static async getCampusAssignment(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Check if coordinator exists and get campus assignment
+      const coordinatorResult = await query('coordinators', 'select', ['campus_assignment', 'assigned_by', 'assigned_at'], { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      const coordinator = coordinatorResult.data[0];
+      
+      if (!coordinator.campus_assignment) {
+        return res.json({
+          success: true,
+          message: 'No campus assignment found',
+          assignment: null
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Campus assignment retrieved successfully',
+        assignment: {
+          coordinatorId: parseInt(id),
+          campusType: coordinator.campus_assignment,
+          assignedBy: coordinator.assigned_by,
+          assignedAt: coordinator.assigned_at
+        }
+      });
+    } catch (error) {
+      console.error('Error getting campus assignment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get campus assignment',
+        error: error.message
+      });
+    }
+  }
+
+  static async updateCampusAssignment(req, res) {
+    try {
+      const { id } = req.params;
+      const { campusType, updatedBy } = req.body;
+
+      if (!campusType || !updatedBy) {
+        return res.status(400).json({
+          success: false,
+          message: 'campusType and updatedBy are required'
+        });
+      }
+
+      if (!['in-campus', 'off-campus'].includes(campusType)) {
+        return res.status(400).json({
+          success: false,
+          message: 'campusType must be either "in-campus" or "off-campus"'
+        });
+      }
+
+      // Check if coordinator exists
+      const coordinatorResult = await query('coordinators', 'select', null, { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      // Check if coordinator has a campus assignment
+      if (!coordinatorResult.data[0].campus_assignment) {
+        return res.status(404).json({
+          success: false,
+          message: 'No campus assignment found for this coordinator'
+        });
+      }
+
+      // Update campus assignment
+      await query('coordinators', 'update', {
+        campus_assignment: campusType,
+        assigned_by: parseInt(updatedBy),
+        assigned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, { id: parseInt(id) });
+
+      res.json({
+        success: true,
+        message: `Coordinator campus assignment updated to ${campusType} successfully`
+      });
+    } catch (error) {
+      console.error('Error updating campus assignment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update campus assignment',
+        error: error.message
+      });
+    }
+  }
+
+  static async removeCampusAssignment(req, res) {
+    try {
+      const { id } = req.params;
+      const { removedBy } = req.body;
+
+      if (!removedBy) {
+        return res.status(400).json({
+          success: false,
+          message: 'removedBy is required'
+        });
+      }
+
+      // Check if coordinator exists
+      const coordinatorResult = await query('coordinators', 'select', null, { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      // Check if coordinator has a campus assignment
+      if (!coordinatorResult.data[0].campus_assignment) {
+        return res.status(404).json({
+          success: false,
+          message: 'No campus assignment found for this coordinator'
+        });
+      }
+
+      // Remove campus assignment (set to null)
+      await query('coordinators', 'update', {
+        campus_assignment: null,
+        assigned_by: null,
+        assigned_at: null,
+        updated_at: new Date().toISOString()
+      }, { id: parseInt(id) });
+
+      // Create notification for campus assignment removal
+      const CoordinatorNotificationController = require('./coordinatorNotificationController');
+      const notification = await CoordinatorNotificationController.createCampusAssignmentNotification(
+        id, 
+        'removed', 
+        removedBy
+      );
+      
+      if (notification) {
+        console.log('🔔 Campus assignment removal notification created successfully');
+      } else {
+        console.log('⚠️ Failed to create campus assignment removal notification');
+      }
+
+      res.json({
+        success: true,
+        message: 'Campus assignment removed successfully'
+      });
+    } catch (error) {
+      console.error('Error removing campus assignment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to remove campus assignment',
         error: error.message
       });
     }

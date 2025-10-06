@@ -24,6 +24,7 @@ class StudentController {
             id: student.id,
             id_number: student.id_number,
             first_name: student.first_name,
+            middle_name: student.middle_name,
             last_name: student.last_name,
             major: student.major,
             year: student.year,
@@ -121,6 +122,96 @@ class StudentController {
       res.status(500).json({
         success: false,
         message: 'Failed to search for student',
+        error: error.message
+      });
+    }
+  }
+
+  // Update student profile
+  static async updateProfile(req, res) {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      console.log('Updating student profile:', id, updateData);
+
+      // First, get the student to find the user_id
+      const studentResult = await query('students', 'select', null, { user_id: id });
+      
+      if (!studentResult.data || studentResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Student not found'
+        });
+      }
+
+      const student = studentResult.data[0];
+
+      // Prepare the update data for students table
+      const studentUpdateData = {};
+      const allowedStudentFields = [
+        'skills', 'interests', 'bio', 'phone_number', 'linkedin_url', 
+        'github_url', 'portfolio_url', 'gpa', 'expected_graduation', 
+        'availability', 'preferred_location', 'work_experience', 
+        'projects', 'achievements', 'first_name', 'middle_name', 'last_name', 
+        'age', 'year', 'date_of_birth', 'program', 'major', 'address'
+      ];
+
+      // Filter and map the update data
+      Object.keys(updateData).forEach(key => {
+        if (allowedStudentFields.includes(key) && updateData[key] !== undefined) {
+          studentUpdateData[key] = updateData[key];
+        }
+      });
+
+      // Add updated_at timestamp
+      studentUpdateData.updated_at = new Date().toISOString();
+
+      // Update the students table
+      if (Object.keys(studentUpdateData).length > 0) {
+        const updateResult = await query('students', 'update', studentUpdateData, { user_id: id });
+        
+        if (!updateResult.success) {
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to update student profile',
+            error: updateResult.error
+          });
+        }
+      }
+
+      // Update profile picture and background picture in users table if provided
+      const userUpdateData = {};
+      if (updateData.profilePicture) {
+        userUpdateData.profile_picture = updateData.profilePicture;
+      }
+      if (updateData.backgroundPicture) {
+        userUpdateData.background_picture = updateData.backgroundPicture;
+      }
+
+      if (Object.keys(userUpdateData).length > 0) {
+        userUpdateData.updated_at = new Date().toISOString();
+        const userUpdateResult = await query('users', 'update', userUpdateData, { id: id });
+        
+        if (!userUpdateResult.success) {
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to update user profile pictures',
+            error: userUpdateResult.error
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Student profile updated successfully'
+      });
+
+    } catch (error) {
+      console.error('Error updating student profile:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update student profile',
         error: error.message
       });
     }

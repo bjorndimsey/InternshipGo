@@ -20,6 +20,9 @@ router.get('/:id', CoordinatorController.getCoordinatorById);
 // GET /api/coordinators/profile/:id - Get coordinator profile by coordinators.id
 router.get('/profile/:id', CoordinatorController.getCoordinatorProfile);
 
+// GET /api/coordinators/profile-by-user/:userId - Get coordinator profile by user_id
+router.get('/profile-by-user/:userId', CoordinatorController.getCoordinatorProfileByUserId);
+
 // POST /api/coordinators - Create new coordinator
 router.post('/', CoordinatorController.createCoordinator);
 
@@ -37,5 +40,18 @@ router.put('/:id/partnership', CoordinatorController.updateCoordinatorPartnershi
 
 // GET /api/coordinators/admin-profile/:userId - Get admin coordinator profile
 router.get('/admin-profile/:userId', CoordinatorController.getAdminCoordinatorProfile);
+
+// Campus Assignment routes
+// POST /api/coordinators/:id/campus-assignment - Assign coordinator to campus
+router.post('/:id/campus-assignment', CoordinatorController.assignCampus);
+
+// GET /api/coordinators/:id/campus-assignment - Get coordinator campus assignment
+router.get('/:id/campus-assignment', CoordinatorController.getCampusAssignment);
+
+// PUT /api/coordinators/:id/campus-assignment - Update coordinator campus assignment
+router.put('/:id/campus-assignment', CoordinatorController.updateCampusAssignment);
+
+// DELETE /api/coordinators/:id/campus-assignment - Remove coordinator campus assignment
+router.delete('/:id/campus-assignment', CoordinatorController.removeCampusAssignment);
 
 module.exports = router;

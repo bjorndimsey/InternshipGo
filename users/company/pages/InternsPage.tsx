@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Alert,
   TextInput,
   Modal,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
@@ -36,6 +37,8 @@ interface Intern {
   // Location data
   student_latitude?: number;
   student_longitude?: number;
+  // Student identification
+  id_number?: string;
   // Additional fields for display
   attendance?: {
     present: number;
@@ -69,6 +72,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [interns, setInterns] = useState<Intern[]>([]);
   const [filteredInterns, setFilteredInterns] = useState<Intern[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -76,6 +80,9 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
   const [selectedIntern, setSelectedIntern] = useState<Intern | null>(null);
   const [currentUserLocation, setCurrentUserLocation] = useState<{ latitude: number; longitude: number; profilePicture?: string } | null>(null);
+  const [pageAnimation] = useState(new Animated.Value(0));
+  const [statsAnimation] = useState(new Animated.Value(0));
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInterns();
@@ -89,7 +96,19 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const fetchInterns = async () => {
     try {
       setLoading(true);
+      setShowSkeleton(true);
+      
+      // Start page animation
+      Animated.timing(pageAnimation, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
+      
       console.log('Fetching approved applications for company:', currentUser.id);
+      
+      // Simulate loading delay for skeleton effect
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       const response = await apiService.getApprovedApplications(currentUser.id);
       
@@ -115,6 +134,8 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           // Location data
           student_latitude: app.student_latitude,
           student_longitude: app.student_longitude,
+          // Student identification
+          id_number: app.id_number || 'N/A',
           // Default values for display
           attendance: {
             present: 0,
@@ -137,13 +158,25 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         }));
         
         setInterns(transformedInterns);
+        
+        // Start stats animation after data is loaded
+        setTimeout(() => {
+          Animated.timing(statsAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }).start();
+          setShowSkeleton(false);
+        }, 500);
       } else {
         console.log('No approved applications found or error:', response);
         setInterns([]);
+        setShowSkeleton(false);
       }
     } catch (error) {
       console.error('Error fetching approved applications:', error);
       setInterns([]);
+      setShowSkeleton(false);
     } finally {
       setLoading(false);
     }
@@ -176,6 +209,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       filtered = filtered.filter(intern =>
         intern.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         intern.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        intern.id_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         intern.student_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         intern.major.toLowerCase().includes(searchQuery.toLowerCase()) ||
         intern.position.toLowerCase().includes(searchQuery.toLowerCase())
@@ -318,131 +352,231 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     return Math.round((attendance.present / attendance.totalDays) * 100);
   };
 
-  const InternCard = ({ intern }: { intern: Intern }) => {
-    const attendancePercentage = getAttendancePercentage(intern.attendance);
+  const toggleCardExpansion = (internId: string) => {
+    setExpandedCard(expandedCard === internId ? null : internId);
+  };
+
+  // Enhanced Progress Bar Component
+  const ProgressBar = ({ progress, color = '#F4D03F' }: { progress: number; color?: string }) => {
+    const progressAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+      Animated.timing(progressAnim, {
+        toValue: progress,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start();
+    }, [progress]);
     
     return (
-      <View style={styles.internCard}>
-        <View style={styles.internHeader}>
-        <View style={styles.profileContainer}>
-          {intern.student_profile_picture ? (
-            <Image source={{ uri: intern.student_profile_picture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>
-                {intern.first_name.charAt(0)}{intern.last_name.charAt(0)}
+      <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarBackground}>
+          <Animated.View 
+            style={[
+              styles.progressBarFill, 
+              { 
+                backgroundColor: color,
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                })
+              }
+            ]} 
+          />
+        </View>
+        <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+      </View>
+    );
+  };
+
+  // Skeleton Components
+  const SkeletonInternCard = () => {
+    return (
+      <View style={styles.skeletonInternCard}>
+        <View style={styles.skeletonInternHeader}>
+          <View style={styles.skeletonProfileContainer}>
+            <View style={styles.skeletonProfileImage} />
+          </View>
+          <View style={styles.skeletonInternInfo}>
+            <View style={styles.skeletonTextLine} />
+            <View style={[styles.skeletonTextLine, { width: '70%' }]} />
+            <View style={[styles.skeletonTextLine, { width: '60%' }]} />
+            <View style={[styles.skeletonTextLine, { width: '50%' }]} />
+          </View>
+          <View style={styles.skeletonStatusContainer}>
+            <View style={styles.skeletonStatusBadge} />
+          </View>
+        </View>
+
+        <View style={styles.skeletonInternDetails}>
+          <View style={styles.skeletonContactInfo}>
+            <View style={styles.skeletonContactItem} />
+            <View style={styles.skeletonContactItem} />
+          </View>
+
+          <View style={styles.skeletonRequirementsContainer}>
+            <View style={styles.skeletonRequirementsHeader}>
+              <View style={[styles.skeletonTextLine, { width: '40%' }]} />
+              <View style={[styles.skeletonTextLine, { width: '20%' }]} />
+            </View>
+            <View style={styles.skeletonProgressBar}>
+              <View style={styles.skeletonProgressFill} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.skeletonActionButtons}>
+          <View style={styles.skeletonActionButton} />
+          <View style={styles.skeletonActionButton} />
+          <View style={styles.skeletonActionButton} />
+        </View>
+      </View>
+    );
+  };
+
+  const InternCard = ({ intern }: { intern: Intern }) => {
+    const attendancePercentage = getAttendancePercentage(intern.attendance);
+    const isExpanded = expandedCard === intern.id;
+    
+    return (
+      <View style={[
+        styles.internCard,
+        isExpanded && styles.expandedInternCard
+      ]}>
+        <TouchableOpacity 
+          onPress={() => toggleCardExpansion(intern.id)}
+          style={styles.cardTouchable}
+        >
+          <View style={styles.internHeader}>
+            <View style={styles.profileContainer}>
+              {intern.student_profile_picture ? (
+                <Image 
+                  source={{ uri: intern.student_profile_picture }} 
+                  style={styles.profileImage}
+                  onError={(error) => {
+                    console.log('❌ Image load error for intern:', intern.id, error.nativeEvent.error);
+                  }}
+                  onLoad={() => {
+                    console.log('✅ Image loaded successfully for intern:', intern.id);
+                  }}
+                />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileText}>
+                    {intern.first_name.charAt(0)}{intern.last_name.charAt(0)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.internInfo}>
+              <Text style={styles.internName}>
+                {intern.first_name} {intern.last_name}
               </Text>
+              <Text style={styles.studentId}>{intern.id_number || intern.student_id}</Text>
+              <Text style={styles.position}>{intern.position}</Text>
+              <Text style={styles.department}>{intern.department || 'N/A'}</Text>
             </View>
-          )}
-        </View>
-        <View style={styles.internInfo}>
-          <Text style={styles.internName}>
-            {intern.first_name} {intern.last_name}
-          </Text>
-          <Text style={styles.studentId}>{intern.student_id}</Text>
-          <Text style={styles.position}>{intern.position}</Text>
-          <Text style={styles.department}>{intern.department || 'N/A'}</Text>
-        </View>
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
-              <Text style={styles.statusText}>{getStatusText(intern.status)}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.internDetails}>
-          <View style={styles.contactInfo}>
-            <View style={styles.contactItem}>
-              <MaterialIcons name="email" size={16} color="#666" />
-              <Text style={styles.contactText}>{intern.student_email}</Text>
-            </View>
-            <View style={styles.contactItem}>
-              <MaterialIcons name="school" size={16} color="#666" />
-              <Text style={styles.contactText}>{intern.major} • {intern.year}</Text>
-            </View>
-          </View>
-
-          <View style={styles.attendanceContainer}>
-            <View style={styles.attendanceHeader}>
-              <Text style={styles.attendanceLabel}>Attendance:</Text>
-              <Text style={styles.attendancePercentage}>{attendancePercentage}%</Text>
-            </View>
-            <View style={styles.attendanceBar}>
-              <View 
-                style={[
-                  styles.attendanceFill, 
-                  { 
-                    width: `${attendancePercentage}%`,
-                    backgroundColor: attendancePercentage >= 90 ? '#34a853' : attendancePercentage >= 70 ? '#fbbc04' : '#ea4335'
-                  }
-                ]} 
+            <View style={styles.statusContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
+                <Text style={styles.statusText}>{getStatusText(intern.status)}</Text>
+              </View>
+              <MaterialIcons 
+                name={isExpanded ? "expand-less" : "expand-more"} 
+                size={24} 
+                color="#F4D03F" 
+                style={styles.expandIcon}
               />
             </View>
-            <Text style={styles.attendanceDetails}>
-              {intern.attendance?.present || 0} present, {intern.attendance?.absent || 0} absent, {intern.attendance?.late || 0} late
-            </Text>
           </View>
 
-          <View style={styles.performanceContainer}>
-            <View style={styles.performanceHeader}>
-              <Text style={styles.performanceLabel}>Performance:</Text>
-              <View style={styles.ratingContainer}>
-                <MaterialIcons name="star" size={16} color="#fbbc04" />
-                <Text style={styles.ratingText}>{intern.performance?.rating || 0}/5</Text>
+          <View style={styles.internDetails}>
+            <View style={styles.attendanceContainer}>
+              <Text style={styles.attendanceLabel}>Attendance Progress:</Text>
+              <ProgressBar 
+                progress={attendancePercentage} 
+                color={attendancePercentage >= 90 ? '#2D5A3D' : '#F4D03F'} 
+              />
+              <Text style={styles.attendanceDetails}>
+                {intern.attendance?.present || 0} present, {intern.attendance?.absent || 0} absent, {intern.attendance?.late || 0} late
+              </Text>
+            </View>
+
+            <View style={styles.performanceContainer}>
+              <View style={styles.performanceHeader}>
+                <Text style={styles.performanceLabel}>Performance:</Text>
+                <View style={styles.ratingContainer}>
+                  <MaterialIcons name="star" size={16} color="#fbbc04" />
+                  <Text style={styles.ratingText}>{intern.performance?.rating || 0}/5</Text>
+                </View>
+              </View>
+              <Text style={styles.performanceFeedback} numberOfLines={2}>
+                {intern.performance?.feedback || 'No feedback available yet'}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            <View style={styles.contactInfo}>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="email" size={16} color="#fff" />
+                <Text style={styles.contactText}>{intern.student_email}</Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="school" size={16} color="#fff" />
+                <Text style={styles.contactText}>{intern.major} • {intern.year}</Text>
               </View>
             </View>
-            <Text style={styles.performanceFeedback} numberOfLines={2}>
-              {intern.performance?.feedback || 'No feedback available yet'}
-            </Text>
-          </View>
-        </View>
 
-        <View style={styles.actionButtons}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.viewButton]} 
-            onPress={() => handleViewDetails(intern)}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="visibility" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Details</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.locationButton]} 
-            onPress={() => handleViewLocation(intern)}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="location-on" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Location</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.attendanceButton]} 
-            onPress={() => handleAttendance(intern)}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="event-note" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Attendance</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.removeButton]} 
-            onPress={() => {
-              console.log('🔥 ===== BUTTON CLICK DEBUGGING =====');
-              console.log('🔥 Remove button onPress triggered');
-              console.log('🔥 Button pressed for intern:', intern.first_name, intern.last_name);
+            <View style={styles.expandedActionButtons}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewDetails(intern)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Details</Text>
+              </TouchableOpacity>
               
-              // Use modal approach instead of Alert
-              setSelectedIntern(intern);
-              setShowRemoveConfirmModal(true);
-              console.log('🔥 Showing remove confirmation modal');
-            }}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="remove" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Remove</Text>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.locationButton]} 
+                onPress={() => handleViewLocation(intern)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="location-on" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Location</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.attendanceButton]} 
+                onPress={() => handleAttendance(intern)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="event-note" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Attendance</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.removeButton]} 
+                onPress={() => {
+                  console.log('🔥 ===== BUTTON CLICK DEBUGGING =====');
+                  console.log('🔥 Remove button onPress triggered');
+                  console.log('🔥 Button pressed for intern:', intern.first_name, intern.last_name);
+                  
+                  // Use modal approach instead of Alert
+                  setSelectedIntern(intern);
+                  setShowRemoveConfirmModal(true);
+                  console.log('🔥 Showing remove confirmation modal');
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="remove" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -457,62 +591,144 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Interns Management</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={handleAddIntern}
-        >
-          <MaterialIcons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Add Intern</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Search Section */}
+    <Animated.View 
+      style={[
+        styles.container,
+        {
+          opacity: pageAnimation,
+          transform: [
+            {
+              translateY: pageAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      {/* Search and Filter Section */}
       <View style={styles.searchSection}>
-        <View style={styles.searchInputContainer}>
-          <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search interns..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
-          />
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputContainer}>
+            <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search interns..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#999"
+            />
+          </View>
         </View>
       </View>
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{filteredInterns.length}</Text>
-          <Text style={styles.statLabel}>Total Interns</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#34a853' }]}>
-            {filteredInterns.filter(i => i.status === 'active').length}
-          </Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#4285f4' }]}>
-            {filteredInterns.filter(i => i.status === 'completed').length}
-          </Text>
-          <Text style={styles.statLabel}>Completed</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
-            {filteredInterns.filter(i => getAttendancePercentage(i.attendance) >= 90).length}
-          </Text>
-          <Text style={styles.statLabel}>Good Attendance</Text>
-        </View>
+        {showSkeleton ? (
+          // Show skeleton stats
+          Array.from({ length: 4 }).map((_, index) => (
+            <View key={`skeleton-stat-${index}`} style={styles.skeletonStatItem}>
+              <View style={styles.skeletonStatNumber} />
+              <View style={styles.skeletonStatLabel} />
+            </View>
+          ))
+        ) : (
+          <>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.statNumber}>{filteredInterns.length}</Text>
+              <Text style={styles.statLabel}>Total Interns</Text>
+            </Animated.View>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.statNumber, { color: '#34a853' }]}>
+                {filteredInterns.filter(i => i.status === 'active').length}
+              </Text>
+              <Text style={styles.statLabel}>Active</Text>
+            </Animated.View>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.statNumber, { color: '#4285f4' }]}>
+                {filteredInterns.filter(i => i.status === 'completed').length}
+              </Text>
+              <Text style={styles.statLabel}>Completed</Text>
+            </Animated.View>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
+                {filteredInterns.filter(i => getAttendancePercentage(i.attendance) >= 90).length}
+              </Text>
+              <Text style={styles.statLabel}>Good Attendance</Text>
+            </Animated.View>
+          </>
+        )}
       </View>
 
       {/* Interns List */}
       <ScrollView style={styles.internsList} showsVerticalScrollIndicator={false}>
-        {filteredInterns.length === 0 ? (
+        {showSkeleton ? (
+          // Show skeleton loading
+          Array.from({ length: 3 }).map((_, index) => (
+            <SkeletonInternCard key={`skeleton-${index}`} />
+          ))
+        ) : filteredInterns.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="school" size={64} color="#ccc" />
             <Text style={styles.emptyStateTitle}>No interns found</Text>
@@ -623,7 +839,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 <View>
                   <Text style={styles.modalSectionTitle}>Personal Information</Text>
                   <Text style={styles.modalText}>Name: {selectedIntern.first_name} {selectedIntern.last_name}</Text>
-                  <Text style={styles.modalText}>Student ID: {selectedIntern.student_id}</Text>
+                  <Text style={styles.modalText}>Student ID: {selectedIntern.id_number || selectedIntern.student_id}</Text>
                   <Text style={styles.modalText}>Email: {selectedIntern.student_email}</Text>
                   
                   <Text style={styles.modalSectionTitle}>Academic Information</Text>
@@ -750,118 +966,129 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4285f4',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 6,
+    color: '#02050a',
+    fontWeight: '500',
   },
   searchSection: {
     backgroundColor: '#fff',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1a1a2e',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 20,
-    gap: 15,
-  },
-  statItem: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
+    marginBottom: 20,
+    borderRadius: 16,
+    marginHorizontal: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  searchContainer: {
+    marginBottom: 15,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  searchIcon: {
+    marginRight: 10,
+    color: '#F4D03F',
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#02050a',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 16,
+  },
+  statItem: {
+    flex: 1,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     textAlign: 'center',
+    fontWeight: '600',
   },
   internsList: {
     flex: 1,
     padding: 20,
   },
   internCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 20,
     marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  expandedInternCard: {
+    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  cardTouchable: {
+    padding: 20,
+  },
+  expandedContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  expandIcon: {
+    marginLeft: 8,
+  },
+  expandedActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 16,
   },
   internHeader: {
     flexDirection: 'row',
@@ -878,15 +1105,15 @@ const styles = StyleSheet.create({
   profilePlaceholder: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+    borderRadius: 35,
+    backgroundColor: '#2D5A3D', // Forest green
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#fff',
   },
   internInfo: {
     flex: 1,
@@ -894,22 +1121,25 @@ const styles = StyleSheet.create({
   internName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 6,
   },
   studentId: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#F4D03F', // Bright yellow
+    marginBottom: 4,
+    fontWeight: '500',
   },
   position: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#fff',
+    marginBottom: 4,
+    opacity: 0.9,
   },
   department: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    opacity: 0.8,
   },
   statusContainer: {
     alignItems: 'flex-end',
@@ -926,6 +1156,7 @@ const styles = StyleSheet.create({
   },
   internDetails: {
     marginBottom: 15,
+    paddingHorizontal: 20,
   },
   contactInfo: {
     marginBottom: 10,
@@ -937,40 +1168,28 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginLeft: 8,
+    opacity: 0.9,
   },
   attendanceContainer: {
-    marginBottom: 10,
-  },
-  attendanceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
+    marginTop: 10,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
   },
   attendanceLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  attendancePercentage: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a2e',
-  },
-  attendanceBar: {
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  attendanceFill: {
-    height: '100%',
-    borderRadius: 3,
+    fontSize: 12,
+    color: '#fff',
+    opacity: 0.9,
+    fontWeight: '500',
+    marginBottom: 8,
   },
   attendanceDetails: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    opacity: 0.8,
+    marginTop: 4,
   },
   performanceContainer: {
     marginTop: 10,
@@ -982,7 +1201,8 @@ const styles = StyleSheet.create({
   },
   performanceLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
+    opacity: 0.9,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -991,36 +1211,56 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#fff',
     marginLeft: 4,
   },
   performanceFeedback: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     fontStyle: 'italic',
+    opacity: 0.8,
+  },
+  // Animated Progress Bar Styles
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressBarBackground: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#F4D03F',
+    fontWeight: 'bold',
+    marginLeft: 12,
   },
   actionButtons: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 4,
+    gap: 8,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     flex: 1,
-    minWidth: '23%',
     justifyContent: 'center',
-    minHeight: 36,
   },
   viewButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   attendanceButton: {
-    backgroundColor: '#fbbc04',
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   removeButton: {
     backgroundColor: '#ea4335',
@@ -1030,26 +1270,139 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#F5F1E8',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#02050a',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#666',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  // Skeleton Loading Styles
+  skeletonInternCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  skeletonInternHeader: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  skeletonProfileContainer: {
+    marginRight: 15,
+  },
+  skeletonProfileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  skeletonInternInfo: {
+    flex: 1,
+  },
+  skeletonTextLine: {
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  skeletonStatusContainer: {
+    alignItems: 'flex-end',
+  },
+  skeletonStatusBadge: {
+    width: 60,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  skeletonInternDetails: {
+    marginBottom: 15,
+  },
+  skeletonContactInfo: {
+    marginBottom: 10,
+  },
+  skeletonContactItem: {
+    height: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 7,
+    marginBottom: 4,
+    width: '80%',
+  },
+  skeletonRequirementsContainer: {
+    marginTop: 10,
+  },
+  skeletonRequirementsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  skeletonProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  skeletonProgressFill: {
+    height: '100%',
+    width: '60%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 3,
+  },
+  skeletonActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  skeletonActionButton: {
+    flex: 1,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+  },
+  skeletonStatItem: {
+    flex: 1,
+    backgroundColor: '#1E3A5F',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  skeletonStatNumber: {
+    width: 40,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  skeletonStatLabel: {
+    width: 60,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 6,
   },
   modalOverlay: {
     flex: 1,

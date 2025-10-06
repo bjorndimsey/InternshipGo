@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   TextInput,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -64,6 +65,25 @@ export default function DashboardHome() {
     totalReviews: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [animatedStats, setAnimatedStats] = useState<CompanyStats>({
+    totalSlots: 0,
+    availableSlots: 0,
+    currentInterns: 0,
+    completedInterns: 0,
+    pendingApplications: 0,
+    approvedApplications: 0,
+    rejectedApplications: 0,
+    averageRating: 0,
+    totalReviews: 0,
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchAnimation] = useState(new Animated.Value(0));
+  const [statsAnimation] = useState(new Animated.Value(0));
+  const [pageAnimation] = useState(new Animated.Value(0));
+  const searchInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     fetchCompanyData();
@@ -72,6 +92,15 @@ export default function DashboardHome() {
   const fetchCompanyData = async () => {
     try {
       setLoading(true);
+      setShowSkeleton(true);
+      
+      // Start page animation
+      Animated.timing(pageAnimation, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
+      
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       const mockCompanyInfo: CompanyInfo = {
@@ -110,11 +139,49 @@ export default function DashboardHome() {
       
       setCompanyInfo(mockCompanyInfo);
       setStats(mockStats);
+      
+      // Start stats animation after data is loaded
+      setTimeout(() => {
+        animateStats(mockStats);
+        setShowSkeleton(false);
+      }, 500);
+      
     } catch (error) {
       console.error('Error fetching company data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const animateStats = (targetStats: CompanyStats) => {
+    const duration = 2000;
+    const steps = 60;
+    const stepDuration = duration / steps;
+    
+    let currentStep = 0;
+    
+    const animateStep = () => {
+      if (currentStep <= steps) {
+        const progress = currentStep / steps;
+        
+        setAnimatedStats({
+          totalSlots: Math.floor(targetStats.totalSlots * progress),
+          availableSlots: Math.floor(targetStats.availableSlots * progress),
+          currentInterns: Math.floor(targetStats.currentInterns * progress),
+          completedInterns: Math.floor(targetStats.completedInterns * progress),
+          pendingApplications: Math.floor(targetStats.pendingApplications * progress),
+          approvedApplications: Math.floor(targetStats.approvedApplications * progress),
+          rejectedApplications: Math.floor(targetStats.rejectedApplications * progress),
+          averageRating: Math.round((targetStats.averageRating * progress) * 10) / 10,
+          totalReviews: Math.floor(targetStats.totalReviews * progress),
+        });
+        
+        currentStep++;
+        setTimeout(animateStep, stepDuration);
+      }
+    };
+    
+    animateStep();
   };
 
   const handleViewDetails = () => {
@@ -180,10 +247,56 @@ export default function DashboardHome() {
     }
   };
 
+  const toggleSearch = () => {
+    setShowSearch(!showSearch);
+    if (!showSearch) {
+      Animated.timing(searchAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        searchInputRef.current?.focus();
+      });
+    } else {
+      Animated.timing(searchAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+      setSearchQuery('');
+    }
+  };
+
+  const SkeletonCard = () => (
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonInfo}>
+          <View style={styles.skeletonTitle} />
+          <View style={styles.skeletonSubtitle} />
+          <View style={styles.skeletonRating} />
+        </View>
+      </View>
+      <View style={styles.skeletonContent}>
+        <View style={styles.skeletonLine} />
+        <View style={styles.skeletonLine} />
+        <View style={styles.skeletonLineShort} />
+      </View>
+    </View>
+  );
+
+  const SkeletonStatCard = () => (
+    <View style={styles.skeletonStatCard}>
+      <View style={styles.skeletonIcon} />
+      <View style={styles.skeletonNumber} />
+      <View style={styles.skeletonLabel} />
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading company dashboard...</Text>
       </View>
     );
@@ -192,7 +305,7 @@ export default function DashboardHome() {
   if (!companyInfo) {
     return (
       <View style={styles.errorContainer}>
-        <MaterialIcons name="error" size={64} color="#ea4335" />
+        <MaterialIcons name="error" size={64} color="#E8A598" />
         <Text style={styles.errorTitle}>Error loading company data</Text>
         <Text style={styles.errorText}>Please try again later</Text>
       </View>
@@ -200,14 +313,75 @@ export default function DashboardHome() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Welcome Section */}
-      <View style={styles.welcomeSection}>
-        <Text style={styles.welcomeTitle}>Welcome to your Company Portal!</Text>
-        <Text style={styles.welcomeSubtitle}>
-          Manage your internship program, view applications, and track progress.
-        </Text>
-      </View>
+    <Animated.View 
+      style={[
+        styles.container,
+        {
+          opacity: pageAnimation,
+          transform: [
+            {
+              translateY: pageAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Welcome Section */}
+        <View style={styles.welcomeSection}>
+          <View style={styles.welcomeHeader}>
+            <View>
+              <Text style={styles.welcomeTitle}>Welcome to your Company Portal!</Text>
+              <Text style={styles.welcomeSubtitle}>
+                Manage your internship program, view applications, and track progress.
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.searchButton}
+              onPress={toggleSearch}
+            >
+              <MaterialIcons name="search" size={24} color="#1E3A5F" />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Search Bar */}
+          <Animated.View
+            style={[
+              styles.searchContainer,
+              {
+                opacity: searchAnimation,
+                height: searchAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 50],
+                }),
+                marginTop: searchAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 16],
+                }),
+              },
+            ]}
+          >
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              placeholder="Search applications, interns, or activities..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
+            <TouchableOpacity 
+              style={styles.searchCloseButton}
+              onPress={toggleSearch}
+            >
+              <MaterialIcons name="close" size={20} color="#666" />
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
 
       {/* Company Info Card */}
       <View style={styles.companyCard}>
@@ -282,7 +456,7 @@ export default function DashboardHome() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.actionButton, styles.favoriteButton]} 
+            style={[styles.actionButton, styles.favoriteActionButton]} 
             onPress={handleToggleFavorite}
           >
             <MaterialIcons 
@@ -305,29 +479,40 @@ export default function DashboardHome() {
         </View>
       </View>
 
-      {/* Stats Section */}
-      <View style={styles.statsSection}>
-        <View style={styles.statCard}>
-          <MaterialIcons name="business-center" size={32} color="#4285f4" />
-          <Text style={styles.statNumber}>{stats.totalSlots}</Text>
-          <Text style={styles.statLabel}>Total Slots</Text>
+        {/* Stats Section */}
+        <View style={styles.statsSection}>
+          {showSkeleton ? (
+            <>
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+            </>
+          ) : (
+            <>
+              <View style={styles.statCard}>
+                <MaterialIcons name="business-center" size={32} color="#1E3A5F" />
+                <Text style={styles.statNumber}>{animatedStats.totalSlots}</Text>
+                <Text style={styles.statLabel}>Total Slots</Text>
+              </View>
+              <View style={styles.statCard}>
+                <MaterialIcons name="person-add" size={32} color="#2D5A3D" />
+                <Text style={styles.statNumber}>{animatedStats.availableSlots}</Text>
+                <Text style={styles.statLabel}>Available Slots</Text>
+              </View>
+              <View style={styles.statCard}>
+                <MaterialIcons name="school" size={32} color="#F4D03F" />
+                <Text style={styles.statNumber}>{animatedStats.currentInterns}</Text>
+                <Text style={styles.statLabel}>Current Interns</Text>
+              </View>
+              <View style={styles.statCard}>
+                <MaterialIcons name="assignment" size={32} color="#E8A598" />
+                <Text style={styles.statNumber}>{animatedStats.pendingApplications}</Text>
+                <Text style={styles.statLabel}>Pending Applications</Text>
+              </View>
+            </>
+          )}
         </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="person-add" size={32} color="#34a853" />
-          <Text style={styles.statNumber}>{stats.availableSlots}</Text>
-          <Text style={styles.statLabel}>Available Slots</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="school" size={32} color="#fbbc04" />
-          <Text style={styles.statNumber}>{stats.currentInterns}</Text>
-          <Text style={styles.statLabel}>Current Interns</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="assignment" size={32} color="#ea4335" />
-          <Text style={styles.statNumber}>{stats.pendingApplications}</Text>
-          <Text style={styles.statLabel}>Pending Applications</Text>
-        </View>
-      </View>
 
       {/* MOA Status Section */}
       <View style={styles.moaSection}>
@@ -397,14 +582,15 @@ export default function DashboardHome() {
           </View>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
@@ -415,7 +601,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#1E3A5F',
   },
   errorContainer: {
     flex: 1,
@@ -426,42 +612,69 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#ea4335',
+    color: '#E8A598',
     marginTop: 16,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 16,
-    color: '#666',
+    color: '#1E3A5F',
     textAlign: 'center',
   },
   welcomeSection: {
-    padding: 20,
-    backgroundColor: '#fff',
+    padding: 24,
+    backgroundColor: '#1E3A5F', // Deep navy blue
     marginBottom: 20,
+  },
+  welcomeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   welcomeTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 8,
   },
   welcomeSubtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#F4D03F', // Bright yellow
     lineHeight: 22,
+  },
+  searchButton: {
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#fff',
+    paddingVertical: 12,
+  },
+  searchCloseButton: {
+    padding: 8,
   },
   companyCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 16,
+    padding: 24,
     marginHorizontal: 20,
     marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   companyHeader: {
     flexDirection: 'row',
@@ -572,7 +785,7 @@ const styles = StyleSheet.create({
   locationButton: {
     backgroundColor: '#34a853',
   },
-  favoriteButton: {
+  favoriteActionButton: {
     backgroundColor: '#ea4335',
   },
   applyButton: {
@@ -727,5 +940,100 @@ const styles = StyleSheet.create({
   activityTime: {
     fontSize: 12,
     color: '#999',
+  },
+  // Skeleton Loading Styles
+  skeletonCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  skeletonAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#e0e0e0',
+    marginRight: 15,
+  },
+  skeletonInfo: {
+    flex: 1,
+  },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    marginBottom: 8,
+    width: '70%',
+  },
+  skeletonSubtitle: {
+    height: 16,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    marginBottom: 8,
+    width: '50%',
+  },
+  skeletonRating: {
+    height: 16,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    width: '40%',
+  },
+  skeletonContent: {
+    marginTop: 10,
+  },
+  skeletonLine: {
+    height: 14,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    marginBottom: 8,
+    width: '100%',
+  },
+  skeletonLineShort: {
+    height: 14,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    width: '60%',
+  },
+  skeletonStatCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  skeletonIcon: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  skeletonNumber: {
+    height: 24,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    marginBottom: 8,
+    width: 40,
+  },
+  skeletonLabel: {
+    height: 12,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    width: 60,
   },
 });

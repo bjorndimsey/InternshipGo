@@ -10,8 +10,31 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import SplashCards from '../components/SplashCards';
+import DatePicker from '../components/DatePicker';
 import { apiService, ApiResponse } from '../lib/api';
+import {
+  validateEmail,
+  validatePassword,
+  validateConfirmPassword,
+  validatePhoneNumber,
+  validateAddress,
+  validateYear,
+  validateProgram,
+  validateMajor,
+  validateRequired,
+  validateIdNumber,
+  validateAge,
+  validateDateOfBirth,
+  validateCompanyName,
+  validateIndustry,
+  PROGRAM_OPTIONS,
+  BSIT_MAJOR_OPTIONS,
+  YEAR_OPTIONS,
+  FieldValidation,
+} from '../lib/validation';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +47,7 @@ interface FormData {
   userType: string;
   email: string;
   firstName: string;
+  middleName: string;
   lastName: string;
   idNumber: string;
   age: string;
@@ -46,6 +70,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
     userType: 'Student',
     email: '',
     firstName: '',
+    middleName: '',
     lastName: '',
     idNumber: '',
     age: '',
@@ -62,10 +87,31 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
   });
 
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showProgramDropdown, setShowProgramDropdown] = useState(false);
+  const [showMajorDropdown, setShowMajorDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSplashCards, setShowSplashCards] = useState(false);
+  const [pendingUserData, setPendingUserData] = useState<any>(null);
+  const [pendingUserType, setPendingUserType] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<FieldValidation>({});
 
   const updateFormData = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+    
+    // Reset major when program changes
+    if (field === 'program') {
+      setFormData(prev => ({ ...prev, major: '' }));
+    }
   };
 
   const handleIdNumberChange = (text: string) => {
@@ -75,74 +121,124 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
     updateFormData('idNumber', formatted);
   };
 
+  const validateField = (field: keyof FormData, value: string): boolean => {
+    let validation;
+    
+    switch (field) {
+      case 'email':
+        validation = validateEmail(value);
+        break;
+      case 'password':
+        validation = validatePassword(value);
+        break;
+      case 'confirmPassword':
+        validation = validateConfirmPassword(formData.password, value);
+        break;
+      case 'phoneNumber':
+        validation = validatePhoneNumber(value);
+        break;
+      case 'address':
+        validation = validateAddress(value);
+        break;
+      case 'year':
+        validation = validateYear(value);
+        break;
+      case 'program':
+        validation = validateProgram(value);
+        break;
+      case 'major':
+        validation = validateMajor(value, formData.program);
+        break;
+      case 'idNumber':
+        validation = validateIdNumber(value);
+        break;
+      case 'age':
+        validation = validateAge(value);
+        break;
+      case 'dateOfBirth':
+        validation = validateDateOfBirth(value);
+        break;
+      case 'companyName':
+        validation = validateCompanyName(value);
+        break;
+      case 'industry':
+        validation = validateIndustry(value);
+        break;
+      case 'firstName':
+      case 'lastName':
+        validation = validateRequired(value, field === 'firstName' ? 'First name' : 'Last name');
+        break;
+      case 'middleName':
+        validation = { isValid: true, message: '' }; // Middle name is optional
+        break;
+      default:
+        return true;
+    }
+    
+    if (!validation.isValid) {
+      setFieldErrors(prev => ({ ...prev, [field]: validation }));
+      return false;
+    } else {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+      return true;
+    }
+  };
+
+  const validateAllFields = (): boolean => {
+    let isValid = true;
+    const errors: FieldValidation = {};
+    
+    // Common fields
+    if (!validateField('email', formData.email)) isValid = false;
+    if (!validateField('password', formData.password)) isValid = false;
+    if (!validateField('confirmPassword', formData.confirmPassword)) isValid = false;
+    if (!validateField('address', formData.address)) isValid = false;
+    
+    // User type specific fields
+    if (formData.userType === 'Student') {
+      if (!validateField('idNumber', formData.idNumber)) isValid = false;
+      if (!validateField('firstName', formData.firstName)) isValid = false;
+      if (!validateField('middleName', formData.middleName)) isValid = false;
+      if (!validateField('lastName', formData.lastName)) isValid = false;
+      if (!validateField('age', formData.age)) isValid = false;
+      if (!validateField('year', formData.year)) isValid = false;
+      if (!validateField('dateOfBirth', formData.dateOfBirth)) isValid = false;
+      if (!validateField('program', formData.program)) isValid = false;
+      if (!validateField('major', formData.major)) isValid = false;
+    } else if (formData.userType === 'Coordinator') {
+      if (!validateField('firstName', formData.firstName)) isValid = false;
+      if (!validateField('middleName', formData.middleName)) isValid = false;
+      if (!validateField('lastName', formData.lastName)) isValid = false;
+      if (!validateField('program', formData.program)) isValid = false;
+      if (!validateField('phoneNumber', formData.phoneNumber)) isValid = false;
+    } else if (formData.userType === 'Company') {
+      if (!validateField('companyName', formData.companyName)) isValid = false;
+      if (!validateField('industry', formData.industry)) isValid = false;
+    }
+    
+    return isValid;
+  };
+
   const validateForm = () => {
-    const { userType, email, password, confirmPassword } = formData;
-
-    if (!email || !password || !confirmPassword) {
+    const isValid = validateAllFields();
+    
+    if (!isValid) {
+      const firstError = Object.values(fieldErrors)[0];
       Toast.show({
         type: 'error',
         text1: 'Validation Error',
-        text2: 'Please fill in all required fields',
+        text2: firstError?.message || 'Please fill in all required fields correctly',
         position: 'top',
+        topOffset: 60,
         visibilityTime: 4000,
       });
-      return false;
     }
-
-    if (password !== confirmPassword) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Passwords do not match',
-        position: 'top',
-        visibilityTime: 4000,
-      });
-      return false;
-    }
-
-    if (userType === 'Student') {
-      const { idNumber, firstName, lastName, age, year, program, major, address } = formData;
-      if (!idNumber || !firstName || !lastName || !age || !year || !program || !major || !address) {
-        Toast.show({
-          type: 'error',
-          text1: 'Validation Error',
-          text2: 'Please fill in all required fields for Student',
-          position: 'top',
-          visibilityTime: 4000,
-        });
-        return false;
-      }
-    }
-
-    if (userType === 'Coordinator') {
-      const { firstName, lastName, program, phoneNumber, address } = formData;
-      if (!firstName || !lastName || !program || !phoneNumber || !address) {
-        Toast.show({
-          type: 'error',
-          text1: 'Validation Error',
-          text2: 'Please fill in all required fields for Coordinator',
-          position: 'top',
-          visibilityTime: 4000,
-        });
-        return false;
-      }
-    }
-
-    if (userType === 'Company') {
-      const { companyName, industry, address } = formData;
-      if (!companyName || !industry || !address) {
-        Toast.show({
-          type: 'error',
-          text1: 'Validation Error',
-          text2: 'Please fill in all required fields for Company',
-          position: 'top',
-          visibilityTime: 4000,
-        });
-        return false;
-      }
-    }
-
-    return true;
+    
+    return isValid;
   };
 
   const handleRegister = async () => {
@@ -163,6 +259,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
       if (formData.userType === 'Student') {
         registrationData.idNumber = formData.idNumber;
         registrationData.firstName = formData.firstName;
+        registrationData.middleName = formData.middleName || 'N/A';
         registrationData.lastName = formData.lastName;
         registrationData.age = formData.age;
         registrationData.year = formData.year;
@@ -171,6 +268,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
         registrationData.major = formData.major;
       } else if (formData.userType === 'Coordinator') {
         registrationData.firstName = formData.firstName;
+        registrationData.middleName = formData.middleName || 'N/A';
         registrationData.lastName = formData.lastName;
         registrationData.program = formData.program;
         registrationData.phoneNumber = formData.phoneNumber;
@@ -188,13 +286,14 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
           text1: 'Registration Successful! 🎉',
           text2: 'Your account has been created successfully',
           position: 'top',
+          topOffset: 60,
           visibilityTime: 5000,
         });
         
-        // Navigate after a short delay
-        setTimeout(() => {
-          onRegisterSuccess?.(response.user || formData, formData.userType.toLowerCase());
-        }, 1500);
+        // Store user data and show splash cards
+        setPendingUserData(response.user || formData);
+        setPendingUserType(formData.userType.toLowerCase());
+        setShowSplashCards(true);
       } else {
         // Handle validation errors
         if (response.errors && response.errors.length > 0) {
@@ -203,6 +302,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
             text1: 'Validation Error',
             text2: response.errors.join(', '),
             position: 'top',
+            topOffset: 60,
             visibilityTime: 6000,
           });
         } else {
@@ -211,6 +311,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
             text1: 'Registration Failed',
             text2: response.message || 'Failed to create account. Please try again.',
             position: 'top',
+            topOffset: 60,
             visibilityTime: 5000,
           });
         }
@@ -225,6 +326,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
           text1: 'Connection Error',
           text2: 'Unable to connect to server. Please check your internet connection and try again.',
           position: 'top',
+          topOffset: 60,
           visibilityTime: 5000,
         });
       } else if (error.message.includes('409')) {
@@ -233,6 +335,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
           text1: 'Duplicate Entry',
           text2: 'Email or ID number already exists. Please use different credentials.',
           position: 'top',
+          topOffset: 60,
           visibilityTime: 5000,
         });
       } else {
@@ -241,11 +344,19 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
           text1: 'Registration Failed',
           text2: error.message || 'Failed to create account. Please try again.',
           position: 'top',
+          topOffset: 60,
           visibilityTime: 5000,
         });
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSplashCardsComplete = () => {
+    setShowSplashCards(false);
+    if (pendingUserData && pendingUserType) {
+      onRegisterSuccess?.(pendingUserData, pendingUserType);
     }
   };
 
@@ -280,19 +391,175 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
     </View>
   );
 
+  const renderProgramDropdown = () => (
+    <View style={[styles.inputContainer, { zIndex: showProgramDropdown ? 1000 : (showYearDropdown ? -1 : 1) }]}>
+      <Text style={styles.label}>Program *</Text>
+      <View style={styles.inputWrapper}>
+        <TouchableOpacity
+          style={[
+            styles.dropdownButton,
+            fieldErrors.program && styles.errorBorder
+          ]}
+          onPress={() => setShowProgramDropdown(!showProgramDropdown)}
+        >
+          <Text style={[
+            styles.dropdownButtonText,
+            !formData.program && styles.placeholderText
+          ]}>
+            {formData.program || 'Select Program'}
+          </Text>
+          <Text style={styles.dropdownArrow}>{showProgramDropdown ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {showProgramDropdown && (
+          <View style={styles.dropdownList}>
+            {PROGRAM_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  updateFormData('program', option.value);
+                  setShowProgramDropdown(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+      {fieldErrors.program && (
+        <Text style={styles.errorText}>{fieldErrors.program.message}</Text>
+      )}
+    </View>
+  );
+
+  const renderMajorDropdown = () => {
+    if (formData.program !== 'BSIT') {
+      return (
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Major *</Text>
+          <TextInput
+            style={[
+              styles.input,
+              fieldErrors.major && styles.errorBorder
+            ]}
+            value={formData.major}
+            onChangeText={(text) => updateFormData('major', text)}
+            placeholder="Enter your major or N/A"
+            placeholderTextColor="#999"
+          />
+          {fieldErrors.major && (
+            <Text style={styles.errorText}>{fieldErrors.major.message}</Text>
+          )}
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.inputContainer, { zIndex: showMajorDropdown ? 1000 : 1 }]}>
+        <Text style={styles.label}>Major *</Text>
+        <View style={styles.inputWrapper}>
+          <TouchableOpacity
+            style={[
+              styles.dropdownButton,
+              fieldErrors.major && styles.errorBorder
+            ]}
+            onPress={() => setShowMajorDropdown(!showMajorDropdown)}
+          >
+            <Text style={[
+              styles.dropdownButtonText,
+              !formData.major && styles.placeholderText
+            ]}>
+              {formData.major || 'Select Major'}
+            </Text>
+            <Text style={styles.dropdownArrow}>{showMajorDropdown ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {showMajorDropdown && (
+            <View style={styles.dropdownList}>
+              {BSIT_MAJOR_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    updateFormData('major', option.value);
+                    setShowMajorDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+        {fieldErrors.major && (
+          <Text style={styles.errorText}>{fieldErrors.major.message}</Text>
+        )}
+      </View>
+    );
+  };
+
+  const renderYearDropdown = () => (
+    <View style={[styles.inputContainer, { zIndex: showYearDropdown ? 99999 : 1 }]}>
+      <Text style={styles.label}>Year *</Text>
+      <View style={styles.inputWrapper}>
+        <TouchableOpacity
+          style={[
+            styles.dropdownButton,
+            fieldErrors.year && styles.errorBorder
+          ]}
+          onPress={() => setShowYearDropdown(!showYearDropdown)}
+        >
+          <Text style={[
+            styles.dropdownButtonText,
+            !formData.year && styles.placeholderText
+          ]}>
+            {formData.year || 'Select Year'}
+          </Text>
+          <Text style={styles.dropdownArrow}>{showYearDropdown ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {showYearDropdown && (
+          <View style={[styles.dropdownList, { zIndex: 100000 }]}>
+            {YEAR_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  updateFormData('year', option.value);
+                  setShowYearDropdown(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+      {fieldErrors.year && (
+        <Text style={styles.errorText}>{fieldErrors.year.message}</Text>
+      )}
+    </View>
+  );
+
   const renderCommonFields = () => (
     <View style={styles.inputContainer}>
       <Text style={styles.label}>Email *</Text>
       <TextInput
-        style={styles.input}
+        style={[
+          styles.input,
+          fieldErrors.email && styles.errorBorder
+        ]}
         value={formData.email}
         onChangeText={(text) => updateFormData('email', text)}
+        onBlur={() => validateField('email', formData.email)}
         placeholder="Enter your email"
         placeholderTextColor="#999"
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
       />
+      {fieldErrors.email && (
+        <Text style={styles.errorText}>{fieldErrors.email.message}</Text>
+      )}
     </View>
   );
 
@@ -302,95 +569,149 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
         <View style={styles.inputHalf}>
           <Text style={styles.label}>First Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              fieldErrors.firstName && styles.errorBorder
+            ]}
             value={formData.firstName}
             onChangeText={(text) => updateFormData('firstName', text)}
+            onBlur={() => validateField('firstName', formData.firstName)}
             placeholder="Enter your first name"
             placeholderTextColor="#999"
           />
+          {fieldErrors.firstName && (
+            <Text style={styles.errorText}>{fieldErrors.firstName.message}</Text>
+          )}
         </View>
         <View style={styles.inputHalf}>
           <Text style={styles.label}>Last Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              fieldErrors.lastName && styles.errorBorder
+            ]}
             value={formData.lastName}
             onChangeText={(text) => updateFormData('lastName', text)}
+            onBlur={() => validateField('lastName', formData.lastName)}
             placeholder="Enter your last name"
             placeholderTextColor="#999"
           />
+          {fieldErrors.lastName && (
+            <Text style={styles.errorText}>{fieldErrors.lastName.message}</Text>
+          )}
         </View>
       </View>
-      <View style={styles.inputRow}>
-        <View style={styles.inputHalf}>
-          <Text style={styles.label}>Program/Course *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.program}
-            onChangeText={(text) => updateFormData('program', text)}
-            placeholder="Enter your program"
-            placeholderTextColor="#999"
-          />
-        </View>
-        <View style={styles.inputHalf}>
-          <Text style={styles.label}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.phoneNumber}
-            onChangeText={(text) => updateFormData('phoneNumber', text)}
-            placeholder="Enter your phone number"
-            placeholderTextColor="#999"
-            keyboardType="phone-pad"
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Middle Name</Text>
+        <TextInput
+          style={[
+            styles.input,
+            fieldErrors.middleName && styles.errorBorder
+          ]}
+          value={formData.middleName}
+          onChangeText={(text) => updateFormData('middleName', text)}
+          onBlur={() => validateField('middleName', formData.middleName)}
+          placeholder="Enter your middle name or N/A"
+          placeholderTextColor="#999"
+        />
+        {fieldErrors.middleName && (
+          <Text style={styles.errorText}>{fieldErrors.middleName.message}</Text>
+        )}
+      </View>
+      {renderProgramDropdown()}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Phone Number *</Text>
+        <TextInput
+          style={[
+            styles.input,
+            fieldErrors.phoneNumber && styles.errorBorder
+          ]}
+          value={formData.phoneNumber}
+          onChangeText={(text) => updateFormData('phoneNumber', text)}
+          onBlur={() => validateField('phoneNumber', formData.phoneNumber)}
+          placeholder="09XXXXXXXXX"
+          placeholderTextColor="#999"
+          keyboardType="phone-pad"
+          maxLength={11}
+        />
+        {fieldErrors.phoneNumber && (
+          <Text style={styles.errorText}>{fieldErrors.phoneNumber.message}</Text>
+        )}
       </View>
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Address *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            fieldErrors.address && styles.errorBorder
+          ]}
           value={formData.address}
           onChangeText={(text) => updateFormData('address', text)}
-          placeholder="Enter your address"
+          onBlur={() => validateField('address', formData.address)}
+          placeholder="Enter your address (minimum 12 characters)"
           placeholderTextColor="#999"
           multiline
         />
+        {fieldErrors.address && (
+          <Text style={styles.errorText}>{fieldErrors.address.message}</Text>
+        )}
       </View>
     </>
   );
 
   const renderCompanyFields = () => (
     <>
-      <View style={styles.inputRow}>
-        <View style={styles.inputHalf}>
-          <Text style={styles.label}>Company Name *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.companyName}
-            onChangeText={(text) => updateFormData('companyName', text)}
-            placeholder="Enter company name"
-            placeholderTextColor="#999"
-          />
-        </View>
-        <View style={styles.inputHalf}>
-          <Text style={styles.label}>Industry *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.industry}
-            onChangeText={(text) => updateFormData('industry', text)}
-            placeholder="Enter industry"
-            placeholderTextColor="#999"
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Company Name *</Text>
+        <TextInput
+          style={[
+            styles.input,
+            fieldErrors.companyName && styles.errorBorder
+          ]}
+          value={formData.companyName}
+          onChangeText={(text) => updateFormData('companyName', text)}
+          onBlur={() => validateField('companyName', formData.companyName)}
+          placeholder="Enter company name"
+          placeholderTextColor="#999"
+        />
+        {fieldErrors.companyName && (
+          <Text style={styles.errorText}>{fieldErrors.companyName.message}</Text>
+        )}
+      </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Industry *</Text>
+        <TextInput
+          style={[
+            styles.input,
+            fieldErrors.industry && styles.errorBorder
+          ]}
+          value={formData.industry}
+          onChangeText={(text) => updateFormData('industry', text)}
+          onBlur={() => validateField('industry', formData.industry)}
+          placeholder="Enter industry"
+          placeholderTextColor="#999"
+        />
+        {fieldErrors.industry && (
+          <Text style={styles.errorText}>{fieldErrors.industry.message}</Text>
+        )}
       </View>
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Address *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            fieldErrors.address && styles.errorBorder
+          ]}
           value={formData.address}
           onChangeText={(text) => updateFormData('address', text)}
-          placeholder="Enter company address"
+          onBlur={() => validateField('address', formData.address)}
+          placeholder="Enter company address (minimum 12 characters)"
           placeholderTextColor="#999"
           multiline
         />
+        {fieldErrors.address && (
+          <Text style={styles.errorText}>{fieldErrors.address.message}</Text>
+        )}
       </View>
     </>
   );
@@ -400,102 +721,128 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
       <View style={styles.inputContainer}>
         <Text style={styles.label}>ID Number (XXXX-XXXX) *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            fieldErrors.idNumber && styles.errorBorder
+          ]}
           value={formData.idNumber}
           onChangeText={handleIdNumberChange}
+          onBlur={() => validateField('idNumber', formData.idNumber)}
           placeholder="0000-0000"
           placeholderTextColor="#999"
           keyboardType="numeric"
           maxLength={9}
         />
+        {fieldErrors.idNumber && (
+          <Text style={styles.errorText}>{fieldErrors.idNumber.message}</Text>
+        )}
       </View>
       <View style={styles.inputRow}>
         <View style={styles.inputHalf}>
           <Text style={styles.label}>First Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              fieldErrors.firstName && styles.errorBorder
+            ]}
             value={formData.firstName}
             onChangeText={(text) => updateFormData('firstName', text)}
+            onBlur={() => validateField('firstName', formData.firstName)}
             placeholder="Enter your first name"
             placeholderTextColor="#999"
           />
+          {fieldErrors.firstName && (
+            <Text style={styles.errorText}>{fieldErrors.firstName.message}</Text>
+          )}
         </View>
         <View style={styles.inputHalf}>
           <Text style={styles.label}>Last Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              fieldErrors.lastName && styles.errorBorder
+            ]}
             value={formData.lastName}
             onChangeText={(text) => updateFormData('lastName', text)}
+            onBlur={() => validateField('lastName', formData.lastName)}
             placeholder="Enter your last name"
             placeholderTextColor="#999"
           />
+          {fieldErrors.lastName && (
+            <Text style={styles.errorText}>{fieldErrors.lastName.message}</Text>
+          )}
         </View>
+      </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Middle Name</Text>
+        <TextInput
+          style={[
+            styles.input,
+            fieldErrors.middleName && styles.errorBorder
+          ]}
+          value={formData.middleName}
+          onChangeText={(text) => updateFormData('middleName', text)}
+          onBlur={() => validateField('middleName', formData.middleName)}
+          placeholder="Enter your middle name or N/A"
+          placeholderTextColor="#999"
+        />
+        {fieldErrors.middleName && (
+          <Text style={styles.errorText}>{fieldErrors.middleName.message}</Text>
+        )}
       </View>
       <View style={styles.inputRow}>
         <View style={styles.inputHalf}>
           <Text style={styles.label}>Age *</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              fieldErrors.age && styles.errorBorder
+            ]}
             value={formData.age}
             onChangeText={(text) => updateFormData('age', text)}
+            onBlur={() => validateField('age', formData.age)}
             placeholder="Enter your age"
             placeholderTextColor="#999"
             keyboardType="numeric"
           />
+          {fieldErrors.age && (
+            <Text style={styles.errorText}>{fieldErrors.age.message}</Text>
+          )}
         </View>
         <View style={styles.inputHalf}>
-          <Text style={styles.label}>Year *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.year}
-            onChangeText={(text) => updateFormData('year', text)}
-            placeholder="Enter your year level"
-            placeholderTextColor="#999"
-          />
+          {renderYearDropdown()}
         </View>
       </View>
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, { zIndex: -1 }]}>
         <Text style={styles.label}>Date of Birth *</Text>
-        <TextInput
-          style={styles.input}
+        <DatePicker
           value={formData.dateOfBirth}
-          onChangeText={(text) => updateFormData('dateOfBirth', text)}
-          placeholder="MM/DD/YYYY"
-          placeholderTextColor="#999"
+          onDateChange={(date) => updateFormData('dateOfBirth', date)}
+          error={!!fieldErrors.dateOfBirth}
         />
+        {fieldErrors.dateOfBirth && (
+          <Text style={styles.errorText}>{fieldErrors.dateOfBirth.message}</Text>
+        )}
       </View>
-      <View style={styles.inputRow}>
-        <View style={styles.inputHalf}>
-          <Text style={styles.label}>Program *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.program}
-            onChangeText={(text) => updateFormData('program', text)}
-            placeholder="Enter your program"
-            placeholderTextColor="#999"
-          />
-        </View>
-        <View style={styles.inputHalf}>
-          <Text style={styles.label}>Major *</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.major}
-            onChangeText={(text) => updateFormData('major', text)}
-            placeholder="Enter your major"
-            placeholderTextColor="#999"
-          />
-        </View>
-      </View>
+      {renderProgramDropdown()}
+      {renderMajorDropdown()}
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Address *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            fieldErrors.address && styles.errorBorder
+          ]}
           value={formData.address}
           onChangeText={(text) => updateFormData('address', text)}
-          placeholder="Enter your address"
+          onBlur={() => validateField('address', formData.address)}
+          placeholder="Enter your address (minimum 12 characters)"
           placeholderTextColor="#999"
           multiline
         />
+        {fieldErrors.address && (
+          <Text style={styles.errorText}>{fieldErrors.address.message}</Text>
+        )}
       </View>
     </>
   );
@@ -505,35 +852,54 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
       <View style={styles.inputHalf}>
         <Text style={styles.label}>Password *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            fieldErrors.password && styles.errorBorder
+          ]}
           value={formData.password}
           onChangeText={(text) => updateFormData('password', text)}
-          placeholder="Enter your password"
+          onBlur={() => validateField('password', formData.password)}
+          placeholder="Enter your password (min 6 characters)"
           placeholderTextColor="#999"
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}
         />
+        {fieldErrors.password && (
+          <Text style={styles.errorText}>{fieldErrors.password.message}</Text>
+        )}
       </View>
       <View style={styles.inputHalf}>
         <Text style={styles.label}>Confirm Password *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            fieldErrors.confirmPassword && styles.errorBorder
+          ]}
           value={formData.confirmPassword}
           onChangeText={(text) => updateFormData('confirmPassword', text)}
+          onBlur={() => validateField('confirmPassword', formData.confirmPassword)}
           placeholder="Confirm your password"
           placeholderTextColor="#999"
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}
         />
+        {fieldErrors.confirmPassword && (
+          <Text style={styles.errorText}>{fieldErrors.confirmPassword.message}</Text>
+        )}
       </View>
     </View>
   );
 
+  // Show splash cards for new users
+  if (showSplashCards) {
+    return <SplashCards onComplete={handleSplashCardsComplete} />;
+  }
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f0" />
+      <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
       
       {/* Background Bubbles */}
       <View style={styles.bubbleContainer}>
@@ -548,7 +914,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
         <View style={styles.formContainer}>
           <View style={styles.headerContainer}>
             <View style={styles.logoContainer}>
-              <Text style={styles.logoText}>IG</Text>
+              <Ionicons name="school-outline" size={60} color="#1E3A5F" />
             </View>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Join our internship platform</Text>
@@ -585,7 +951,56 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
       </ScrollView>
       
       {/* Toast Component */}
-      <Toast />
+      <Toast 
+        config={{
+          success: (props) => (
+            <View style={{
+              backgroundColor: '#4CAF50',
+              padding: 16,
+              borderRadius: 8,
+              marginHorizontal: 16,
+              marginTop: 60,
+              alignSelf: 'flex-end',
+              maxWidth: 300,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                {props.text1}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 14, marginTop: 4 }}>
+                {props.text2}
+              </Text>
+            </View>
+          ),
+          error: (props) => (
+            <View style={{
+              backgroundColor: '#F44336',
+              padding: 16,
+              borderRadius: 8,
+              marginHorizontal: 16,
+              marginTop: 60,
+              alignSelf: 'flex-end',
+              maxWidth: 300,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                {props.text1}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 14, marginTop: 4 }}>
+                {props.text2}
+              </Text>
+            </View>
+          ),
+        }}
+      />
     </View>
   );
 }
@@ -593,7 +1008,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f0',
+    backgroundColor: '#1E3A5F', // Deep navy blue
   },
   bubbleContainer: {
     position: 'absolute',
@@ -603,7 +1018,7 @@ const styles = StyleSheet.create({
   bubble: {
     position: 'absolute',
     borderRadius: 50,
-    backgroundColor: 'rgba(255, 132, 0, 0.1)',
+    backgroundColor: 'rgba(245, 241, 232, 0.3)', // Soft cream with opacity
   },
   bubble1: {
     width: 100,
@@ -616,24 +1031,28 @@ const styles = StyleSheet.create({
     height: 80,
     top: height * 0.2,
     right: width * 0.15,
+    backgroundColor: 'rgba(30, 58, 95, 0.1)', // Deep navy blue with opacity
   },
   bubble3: {
     width: 120,
     height: 120,
     bottom: height * 0.2,
     left: width * 0.05,
+    backgroundColor: 'rgba(245, 241, 232, 0.2)', // Soft cream with opacity
   },
   bubble4: {
     width: 60,
     height: 60,
     bottom: height * 0.1,
     right: width * 0.2,
+    backgroundColor: 'rgba(30, 58, 95, 0.15)', // Deep navy blue with opacity
   },
   bubble5: {
     width: 90,
     height: 90,
     top: height * 0.5,
     right: width * 0.1,
+    backgroundColor: 'rgba(245, 241, 232, 0.25)', // Soft cream with opacity
   },
   scrollContainer: {
     flexGrow: 1,
@@ -650,55 +1069,58 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#fff',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F4D03F', // Bright yellow
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: '#1E3A5F',
     shadowOffset: {
       width: 0,
-      height: 5,
+      height: 8,
     },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FF8400',
+    shadowRadius: 15,
+    elevation: 10,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#F5F1E8', // Soft cream
     marginBottom: 8,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    color: '#F5F1E8', // Soft cream
     textAlign: 'center',
-    fontWeight: '300',
+    fontWeight: '400',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   formContent: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 25,
+    backgroundColor: 'rgba(245, 241, 232, 0.95)', // Soft cream with opacity
+    borderRadius: 24,
+    padding: 32,
     width: '100%',
     maxWidth: 577,
     alignSelf: 'center',
-    shadowColor: '#000',
+    shadowColor: '#1E3A5F',
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 12,
     },
     shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 15,
+    shadowRadius: 24,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(30, 58, 95, 0.2)',
   },
   inputContainer: {
     marginBottom: 20,
@@ -715,40 +1137,58 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#1E3A5F', // Deep navy blue
     marginBottom: 8,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     fontSize: 16,
     backgroundColor: '#fff',
-    color: '#333',
+    color: '#1E3A5F', // Deep navy blue
+    shadowColor: '#1E3A5F',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   inputWrapper: {
     position: 'relative',
   },
   dropdownButton: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     backgroundColor: '#fff',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: '#1E3A5F',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   dropdownButtonText: {
     fontSize: 16,
-    color: '#333',
+    color: '#1E3A5F', // Deep navy blue
+    fontWeight: '500',
   },
   dropdownArrow: {
     fontSize: 12,
-    color: '#666',
+    color: '#1E3A5F', // Deep navy blue
+    fontWeight: 'bold',
   },
   dropdownList: {
     position: 'absolute',
@@ -756,42 +1196,56 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#1E3A5F', // Deep navy blue
     marginTop: 4,
-    shadowColor: '#000',
+    shadowColor: '#1E3A5F',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 8,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+    zIndex: 10000,
   },
   dropdownItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F5F1E8', // Soft cream
   },
   dropdownItemText: {
     fontSize: 16,
-    color: '#333',
+    color: '#1E3A5F', // Deep navy blue
+    fontWeight: '500',
+  },
+  errorBorder: {
+    borderColor: '#FF6B6B',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  placeholderText: {
+    color: '#999',
   },
   registerButton: {
-    backgroundColor: '#4285f4',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
+    paddingVertical: 18,
     marginTop: 20,
-    shadowColor: '#4285f4',
+    shadowColor: '#1E3A5F',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 6,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   registerButtonDisabled: {
     backgroundColor: '#ccc',
@@ -801,7 +1255,7 @@ const styles = StyleSheet.create({
   registerButtonText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: '#F5F1E8', // Soft cream
     textAlign: 'center',
   },
   loginContainer: {
@@ -812,11 +1266,12 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 16,
-    color: '#666',
+    color: '#1E3A5F', // Deep navy blue
+    fontWeight: '500',
   },
   loginLink: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4285f4',
+    color: '#1E3A5F', // Deep navy blue
   },
 });

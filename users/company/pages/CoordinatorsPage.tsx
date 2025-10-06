@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Linking,
   Platform,
   Modal,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
@@ -78,6 +79,10 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
   const [coordinatorPictures, setCoordinatorPictures] = useState<any[]>([]);
   const [picturesLoading, setPicturesLoading] = useState(false);
   const [currentUserLocation, setCurrentUserLocation] = useState<{ latitude: number; longitude: number; profilePicture?: string } | null>(null);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [pageAnimation] = useState(new Animated.Value(0));
+  const [statsAnimation] = useState(new Animated.Value(0));
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCoordinators();
@@ -92,6 +97,14 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
     try {
       console.log('🔄 Starting fetchCoordinators...');
       setLoading(true);
+      setShowSkeleton(true);
+      
+      // Start page animation
+      Animated.timing(pageAnimation, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
       
       // Test API connection first
       console.log('🧪 Testing API connection...');
@@ -103,6 +116,9 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
       } catch (testError) {
         console.error('❌ API connection test failed:', testError);
       }
+      
+      // Simulate loading delay for skeleton effect
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       console.log('🔍 Fetching coordinators with MOA from API...');
       // Get the current company's ID by looking up the company record
@@ -167,6 +183,16 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
         })));
         setCoordinators(response.coordinators);
         console.log('✅ Coordinators state updated');
+        
+        // Start stats animation after data is loaded
+        setTimeout(() => {
+          Animated.timing(statsAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }).start();
+          setShowSkeleton(false);
+        }, 500);
       } else {
         console.error('❌ Failed to fetch coordinators with MOA:', response);
         console.error('❌ Response details:', {
@@ -176,7 +202,8 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
           isArray: Array.isArray(response.coordinators)
         });
         setCoordinators([]); // Set empty array as fallback
-        Alert.alert('Error', response.message || 'Failed to fetch coordinators');
+        setShowSkeleton(false);
+        Alert.alert('Error', typeof response.message === 'string' ? response.message : 'Failed to fetch coordinators');
       }
     } catch (error) {
       console.error('❌ Error fetching coordinators with MOA:', error);
@@ -185,6 +212,7 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
         stack: error instanceof Error ? error.stack : undefined
       });
       setCoordinators([]); // Set empty array as fallback
+      setShowSkeleton(false);
       Alert.alert('Error', 'Failed to fetch coordinators. Please try again.');
     } finally {
       console.log('🔄 Setting loading to false');
@@ -726,130 +754,195 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
     }
   };
 
+  const toggleCardExpansion = (coordinatorId: string) => {
+    setExpandedCard(expandedCard === coordinatorId ? null : coordinatorId);
+  };
+
+
+  // Skeleton Components
+  const SkeletonCoordinatorCard = () => {
+    return (
+      <View style={styles.skeletonCoordinatorCard}>
+        <View style={styles.skeletonCoordinatorHeader}>
+          <View style={styles.skeletonProfileContainer}>
+            <View style={styles.skeletonProfileImage} />
+          </View>
+          <View style={styles.skeletonCoordinatorInfo}>
+            <View style={styles.skeletonTextLine} />
+            <View style={[styles.skeletonTextLine, { width: '70%' }]} />
+            <View style={[styles.skeletonTextLine, { width: '60%' }]} />
+            <View style={[styles.skeletonTextLine, { width: '50%' }]} />
+          </View>
+          <View style={styles.skeletonStatusContainer}>
+            <View style={styles.skeletonStatusBadge} />
+          </View>
+        </View>
+
+        <View style={styles.skeletonCoordinatorDetails}>
+          <View style={styles.skeletonMoaContainer}>
+            <View style={styles.skeletonMoaHeader}>
+              <View style={[styles.skeletonTextLine, { width: '40%' }]} />
+              <View style={[styles.skeletonTextLine, { width: '20%' }]} />
+            </View>
+            <View style={styles.skeletonTextLine} />
+            <View style={[styles.skeletonTextLine, { width: '80%' }]} />
+          </View>
+
+          <View style={styles.skeletonStatsContainer}>
+            <View style={styles.skeletonStatItem}>
+              <View style={styles.skeletonStatNumber} />
+              <View style={styles.skeletonStatLabel} />
+            </View>
+            <View style={styles.skeletonStatItem}>
+              <View style={styles.skeletonStatNumber} />
+              <View style={styles.skeletonStatLabel} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.skeletonActionButtons}>
+          <View style={styles.skeletonActionButton} />
+          <View style={styles.skeletonActionButton} />
+          <View style={styles.skeletonActionButton} />
+        </View>
+      </View>
+    );
+  };
+
   const CoordinatorCard = ({ coordinator }: { coordinator: Coordinator }) => {
     console.log('🎴 Rendering CoordinatorCard for:', {
       id: coordinator.id,
       name: `${coordinator.firstName} ${coordinator.lastName}`,
       partnershipStatus: coordinator.partnershipStatus
     });
+    
+    const isExpanded = expandedCard === coordinator.id;
+    
     return (
-    <View style={styles.coordinatorCard}>
-      <View style={styles.coordinatorHeader}>
-        <View style={styles.profileContainer}>
-          {coordinator.profilePicture ? (
-            <Image source={{ uri: coordinator.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>
-                {coordinator.firstName.charAt(0)}{coordinator.lastName.charAt(0)}
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.coordinatorInfo}>
-          <Text style={styles.coordinatorName}>
-            {coordinator.firstName} {coordinator.lastName}
-          </Text>
-          <Text style={styles.coordinatorPosition}>{coordinator.position}</Text>
-          <Text style={styles.coordinatorDepartment}>{coordinator.department}</Text>
-          <Text style={styles.coordinatorEmail}>{coordinator.email}</Text>
-        </View>
-        <View style={styles.statusContainer}>
-          <View style={[styles.partnershipBadge, { backgroundColor: getPartnershipStatusColor(coordinator.partnershipStatus) }]}>
-            <Text style={styles.partnershipText}>{getPartnershipStatusText(coordinator.partnershipStatus)}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.coordinatorDetails}>
-        <View style={styles.moaContainer}>
-          <View style={styles.moaHeader}>
-            <Text style={styles.moaLabel}>MOA Status:</Text>
-            <View style={[styles.moaStatusBadge, { backgroundColor: getMOAStatusColor(coordinator.moaStatus) }]}>
-              <Text style={styles.moaStatusText}>{getMOAStatusText(coordinator.moaStatus)}</Text>
-            </View>
-          </View>
-          
-          {coordinator.moaSentDate && (
-            <Text style={styles.moaDate}>Sent: {coordinator.moaSentDate}</Text>
-          )}
-          {coordinator.moaReceivedDate && (
-            <Text style={styles.moaDate}>Received: {coordinator.moaReceivedDate}</Text>
-          )}
-          {coordinator.moaExpiryDate && (
-            <Text style={styles.moaDate}>Expires: {coordinator.moaExpiryDate}</Text>
-          )}
-        </View>
-
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{coordinator.assignedInterns}</Text>
-            <Text style={styles.statLabel}>Assigned Interns</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {Math.floor((new Date().getTime() - new Date(coordinator.lastContact).getTime()) / (1000 * 60 * 60 * 24))}
-            </Text>
-            <Text style={styles.statLabel}>Days Since Contact</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.actionButtons}>
+      <View style={[
+        styles.coordinatorCard,
+        isExpanded && styles.expandedCoordinatorCard
+      ]}>
         <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewDetails(coordinator)}
+          onPress={() => toggleCardExpansion(coordinator.id)}
+          style={styles.cardTouchable}
         >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View Details</Text>
+          <View style={styles.coordinatorHeader}>
+            <View style={styles.profileContainer}>
+              {coordinator.profilePicture ? (
+                <Image source={{ uri: coordinator.profilePicture }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileText}>
+                    {coordinator.firstName.charAt(0)}{coordinator.lastName.charAt(0)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.coordinatorInfo}>
+              <Text style={styles.coordinatorName}>
+                {coordinator.firstName} {coordinator.lastName}
+              </Text>
+              <Text style={styles.coordinatorPosition}>{coordinator.position}</Text>
+              <Text style={styles.coordinatorDepartment}>{coordinator.department}</Text>
+            </View>
+            <View style={styles.statusContainer}>
+              <View style={[styles.partnershipBadge, { backgroundColor: getPartnershipStatusColor(coordinator.partnershipStatus) }]}>
+                <Text style={styles.partnershipText}>{getPartnershipStatusText(coordinator.partnershipStatus)}</Text>
+              </View>
+              <MaterialIcons 
+                name={isExpanded ? "expand-less" : "expand-more"} 
+                size={24} 
+                color="#F4D03F" 
+                style={styles.expandIcon}
+              />
+            </View>
+          </View>
+
+          <View style={styles.coordinatorDetails}>
+
+          </View>
         </TouchableOpacity>
-        
-        {coordinator.moaUrl && (
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.downloadButton]} 
-            onPress={() => {
-              console.log('📥 Direct file download pressed');
-              directFileDownload(coordinator);
-            }}
-          >
-            <MaterialIcons name="download" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Download MOA</Text>
-          </TouchableOpacity>
-        )}
-        
-        {coordinator.partnershipStatus === 'pending' && (
-          <>
-            {console.log('🔥 RENDERING ACCEPT/DENY BUTTONS for coordinator:', coordinator.id, 'status:', coordinator.partnershipStatus)}
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.acceptButton]} 
-              onPress={() => {
-                console.log('🔥 ACCEPT BUTTON CLICKED!', coordinator.id);
-                // Test direct API call without Alert dialog
-                console.log('🧪 Testing direct API call...');
-                handleAcceptPartnershipDirect(coordinator);
-              }}
-            >
-              <MaterialIcons name="check" size={16} color="#fff" />
-              <Text style={styles.actionButtonText}>Accept</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.denyButton]} 
-              onPress={() => {
-                console.log('🔥 DENY BUTTON CLICKED!', coordinator.id);
-                // Test direct API call without Alert dialog
-                console.log('🧪 Testing direct DENY API call...');
-                handleDenyPartnershipDirect(coordinator);
-              }}
-            >
-              <MaterialIcons name="close" size={16} color="#fff" />
-              <Text style={styles.actionButtonText}>Deny</Text>
-            </TouchableOpacity>
-          </>
+
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            <View style={styles.contactInfo}>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="email" size={16} color="#fff" />
+                <Text style={styles.contactText}>{coordinator.email}</Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="phone" size={16} color="#fff" />
+                <Text style={styles.contactText}>{coordinator.phoneNumber}</Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="location-on" size={16} color="#fff" />
+                <Text style={styles.contactText}>{coordinator.officeLocation}</Text>
+              </View>
+            </View>
+
+            {coordinator.moaSentDate && (
+              <Text style={styles.moaDate}>Sent: {coordinator.moaSentDate}</Text>
+            )}
+            {coordinator.moaReceivedDate && (
+              <Text style={styles.moaDate}>Received: {coordinator.moaReceivedDate}</Text>
+            )}
+            {coordinator.moaExpiryDate && (
+              <Text style={styles.moaDate}>Expires: {coordinator.moaExpiryDate}</Text>
+            )}
+
+            <View style={styles.expandedActionButtons}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewDetails(coordinator)}
+              >
+                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>View Details</Text>
+              </TouchableOpacity>
+              
+              {coordinator.moaUrl && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.downloadButton]} 
+                  onPress={() => {
+                    console.log('📥 Direct file download pressed');
+                    directFileDownload(coordinator);
+                  }}
+                >
+                  <MaterialIcons name="download" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Download MOA</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {coordinator.partnershipStatus === 'pending' && (
+              <View style={styles.partnershipActionButtons}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.acceptButton]} 
+                  onPress={() => {
+                    console.log('🔥 ACCEPT BUTTON CLICKED!', coordinator.id);
+                    handleAcceptPartnershipDirect(coordinator);
+                  }}
+                >
+                  <MaterialIcons name="check" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Accept</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.denyButton]} 
+                  onPress={() => {
+                    console.log('🔥 DENY BUTTON CLICKED!', coordinator.id);
+                    handleDenyPartnershipDirect(coordinator);
+                  }}
+                >
+                  <MaterialIcons name="close" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Deny</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         )}
       </View>
-    </View>
-  );
+    );
   };
 
   console.log('🔄 Render state:', {
@@ -871,12 +964,22 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Coordinators & MOA Management</Text>
-      </View>
-
+    <Animated.View 
+      style={[
+        styles.container,
+        {
+          opacity: pageAnimation,
+          transform: [
+            {
+              translateY: pageAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
       {/* Search and Filter Section */}
       <View style={styles.searchSection}>
         <View style={styles.searchContainer}>
@@ -924,45 +1027,110 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{filteredCoordinators.length}</Text>
-          <Text style={styles.statLabel}>Total Coordinators</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#34a853' }]}>
-            {filteredCoordinators.filter(c => c.partnershipStatus === 'approved').length}
-          </Text>
-          <Text style={styles.statLabel}>Partners</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
-            {filteredCoordinators.filter(c => c.partnershipStatus === 'pending').length}
-          </Text>
-          <Text style={styles.statLabel}>Pending</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#4285f4' }]}>
-            {filteredCoordinators.filter(c => c.moaStatus === 'active' || c.moaStatus === 'approved').length}
-          </Text>
-          <Text style={styles.statLabel}>MOA Active</Text>
-        </View>
+        {showSkeleton ? (
+          // Show skeleton stats
+          Array.from({ length: 4 }).map((_, index) => (
+            <View key={`skeleton-stat-${index}`} style={styles.skeletonStatItem}>
+              <View style={styles.skeletonStatNumber} />
+              <View style={styles.skeletonStatLabel} />
+            </View>
+          ))
+        ) : (
+          <>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.statNumber}>{filteredCoordinators.length}</Text>
+              <Text style={styles.statLabel}>Total Coordinators</Text>
+            </Animated.View>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.statNumber, { color: '#34a853' }]}>
+                {filteredCoordinators.filter(c => c.partnershipStatus === 'approved').length}
+              </Text>
+              <Text style={styles.statLabel}>Partners</Text>
+            </Animated.View>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
+                {filteredCoordinators.filter(c => c.partnershipStatus === 'pending').length}
+              </Text>
+              <Text style={styles.statLabel}>Pending</Text>
+            </Animated.View>
+            <Animated.View 
+              style={[
+                styles.statItem,
+                {
+                  opacity: statsAnimation,
+                  transform: [
+                    {
+                      scale: statsAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.statNumber, { color: '#4285f4' }]}>
+                {filteredCoordinators.filter(c => c.moaStatus === 'active' || c.moaStatus === 'approved').length}
+              </Text>
+              <Text style={styles.statLabel}>MOA Active</Text>
+            </Animated.View>
+          </>
+        )}
       </View>
 
       {/* Coordinators List */}
       <ScrollView style={styles.coordinatorsList} showsVerticalScrollIndicator={false}>
-        {(() => {
-          console.log('📋 Rendering coordinators list:', {
-            filteredCount: filteredCoordinators.length,
-            hasSearchQuery: !!searchQuery,
-            coordinators: filteredCoordinators.map(c => ({
-              id: c.id,
-              name: `${c.firstName} ${c.lastName}`,
-              partnershipStatus: c.partnershipStatus
-            }))
-          });
-          console.log('📋 Full coordinators data:', filteredCoordinators);
-          
-          return filteredCoordinators.length === 0 ? (
+        {showSkeleton ? (
+          // Show skeleton loading
+          Array.from({ length: 3 }).map((_, index) => (
+            <SkeletonCoordinatorCard key={`skeleton-${index}`} />
+          ))
+        ) : filteredCoordinators.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="supervisor-account" size={64} color="#ccc" />
             <Text style={styles.emptyStateTitle}>No coordinators found</Text>
@@ -977,8 +1145,7 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
           filteredCoordinators.map((coordinator) => (
             <CoordinatorCard key={coordinator.id} coordinator={coordinator} />
           ))
-          );
-        })()}
+        )}
       </ScrollView>
 
       {/* Coordinator Details Modal */}
@@ -1231,42 +1398,39 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
           </View>
         </Modal>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
+    fontWeight: '500',
   },
   searchSection: {
     backgroundColor: '#fff',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 20,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchContainer: {
     marginBottom: 15,
@@ -1275,17 +1439,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   searchIcon: {
     marginRight: 10,
+    color: '#F4D03F',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
   },
   filterContainer: {
     flexDirection: 'row',
@@ -1298,7 +1465,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   activeFilterTab: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#1E3A5F',
   },
   filterText: {
     fontSize: 14,
@@ -1310,46 +1477,77 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    padding: 20,
-    gap: 15,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 16,
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     textAlign: 'center',
+    fontWeight: '600',
   },
   coordinatorsList: {
     flex: 1,
     padding: 20,
   },
   coordinatorCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 20,
     marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  expandedCoordinatorCard: {
+    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  cardTouchable: {
+    padding: 20,
+  },
+  expandedContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  expandIcon: {
+    marginLeft: 8,
+  },
+  expandedActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 16,
+  },
+  partnershipActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
   },
   coordinatorHeader: {
     flexDirection: 'row',
@@ -1366,15 +1564,15 @@ const styles = StyleSheet.create({
   profilePlaceholder: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+    borderRadius: 35,
+    backgroundColor: '#2D5A3D', // Forest green
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#fff',
   },
   coordinatorInfo: {
     flex: 1,
@@ -1382,22 +1580,25 @@ const styles = StyleSheet.create({
   coordinatorName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 6,
   },
   coordinatorPosition: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#F4D03F', // Bright yellow
+    marginBottom: 4,
+    fontWeight: '500',
   },
   coordinatorDepartment: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#fff',
+    marginBottom: 4,
+    opacity: 0.9,
   },
   coordinatorEmail: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    opacity: 0.8,
   },
   statusContainer: {
     alignItems: 'flex-end',
@@ -1426,7 +1627,8 @@ const styles = StyleSheet.create({
   },
   moaLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
+    opacity: 0.9,
   },
   moaStatusBadge: {
     paddingHorizontal: 8,
@@ -1440,8 +1642,23 @@ const styles = StyleSheet.create({
   },
   moaDate: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
     marginBottom: 2,
+    opacity: 0.8,
+  },
+  contactInfo: {
+    marginBottom: 10,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  contactText: {
+    fontSize: 14,
+    color: '#fff',
+    marginLeft: 8,
+    opacity: 0.9,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1453,19 +1670,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     flex: 1,
     minWidth: '45%',
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   downloadButton: {
-    backgroundColor: '#34a853',
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   acceptButton: {
-    backgroundColor: '#34a853',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   denyButton: {
     backgroundColor: '#ea4335',
@@ -1478,20 +1695,106 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#F5F1E8',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#02050a',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#666',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  // Skeleton Loading Styles
+  skeletonCoordinatorCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  skeletonCoordinatorHeader: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  skeletonProfileContainer: {
+    marginRight: 15,
+  },
+  skeletonProfileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  skeletonCoordinatorInfo: {
+    flex: 1,
+  },
+  skeletonTextLine: {
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  skeletonStatusContainer: {
+    alignItems: 'flex-end',
+  },
+  skeletonStatusBadge: {
+    width: 60,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  skeletonCoordinatorDetails: {
+    marginBottom: 15,
+  },
+  skeletonMoaContainer: {
+    marginBottom: 15,
+  },
+  skeletonMoaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  skeletonStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  skeletonStatItem: {
+    alignItems: 'center',
+  },
+  skeletonStatNumber: {
+    width: 40,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  skeletonStatLabel: {
+    width: 60,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 6,
+  },
+  skeletonActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  skeletonActionButton: {
+    flex: 1,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
   },
   // Modal Styles
   modalContainer: {

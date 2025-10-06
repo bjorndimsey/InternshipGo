@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { apiService } from '../../../lib/api';
 
 const { width } = Dimensions.get('window');
 
@@ -24,125 +26,179 @@ interface Notification {
   actionRequired: boolean;
   actionText?: string;
   relatedId?: string;
+  category?: string;
+  action?: string;
+  priority?: string;
+  data?: any;
 }
 
-export default function NotificationsPage() {
+interface NotificationResponse {
+  success: boolean;
+  notifications: Notification[];
+  message?: string;
+}
+
+interface NotificationsPageProps {
+  currentUser: {
+    id: string;
+    name: string;
+    email: string;
+    user_type: string;
+  } | null;
+  onUnreadCountChange?: (count: number) => void;
+}
+
+export default function NotificationsPage({ currentUser, onUnreadCountChange }: NotificationsPageProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filteredNotifications, setFilteredNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread' | 'important' | 'action-required'>('all');
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
+    if (currentUser?.id) {
+      fetchCompanyIdAndNotifications();
+      
+      // Animate on mount
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [currentUser?.id]);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
 
   useEffect(() => {
     filterNotifications();
   }, [filter, notifications]);
 
-  const fetchNotifications = async () => {
+  useEffect(() => {
+    console.log('🔄 Notifications state changed:', notifications.length, 'notifications');
+    updateUnreadCount();
+  }, [notifications]);
+
+  useEffect(() => {
+    console.log('🔄 Loading state changed:', loading);
+  }, [loading]);
+
+  const fetchCompanyIdAndNotifications = async () => {
+    console.log('🚀 fetchCompanyIdAndNotifications called with currentUser:', currentUser);
+    if (!currentUser?.id) {
+      console.log('❌ No currentUser.id, returning');
+      return;
+    }
+
     try {
+      console.log('🔄 Setting loading to true in fetchCompanyIdAndNotifications');
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const mockNotifications: Notification[] = [
-        {
-          id: '1',
-          title: 'New Application Received',
-          message: 'John Doe has applied for the Software Developer Intern position. Review required.',
-          type: 'application',
-          timestamp: '2 hours ago',
-          isRead: false,
-          isImportant: true,
-          actionRequired: true,
-          actionText: 'Review Application',
-          relatedId: 'app_1',
-        },
-        {
-          id: '2',
-          title: 'MOA Status Update',
-          message: 'Your MOA with University of Technology has been approved and is now active.',
-          type: 'moa',
-          timestamp: '1 day ago',
-          isRead: true,
-          isImportant: false,
-          actionRequired: false,
-        },
-        {
-          id: '3',
-          title: 'Intern Attendance Alert',
-          message: 'Sarah Wilson has been absent for 3 consecutive days. Please check in.',
-          type: 'intern',
-          timestamp: '2 days ago',
-          isRead: false,
-          isImportant: true,
-          actionRequired: true,
-          actionText: 'Contact Intern',
-          relatedId: 'intern_1',
-        },
-        {
-          id: '4',
-          title: 'Application Approved',
-          message: 'Jane Smith\'s application for Data Analyst Intern has been approved.',
-          type: 'success',
-          timestamp: '3 days ago',
-          isRead: true,
-          isImportant: false,
-          actionRequired: false,
-        },
-        {
-          id: '5',
-          title: 'System Maintenance',
-          message: 'Scheduled maintenance will occur on Sunday from 2 AM to 4 AM.',
-          type: 'info',
-          timestamp: '1 week ago',
-          isRead: true,
-          isImportant: false,
-          actionRequired: false,
-        },
-        {
-          id: '6',
-          title: 'MOA Expiry Warning',
-          message: 'Your MOA with State University will expire in 30 days. Please renew.',
-          type: 'warning',
-          timestamp: '1 week ago',
-          isRead: false,
-          isImportant: true,
-          actionRequired: true,
-          actionText: 'Renew MOA',
-          relatedId: 'moa_1',
-        },
-        {
-          id: '7',
-          title: 'Intern Performance Review',
-          message: 'Mike Johnson\'s performance review is due. Please submit your feedback.',
-          type: 'intern',
-          timestamp: '2 weeks ago',
-          isRead: true,
-          isImportant: false,
-          actionRequired: true,
-          actionText: 'Submit Review',
-          relatedId: 'review_1',
-        },
-        {
-          id: '8',
-          title: 'New Partnership Request',
-          message: 'Tech University has requested a partnership. Review and respond.',
-          type: 'moa',
-          timestamp: '2 weeks ago',
-          isRead: false,
-          isImportant: true,
-          actionRequired: true,
-          actionText: 'Review Request',
-          relatedId: 'partnership_1',
-        },
-      ];
-      
-      setNotifications(mockNotifications);
+      console.log('🔔 Fetching company profile for user:', currentUser.id);
+
+      const companyResponse = await apiService.getCompanyProfileByUserId(currentUser.id);
+
+      if (!companyResponse.success || !companyResponse.user) {
+        console.error('❌ Failed to get company profile');
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+
+      const fetchedCompanyId = companyResponse.user.id;
+      setCompanyId(fetchedCompanyId);
+      console.log('✅ Fetched company ID:', fetchedCompanyId);
+
+      console.log('🔄 Calling fetchNotifications with companyId:', fetchedCompanyId);
+      await fetchNotifications(fetchedCompanyId);
+      console.log('✅ fetchNotifications completed');
+
     } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
+      console.error('Error fetching company ID:', error);
+      setNotifications([]);
       setLoading(false);
+    }
+  };
+
+  const fetchNotifications = async (cId: string) => {
+    console.log('🚀 fetchNotifications called with cId:', cId);
+    if (!cId) {
+      console.log('❌ No companyId provided, returning');
+      return;
+    }
+
+    try {
+      console.log('🔄 Setting loading to true');
+      setLoading(true);
+      setShowSkeleton(true);
+      console.log('🔔 Fetching company notifications for companyId:', cId);
+
+      const notificationsResponse = await apiService.getCompanyNotifications(cId, currentUser!.id) as NotificationResponse;
+
+      console.log('🔍 API Response:', notificationsResponse);
+      console.log('🔍 API Response type:', typeof notificationsResponse);
+      console.log('🔍 API Response success:', notificationsResponse.success);
+      console.log('🔍 API Response notifications:', notificationsResponse.notifications);
+
+      if (notificationsResponse.success && notificationsResponse.notifications) {
+        console.log('✅ Setting notifications:', notificationsResponse.notifications);
+        setNotifications(notificationsResponse.notifications);
+        console.log('✅ Fetched notifications:', notificationsResponse.notifications.length);
+      } else {
+        console.log('ℹ️ No notifications found or failed to fetch.');
+        setNotifications([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching notifications:', error);
+      setNotifications([]);
+    } finally {
+      console.log('🔄 Setting loading to false');
+      setLoading(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
@@ -167,38 +223,85 @@ export default function NotificationsPage() {
     setFilteredNotifications(filtered);
   };
 
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(notifications.map(notification =>
-      notification.id === notificationId 
-        ? { ...notification, isRead: true }
-        : notification
-    ));
+  const handleMarkAsRead = async (notificationId: string) => {
+    if (!currentUser?.id || !companyId) return;
+    
+    try {
+      await apiService.markCompanyNotificationAsRead(notificationId, companyId, currentUser.id);
+      setNotifications(notifications.map(notification =>
+        notification.id === notificationId 
+          ? { ...notification, isRead: true }
+          : notification
+      ));
+      updateUnreadCount();
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(notifications.map(notification => ({
-      ...notification,
-      isRead: true
-    })));
-    Alert.alert('Success', 'All notifications marked as read');
+  const updateUnreadCount = () => {
+    const unreadCount = notifications.filter(notification => !notification.isRead).length;
+    onUnreadCountChange?.(unreadCount);
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!currentUser?.id || !companyId) return;
+    
+    try {
+      await apiService.markAllCompanyNotificationsAsRead(companyId, currentUser.id);
+      setNotifications(notifications.map(notification => ({
+        ...notification,
+        isRead: true
+      })));
+      updateUnreadCount();
+      Alert.alert('Success', 'All notifications marked as read');
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      Alert.alert('Error', 'Failed to mark all notifications as read');
+    }
   };
 
   const handleNotificationAction = (notification: Notification) => {
-    if (notification.actionText) {
-      Alert.alert(
-        'Action Required',
-        `Perform action: ${notification.actionText}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Perform Action', 
-            onPress: () => {
-              handleMarkAsRead(notification.id);
-              Alert.alert('Success', 'Action completed successfully');
-            }
-          },
-        ]
-      );
+    if (notification.action || notification.actionText) {
+      if (notification.type === 'moa') {
+        Alert.alert('MOA Details',
+          `Coordinator: ${notification.data?.coordinatorName}\n` +
+          `Email: ${notification.data?.coordinatorEmail}\n` +
+          `Status: ${notification.data?.moaStatus}\n` +
+          `Uploaded At: ${notification.data?.uploadedAt ? new Date(notification.data.uploadedAt).toLocaleString() : 'N/A'}\n` +
+          `Expiry Date: ${notification.data?.moaExpiryDate || 'N/A'}\n` +
+          `${notification.data?.moaUrl ? `MOA Document: ${notification.data.moaUrl}` : ''}`
+        );
+        handleMarkAsRead(notification.id);
+      } else if (notification.type === 'application') {
+        Alert.alert('Application Details',
+          `Student: ${notification.data?.studentName}\n` +
+          `Email: ${notification.data?.studentEmail}\n` +
+          `Position: ${notification.data?.position}\n` +
+          `Department: ${notification.data?.department || 'N/A'}\n` +
+          `Applied At: ${notification.data?.appliedAt ? new Date(notification.data.appliedAt).toLocaleString() : 'N/A'}\n` +
+          `Status: ${notification.data?.status}\n` +
+          `${notification.data?.coverLetter ? `Cover Letter: ${notification.data.coverLetter}` : ''}\n` +
+          `${notification.data?.resumeUrl ? `Resume: ${notification.data.resumeUrl}` : ''}`
+        );
+        handleMarkAsRead(notification.id);
+      } else {
+        Alert.alert('Action Required',
+          `Perform action: ${notification.actionText || notification.action}`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Perform Action', 
+              onPress: () => {
+                handleMarkAsRead(notification.id);
+                Alert.alert('Success', 'Action completed successfully');
+              }
+            },
+          ]
+        );
+      }
+    } else {
+      handleMarkAsRead(notification.id);
     }
   };
 
@@ -235,93 +338,153 @@ export default function NotificationsPage() {
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'info': return '#4285f4';
-      case 'success': return '#34a853';
-      case 'warning': return '#fbbc04';
-      case 'error': return '#ea4335';
-      case 'application': return '#9c27b0';
-      case 'moa': return '#ff9800';
-      case 'intern': return '#00bcd4';
-      default: return '#666';
+      case 'success': return '#2D5A3D'; // Forest green
+      case 'info': return '#1E3A5F'; // Deep navy blue
+      case 'warning': return '#F4D03F'; // Bright yellow
+      case 'error': return '#E8A598'; // Soft coral
+      case 'application': return '#1E3A5F'; // Deep navy blue
+      case 'moa': return '#F4D03F'; // Bright yellow
+      case 'intern': return '#2D5A3D'; // Forest green
+      default: return '#1E3A5F'; // Deep navy blue
+    }
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'moa': return 'description';
+      case 'application': return 'assignment';
+      case 'system': return 'settings';
+      case 'event': return 'event';
+      default: return 'notifications';
     }
   };
 
   const getPriorityColor = (isImportant: boolean, actionRequired: boolean) => {
-    if (actionRequired) return '#ea4335';
-    if (isImportant) return '#fbbc04';
-    return '#666';
+    if (actionRequired) return '#E8A598'; // Soft coral
+    if (isImportant) return '#F4D03F'; // Bright yellow
+    return '#2D5A3D'; // Forest green
+  };
+
+  // Skeleton Components
+  const SkeletonNotificationItem = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonNotificationItem}>
+        <View style={styles.skeletonNotificationHeader}>
+          <Animated.View style={[styles.skeletonNotificationIcon, { opacity: shimmerOpacity }]} />
+          <View style={styles.skeletonNotificationContent}>
+            <Animated.View style={[styles.skeletonNotificationTitle, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonNotificationMessage, { opacity: shimmerOpacity }]} />
+          </View>
+          <View style={styles.skeletonNotificationMeta}>
+            <Animated.View style={[styles.skeletonNotificationTime, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonUnreadDot, { opacity: shimmerOpacity }]} />
+          </View>
+        </View>
+        <Animated.View style={[styles.skeletonNotificationAction, { opacity: shimmerOpacity }]} />
+      </View>
+    );
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) {
+      return 'Just now';
+    } else if (diffInHours < 24) {
+      return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    } else {
+      const diffInDays = Math.floor(diffInHours / 24);
+      return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+    }
   };
 
   const NotificationItem = ({ notification }: { notification: Notification }) => (
     <TouchableOpacity
       style={[
         styles.notificationItem,
-        !notification.isRead && styles.unreadNotification
+        !notification.isRead && styles.unreadNotification,
+        notification.actionRequired && styles.urgentNotification
       ]}
       onPress={() => handleNotificationAction(notification)}
     >
       <View style={styles.notificationHeader}>
-        <View style={styles.notificationIconContainer}>
+        <View style={[styles.notificationIcon, { backgroundColor: getNotificationColor(notification.type) }]}>
           <MaterialIcons 
             name={getNotificationIcon(notification.type)} 
-            size={24} 
-            color={getNotificationColor(notification.type)} 
+            size={20} 
+            color="#fff" 
           />
-          {!notification.isRead && <View style={styles.unreadDot} />}
         </View>
         <View style={styles.notificationContent}>
           <View style={styles.notificationTitleRow}>
             <Text style={styles.notificationTitle}>{notification.title}</Text>
-            <View style={[
-              styles.priorityIndicator, 
-              { backgroundColor: getPriorityColor(notification.isImportant, notification.actionRequired) }
-            ]} />
+            <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(notification.isImportant, notification.actionRequired) }]}>
+              <Text style={styles.priorityText}>
+                {notification.actionRequired ? 'ACTION REQUIRED' : notification.isImportant ? 'IMPORTANT' : 'NORMAL'}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.notificationMessage}>{notification.message}</Text>
-          <View style={styles.notificationFooter}>
-            <Text style={styles.notificationTimestamp}>{notification.timestamp}</Text>
-            {notification.actionRequired && (
-              <Text style={styles.actionRequiredText}>Action Required</Text>
-            )}
+          <Text style={styles.notificationMessage} numberOfLines={2}>
+            {notification.message}
+          </Text>
+          <View style={styles.notificationMeta}>
+            <View style={styles.categoryContainer}>
+              <MaterialIcons 
+                name={getCategoryIcon(notification.category || 'system')} 
+                size={14} 
+                color="#666" 
+              />
+              <Text style={styles.categoryText}>{notification.category || 'system'}</Text>
+            </View>
+            <Text style={styles.notificationTime}>{formatTimestamp(notification.timestamp)}</Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDeleteNotification(notification.id)}
-        >
-          <MaterialIcons name="delete" size={20} color="#ea4335" />
-        </TouchableOpacity>
+        <View style={styles.notificationActions}>
+          {!notification.isRead && <View style={styles.unreadDot} />}
+          {notification.isImportant && (
+            <MaterialIcons name="star" size={16} color="#fbbc04" />
+          )}
+        </View>
       </View>
+      {notification.actionRequired && (
+        <View style={styles.notificationAction}>
+          <Text style={styles.actionText}>Action Required</Text>
+          <MaterialIcons name="arrow-forward-ios" size={16} color="#4285f4" />
+        </View>
+      )}
     </TouchableOpacity>
   );
 
+  console.log('🔄 Render - loading state:', loading, 'notifications count:', notifications.length);
+
   if (loading) {
+    console.log('🔄 Showing loading screen');
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading notifications...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
+      <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.headerGradient}>
           <Text style={styles.headerTitle}>Notifications</Text>
           <Text style={styles.headerSubtitle}>
             {notifications.filter(n => !n.isRead).length} unread notifications
           </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.markAllButton}
-          onPress={handleMarkAllAsRead}
-        >
-          <MaterialIcons name="done-all" size={20} color="#4285f4" />
-          <Text style={styles.markAllText}>Mark All Read</Text>
-        </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -361,41 +524,37 @@ export default function NotificationsPage() {
         </ScrollView>
       </View>
 
-      {/* Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{filteredNotifications.length}</Text>
-          <Text style={styles.statLabel}>Total Notifications</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#ea4335' }]}>
-            {filteredNotifications.filter(n => !n.isRead).length}
-          </Text>
-          <Text style={styles.statLabel}>Unread</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
-            {filteredNotifications.filter(n => n.isImportant).length}
-          </Text>
-          <Text style={styles.statLabel}>Important</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#ea4335' }]}>
-            {filteredNotifications.filter(n => n.actionRequired).length}
-          </Text>
-          <Text style={styles.statLabel}>Action Required</Text>
-        </View>
+      {/* Actions */}
+      <View style={styles.actionsContainer}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={handleMarkAllAsRead}
+        >
+          <MaterialIcons name="done-all" size={20} color="#4285f4" />
+          <Text style={styles.actionButtonText}>Mark All Read</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Notifications List */}
-      <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
-        {filteredNotifications.length === 0 ? (
+      <Animated.ScrollView 
+        style={[styles.notificationsList, { transform: [{ scale: scaleAnim }] }]} 
+        showsVerticalScrollIndicator={false}
+      >
+        {showSkeleton ? (
+          <>
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+          </>
+        ) : filteredNotifications.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="notifications-none" size={64} color="#ccc" />
-            <Text style={styles.emptyStateTitle}>No notifications found</Text>
+            <MaterialIcons name="notifications-none" size={64} color="#02050a" />
+            <Text style={styles.emptyStateTitle}>No notifications</Text>
             <Text style={styles.emptyStateText}>
               {filter === 'all' 
-                ? 'You\'re all caught up! No notifications at the moment.'
+                ? 'You have no notifications yet'
                 : `No ${filter.replace('-', ' ')} notifications found`
               }
             </Text>
@@ -405,151 +564,136 @@ export default function NotificationsPage() {
             <NotificationItem key={notification.id} notification={notification} />
           ))
         )}
-      </ScrollView>
-    </View>
+      </Animated.ScrollView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  headerContent: {
-    flex: 1,
+  headerGradient: {
+    position: 'relative',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 8,
+    fontFamily: 'System',
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#666',
-  },
-  markAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#4285f4',
-  },
-  markAllText: {
-    color: '#4285f4',
-    fontSize: 14,
+    color: '#F4D03F', // Bright yellow
     fontWeight: '500',
-    marginLeft: 4,
   },
   filterContainer: {
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    paddingVertical: 16,
+    paddingHorizontal: 20,
   },
   filterTab: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginHorizontal: 5,
-    borderRadius: 20,
-    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    marginHorizontal: 6,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   activeFilterTab: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   filterText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  activeFilterText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: '#fff',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 20,
-    gap: 15,
-  },
-  statItem: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statNumber: {
-    fontSize: 24,
+  activeFilterText: {
+    color: '#02050a', // Dark navy text on yellow
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
+  actionsContainer: {
+    backgroundColor: '#2D5A3D', // Forest green
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  actionButtonText: {
+    fontSize: 15,
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '600',
   },
   notificationsList: {
     flex: 1,
-    padding: 20,
   },
   notificationItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    marginHorizontal: 20,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4285f4',
+    borderLeftWidth: 6,
+    borderLeftColor: '#F4D03F', // Bright yellow
+    elevation: 8,
+    shadowOpacity: 0.2,
+  },
+  urgentNotification: {
+    borderLeftWidth: 6,
+    borderLeftColor: '#E8A598', // Soft coral
+    elevation: 8,
+    shadowOpacity: 0.2,
   },
   notificationHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  notificationIconContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ea4335',
+  notificationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
   notificationContent: {
     flex: 1,
@@ -560,56 +704,157 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   notificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a2e',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
     flex: 1,
+    fontFamily: 'System',
   },
-  priorityIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  priorityBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
     marginLeft: 8,
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   notificationMessage: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 8,
+    fontSize: 15,
+    color: '#F4D03F', // Bright yellow
+    lineHeight: 22,
+    fontWeight: '500',
+    opacity: 0.9,
   },
-  notificationFooter: {
+  notificationMeta: {
+    alignItems: 'flex-end',
+  },
+  categoryContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  notificationTimestamp: {
+  categoryText: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    marginLeft: 4,
+    textTransform: 'capitalize',
+    opacity: 0.7,
   },
-  actionRequiredText: {
-    fontSize: 12,
-    color: '#ea4335',
+  notificationTime: {
+    fontSize: 13,
+    color: '#fff',
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  notificationActions: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F4D03F', // Bright yellow
+  },
+  notificationAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  actionText: {
+    fontSize: 15,
+    color: '#F4D03F', // Bright yellow
     fontWeight: '600',
-  },
-  deleteButton: {
-    padding: 4,
-    marginLeft: 8,
   },
   emptyState: {
     alignItems: 'center',
     padding: 40,
   },
   emptyStateTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
+    color: '#02050a',
+    marginTop: 20,
+    marginBottom: 12,
+    fontFamily: 'System',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#02050a',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
+    opacity: 0.7,
+    fontWeight: '400',
+  },
+  // Skeleton Loading Styles
+  skeletonNotificationItem: {
+    backgroundColor: '#1E3A5F',
+    marginHorizontal: 20,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    opacity: 0.7,
+  },
+  skeletonNotificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  skeletonNotificationIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 24,
+    marginRight: 16,
+  },
+  skeletonNotificationContent: {
+    flex: 1,
+  },
+  skeletonNotificationTitle: {
+    width: '70%',
+    height: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  skeletonNotificationMessage: {
+    width: '90%',
+    height: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  skeletonNotificationMeta: {
+    alignItems: 'flex-end',
+  },
+  skeletonNotificationTime: {
+    width: 60,
+    height: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonUnreadDot: {
+    width: 10,
+    height: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 5,
+  },
+  skeletonNotificationAction: {
+    width: '40%',
+    height: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    marginTop: 16,
   },
 });

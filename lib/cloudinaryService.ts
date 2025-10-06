@@ -505,6 +505,72 @@ export class CloudinaryService {
   }
 
   /**
+   * Upload group chat avatar to Cloudinary
+   */
+  static async uploadGroupAvatar(
+    file: File | Blob,
+    groupId: string,
+    options: any = {}
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('☁️ Uploading group avatar to Cloudinary...');
+      
+      // Convert file to base64
+      const base64 = await this.fileToBase64(file);
+      
+      // Create form data for unsigned upload
+      const formData = new FormData();
+      formData.append('file', `data:${file.type};base64,${base64}`);
+      formData.append('cloud_name', this.CLOUD_NAME);
+      formData.append('api_key', this.API_KEY);
+      formData.append('upload_preset', 'ml_default');
+      formData.append('folder', 'internship-avatars/group-chats');
+      formData.append('public_id', `group-chats/${groupId}_${Date.now()}`);
+      
+      console.log('📤 Uploading group avatar with preset:', 'ml_default');
+      console.log('📁 Folder: internship-avatars/group-chats');
+      console.log('👥 Group ID:', groupId);
+
+      // Upload to Cloudinary
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('📊 Upload response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+
+      console.log('✅ Group avatar uploaded successfully:', result.secure_url);
+      
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+      };
+    } catch (error) {
+      console.error('❌ Cloudinary group avatar upload error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  /**
+   * Generate Cloudinary URL for group avatars
+   */
+  static getGroupAvatarUrl(publicId: string, transformations: any = {}): string {
+    const baseUrl = `https://res.cloudinary.com/${this.CLOUD_NAME}/image/upload`;
+    // Default transformations for group avatar display
+    const transformString = 'w_200,h_200,c_fill,g_face,q_auto,f_auto';
+    return `${baseUrl}/${transformString}/${publicId}`;
+  }
+
+  /**
    * Upload any file type to Cloudinary with automatic resource type detection
    */
   static async uploadFile(

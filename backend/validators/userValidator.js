@@ -42,6 +42,9 @@ const studentSchema = Joi.object({
     'string.max': 'First name must not exceed 50 characters',
     'any.required': 'First name is required'
   }),
+  middleName: Joi.string().max(50).allow('', null).optional().messages({
+    'string.max': 'Middle name must not exceed 50 characters'
+  }),
   lastName: Joi.string().min(2).max(50).required().messages({
     'string.min': 'Last name must be at least 2 characters',
     'string.max': 'Last name must not exceed 50 characters',
@@ -99,6 +102,9 @@ const coordinatorSchema = Joi.object({
     'string.max': 'First name must not exceed 50 characters',
     'any.required': 'First name is required'
   }),
+  middleName: Joi.string().max(50).allow('', null).optional().messages({
+    'string.max': 'Middle name must not exceed 50 characters'
+  }),
   lastName: Joi.string().min(2).max(50).required().messages({
     'string.min': 'Last name must be at least 2 characters',
     'string.max': 'Last name must not exceed 50 characters',
@@ -147,6 +153,7 @@ const companySchema = Joi.object({
   }),
   // Allow other fields but don't require them for Company
   firstName: Joi.string().allow('', null).optional(),
+  middleName: Joi.string().allow('', null).optional(),
   lastName: Joi.string().allow('', null).optional(),
   idNumber: Joi.string().allow('', null).optional(),
   age: Joi.string().allow('', null).optional(),

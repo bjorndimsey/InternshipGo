@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { apiService } from '../../../lib/api';
 
 const { width } = Dimensions.get('window');
 
@@ -21,148 +23,219 @@ interface Notification {
   timestamp: string;
   isRead: boolean;
   isImportant: boolean;
-  category: 'application' | 'internship' | 'company' | 'system' | 'event';
+  category: 'moa' | 'requirement' | 'application' | 'internship' | 'company' | 'system' | 'event';
   action?: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  data?: any;
 }
 
-export default function NotificationsPage() {
+interface NotificationResponse {
+  success: boolean;
+  notifications: Notification[];
+  message?: string;
+}
+
+interface NotificationsPageProps {
+  currentUser: {
+    id: string;
+    name: string;
+    email: string;
+    user_type: string;
+  } | null;
+  onUnreadCountChange?: (count: number) => void;
+}
+
+export default function NotificationsPage({ currentUser, onUnreadCountChange }: NotificationsPageProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread' | 'important' | 'urgent'>('all');
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
+    if (currentUser?.id) {
+      fetchNotifications();
+      
+      // Animate on mount
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [currentUser?.id]);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
+
+  // Update unread count when notifications change
+  useEffect(() => {
+    updateUnreadCount();
+  }, [notifications]);
 
   const fetchNotifications = async () => {
+    if (!currentUser?.id) return;
+    
     try {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      setShowSkeleton(true);
+      console.log('🔔 Fetching coordinator notifications for user:', currentUser.id);
       
-      const mockNotifications: Notification[] = [
-        {
-          id: '1',
-          title: 'New Internship Application',
-          message: 'John Doe has submitted an application for TechCorp Solutions internship.',
-          type: 'info',
-          timestamp: '2 hours ago',
-          isRead: false,
-          isImportant: true,
-          category: 'application',
-          action: 'Review Application',
-          priority: 'high',
-        },
-        {
-          id: '2',
-          title: 'MOA Expiry Warning',
-          message: 'DataFlow Inc MOA will expire in 7 days. Please renew the agreement.',
-          type: 'warning',
-          timestamp: '1 day ago',
-          isRead: false,
-          isImportant: true,
-          category: 'company',
-          action: 'Renew MOA',
-          priority: 'urgent',
-        },
-        {
-          id: '3',
-          title: 'Internship Completion',
-          message: 'Sarah Wilson has successfully completed her internship at InnovateLab.',
-          type: 'success',
-          timestamp: '2 days ago',
-          isRead: true,
-          isImportant: false,
-          category: 'internship',
-          action: 'View Report',
-          priority: 'medium',
-        },
-        {
-          id: '4',
-          title: 'Event Reminder',
-          message: 'Internship orientation is scheduled for tomorrow at 9:00 AM.',
-          type: 'info',
-          timestamp: '3 days ago',
-          isRead: true,
-          isImportant: false,
-          category: 'event',
-          action: 'View Details',
-          priority: 'medium',
-        },
-        {
-          id: '5',
-          title: 'System Maintenance',
-          message: 'The system will be under maintenance on Sunday from 2:00 AM to 6:00 AM.',
-          type: 'info',
-          timestamp: '1 week ago',
-          isRead: true,
-          isImportant: false,
-          category: 'system',
-          priority: 'low',
-        },
-        {
-          id: '6',
-          title: 'Application Deadline Approaching',
-          message: 'Only 3 days left for students to submit internship applications.',
-          type: 'warning',
-          timestamp: '1 week ago',
-          isRead: true,
-          isImportant: true,
-          category: 'application',
-          action: 'Send Reminder',
-          priority: 'high',
-        },
-        {
-          id: '7',
-          title: 'New Company Partnership',
-          message: 'CloudTech Systems has joined as a new partner company.',
-          type: 'success',
-          timestamp: '2 weeks ago',
-          isRead: true,
-          isImportant: false,
-          category: 'company',
-          action: 'View Company',
-          priority: 'medium',
-        },
-      ];
+      // First, get the coordinator's ID from their user_id
+      const coordinatorResponse = await apiService.getCoordinatorProfileByUserId(currentUser.id);
       
-      setNotifications(mockNotifications);
+      if (!coordinatorResponse.success || !coordinatorResponse.user) {
+        console.error('❌ Failed to get coordinator profile');
+        setNotifications([]);
+        return;
+      }
+
+      const coordinatorId = coordinatorResponse.user.id;
+      console.log('👨‍🏫 Found coordinator ID:', coordinatorId);
+
+      // Now fetch notifications for this coordinator
+      const response = await apiService.getCoordinatorNotifications(coordinatorId, currentUser.id) as NotificationResponse;
+      
+      if (response.success && response.notifications) {
+        console.log('🔔 Fetched notifications:', response.notifications.length);
+        setNotifications(response.notifications);
+      } else {
+        console.log('⚠️ No notifications found or API error');
+        setNotifications([]);
+      }
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('❌ Error fetching notifications:', error);
+      setNotifications([]);
     } finally {
       setLoading(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(notifications.map(notification =>
-      notification.id === notificationId
-        ? { ...notification, isRead: true }
-        : notification
-    ));
+  const handleMarkAsRead = async (notificationId: string) => {
+    if (!currentUser?.id) return;
+    
+    try {
+      // Get coordinator ID
+      const coordinatorResponse = await apiService.getCoordinatorProfileByUserId(currentUser.id);
+      if (!coordinatorResponse.success || !coordinatorResponse.user) return;
+      
+      const coordinatorId = coordinatorResponse.user.id;
+      const userId = currentUser.id; // Use user_id for authentication
+      
+      await apiService.markCoordinatorNotificationAsRead(notificationId, coordinatorId, userId);
+      setNotifications(notifications.map(notification =>
+        notification.id === notificationId
+          ? { ...notification, isRead: true }
+          : notification
+      ));
+      
+      // Update unread count in dashboard
+      updateUnreadCount();
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(notifications.map(notification => ({
-      ...notification,
-      isRead: true
-    })));
-    Alert.alert('Success', 'All notifications marked as read');
+  const updateUnreadCount = () => {
+    const unreadCount = notifications.filter(notification => !notification.isRead).length;
+    onUnreadCountChange?.(unreadCount);
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      // Get coordinator ID
+      const coordinatorResponse = await apiService.getCoordinatorProfileByUserId(currentUser.id);
+      if (!coordinatorResponse.success || !coordinatorResponse.user) return;
+      
+      const coordinatorId = coordinatorResponse.user.id;
+      const userId = currentUser.id; // Use user_id for authentication
+      
+      await apiService.markAllCoordinatorNotificationsAsRead(coordinatorId, userId);
+      setNotifications(notifications.map(notification => ({
+        ...notification,
+        isRead: true
+      })));
+      
+      // Update unread count in dashboard
+      updateUnreadCount();
+      
+      Alert.alert('Success', 'All notifications marked as read');
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      Alert.alert('Error', 'Failed to mark all notifications as read');
+    }
   };
 
   const handleNotificationAction = (notification: Notification) => {
     if (notification.action) {
-      Alert.alert(
-        'Action',
-        `Would you like to ${notification.action.toLowerCase()}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes', onPress: () => {
-            Alert.alert('Success', `Action completed: ${notification.action}`);
-            handleMarkAsRead(notification.id);
-          }},
-        ]
-      );
+      // Handle different notification types directly
+      if (notification.category === 'moa') {
+        Alert.alert('MOA Details', 
+          `Company: ${notification.data?.companyName}\nStatus: ${notification.data?.moaStatus}\nApproved: ${notification.data?.approvedAt ? new Date(notification.data.approvedAt).toLocaleString() : 'N/A'}\nExpiry: ${notification.data?.moaExpiryDate || 'N/A'}`
+        );
+        handleMarkAsRead(notification.id);
+      } else if (notification.category === 'requirement') {
+        // Enhanced requirement details with submission information
+        let details = `Student: ${notification.data?.studentName} (${notification.data?.studentEmail})\n`;
+        details += `Requirement: ${notification.data?.requirementName}\n`;
+        details += `Description: ${notification.data?.requirementDescription}\n`;
+        details += `Due Date: ${notification.data?.dueDate || 'No due date'}\n`;
+        details += `Required: ${notification.data?.isRequired ? 'Yes' : 'No'}\n`;
+        details += `Submitted: ${notification.data?.submittedAt ? new Date(notification.data.submittedAt).toLocaleString() : 'N/A'}\n`;
+        details += `File: ${notification.data?.fileName || 'No file'}\n`;
+        details += `Size: ${notification.data?.fileSize ? `${(notification.data.fileSize / 1024).toFixed(1)} KB` : 'Unknown'}`;
+        
+        Alert.alert('Requirement Submission Details', details);
+        handleMarkAsRead(notification.id);
+      } else {
+        Alert.alert('Success', `Action completed: ${notification.action}`);
+        handleMarkAsRead(notification.id);
+      }
     } else {
       handleMarkAsRead(notification.id);
     }
@@ -194,17 +267,19 @@ export default function NotificationsPage() {
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'success': return '#34a853';
-      case 'info': return '#4285f4';
-      case 'warning': return '#fbbc04';
-      case 'error': return '#ea4335';
-      case 'urgent': return '#d32f2f';
-      default: return '#666';
+      case 'success': return '#2D5A3D'; // Forest green
+      case 'info': return '#1E3A5F'; // Deep navy blue
+      case 'warning': return '#F4D03F'; // Bright yellow
+      case 'error': return '#E8A598'; // Soft coral
+      case 'urgent': return '#E8A598'; // Soft coral
+      default: return '#1E3A5F'; // Deep navy blue
     }
   };
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
+      case 'moa': return 'description';
+      case 'requirement': return 'assignment';
       case 'application': return 'assignment';
       case 'internship': return 'work';
       case 'company': return 'business-center';
@@ -216,11 +291,51 @@ export default function NotificationsPage() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return '#d32f2f';
-      case 'high': return '#ea4335';
-      case 'medium': return '#fbbc04';
-      case 'low': return '#34a853';
-      default: return '#666';
+      case 'urgent': return '#E8A598'; // Soft coral
+      case 'high': return '#E8A598'; // Soft coral
+      case 'medium': return '#F4D03F'; // Bright yellow
+      case 'low': return '#2D5A3D'; // Forest green
+      default: return '#1E3A5F'; // Deep navy blue
+    }
+  };
+
+  // Skeleton Components
+  const SkeletonNotificationItem = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonNotificationItem}>
+        <View style={styles.skeletonNotificationHeader}>
+          <Animated.View style={[styles.skeletonNotificationIcon, { opacity: shimmerOpacity }]} />
+          <View style={styles.skeletonNotificationContent}>
+            <Animated.View style={[styles.skeletonNotificationTitle, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonNotificationMessage, { opacity: shimmerOpacity }]} />
+          </View>
+          <View style={styles.skeletonNotificationMeta}>
+            <Animated.View style={[styles.skeletonNotificationTime, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonUnreadDot, { opacity: shimmerOpacity }]} />
+          </View>
+        </View>
+        <Animated.View style={[styles.skeletonNotificationAction, { opacity: shimmerOpacity }]} />
+      </View>
+    );
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) {
+      return 'Just now';
+    } else if (diffInHours < 24) {
+      return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    } else {
+      const diffInDays = Math.floor(diffInHours / 24);
+      return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
     }
   };
 
@@ -260,7 +375,7 @@ export default function NotificationsPage() {
               />
               <Text style={styles.categoryText}>{notification.category}</Text>
             </View>
-            <Text style={styles.notificationTime}>{notification.timestamp}</Text>
+            <Text style={styles.notificationTime}>{formatTimestamp(notification.timestamp)}</Text>
           </View>
         </View>
         <View style={styles.notificationActions}>
@@ -284,21 +399,23 @@ export default function NotificationsPage() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading notifications...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <Text style={styles.headerSubtitle}>
-          {notifications.filter(n => !n.isRead).length} unread notifications
-        </Text>
-      </View>
+      <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.headerGradient}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={styles.headerSubtitle}>
+            {notifications.filter(n => !n.isRead).length} unread notifications
+          </Text>
+        </View>
+      </Animated.View>
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -350,10 +467,21 @@ export default function NotificationsPage() {
       </View>
 
       {/* Notifications List */}
-      <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
-        {filteredNotifications.length === 0 ? (
+      <Animated.ScrollView 
+        style={[styles.notificationsList, { transform: [{ scale: scaleAnim }] }]} 
+        showsVerticalScrollIndicator={false}
+      >
+        {showSkeleton ? (
+          <>
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+            <SkeletonNotificationItem />
+          </>
+        ) : filteredNotifications.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="notifications-none" size={64} color="#ccc" />
+            <MaterialIcons name="notifications-none" size={64} color="#02050a" />
             <Text style={styles.emptyStateTitle}>No notifications</Text>
             <Text style={styles.emptyStateText}>
               {filter === 'all' 
@@ -367,118 +495,136 @@ export default function NotificationsPage() {
             <NotificationItem key={notification.id} notification={notification} />
           ))
         )}
-      </ScrollView>
-    </View>
+      </Animated.ScrollView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   header: {
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  headerGradient: {
+    position: 'relative',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 8,
+    fontFamily: 'System',
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '500',
   },
   filterContainer: {
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    paddingVertical: 16,
+    paddingHorizontal: 20,
   },
   filterTab: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginHorizontal: 5,
-    borderRadius: 20,
-    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    marginHorizontal: 6,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   activeFilterTab: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   filterText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  activeFilterText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: '#fff',
   },
+  activeFilterText: {
+    color: '#02050a', // Dark navy text on yellow
+    fontWeight: 'bold',
+  },
   actionsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#2D5A3D', // Forest green
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   actionButtonText: {
-    fontSize: 14,
-    color: '#4285f4',
+    fontSize: 15,
+    color: '#fff',
     marginLeft: 8,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   notificationsList: {
     flex: 1,
   },
   notificationItem: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1E3A5F', // Deep navy blue
     marginHorizontal: 20,
-    marginVertical: 5,
-    borderRadius: 12,
-    padding: 16,
-    elevation: 2,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4285f4',
+    borderLeftWidth: 6,
+    borderLeftColor: '#F4D03F', // Bright yellow
+    elevation: 8,
+    shadowOpacity: 0.2,
   },
   urgentNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#d32f2f',
+    borderLeftWidth: 6,
+    borderLeftColor: '#E8A598', // Soft coral
+    elevation: 8,
+    shadowOpacity: 0.2,
   },
   notificationHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   notificationContent: {
     flex: 1,
@@ -489,10 +635,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   notificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a2e',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
     flex: 1,
+    fontFamily: 'System',
   },
   priorityBadge: {
     paddingHorizontal: 6,
@@ -506,15 +653,14 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   notificationMessage: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 8,
+    fontSize: 15,
+    color: '#F4D03F', // Bright yellow
+    lineHeight: 22,
+    fontWeight: '500',
+    opacity: 0.9,
   },
   notificationMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   categoryContainer: {
     flexDirection: 'row',
@@ -522,53 +668,124 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     marginLeft: 4,
     textTransform: 'capitalize',
+    opacity: 0.7,
   },
   notificationTime: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 13,
+    color: '#fff',
+    marginBottom: 6,
+    fontWeight: '500',
   },
   notificationActions: {
     alignItems: 'flex-end',
     gap: 4,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4285f4',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   notificationAction: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
   actionText: {
-    fontSize: 14,
-    color: '#4285f4',
-    fontWeight: '500',
+    fontSize: 15,
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
     padding: 40,
   },
   emptyStateTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
+    color: '#02050a',
+    marginTop: 20,
+    marginBottom: 12,
+    fontFamily: 'System',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#02050a',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
+    opacity: 0.7,
+    fontWeight: '400',
+  },
+  // Skeleton Loading Styles
+  skeletonNotificationItem: {
+    backgroundColor: '#1E3A5F',
+    marginHorizontal: 20,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    opacity: 0.7,
+  },
+  skeletonNotificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  skeletonNotificationIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 24,
+    marginRight: 16,
+  },
+  skeletonNotificationContent: {
+    flex: 1,
+  },
+  skeletonNotificationTitle: {
+    width: '70%',
+    height: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  skeletonNotificationMessage: {
+    width: '90%',
+    height: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  skeletonNotificationMeta: {
+    alignItems: 'flex-end',
+  },
+  skeletonNotificationTime: {
+    width: 60,
+    height: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonUnreadDot: {
+    width: 10,
+    height: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 5,
+  },
+  skeletonNotificationAction: {
+    width: '40%',
+    height: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    marginTop: 16,
   },
 });

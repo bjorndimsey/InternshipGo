@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ScrollView,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
 import SubmissionsPage from './pages/SubmissionsPage';
+import { apiService } from '../../lib/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -58,30 +60,325 @@ const navigationItems: MenuItem[] = [
 export default function CoordinatorsDashboard({ onLogout, currentUser }: CoordinatorsDashboardProps) {
   const [activeScreen, setActiveScreen] = useState('Dashboard');
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [sidebarAnimation] = useState(new Animated.Value(-250));
+  const [sidebarAnimation] = useState(new Animated.Value(0));
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [userProfile, setUserProfile] = useState<{
+    first_name?: string;
+    last_name?: string;
+    profile_picture?: string;
+  } | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showAutoNotifications, setShowAutoNotifications] = useState(false);
+  const [notificationsAnimating, setNotificationsAnimating] = useState(false);
+  const [notificationAnimations] = useState(() => 
+    Array.from({ length: 10 }, () => new Animated.Value(0))
+  );
+  const [notificationIconBounce] = useState(new Animated.Value(1));
+  const [notificationIconShine] = useState(new Animated.Value(0));
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+  const [logoutSuccessAnim] = useState(new Animated.Value(0));
+  const [waveAnim] = useState(new Animated.Value(0));
+
+  // Fetch user profile and unread counts when component mounts
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!currentUser?.id) return;
+
+      try {
+        // Fetch user profile
+        const profileResponse = await apiService.getProfile(currentUser.id);
+        if (profileResponse.success && profileResponse.user) {
+          console.log('🔍 Coordinator dashboard profile data:', profileResponse.user);
+          console.log('🔍 Profile picture field:', profileResponse.user.profile_picture, profileResponse.user.profilePicture);
+          
+          const profileData = {
+            first_name: profileResponse.user.first_name || profileResponse.user.firstName || '',
+            last_name: profileResponse.user.last_name || profileResponse.user.lastName || '',
+            profile_picture: profileResponse.user.profile_picture || profileResponse.user.profilePicture,
+          };
+          console.log('🔍 Setting user profile data:', profileData);
+          setUserProfile(profileData);
+        }
+
+        // Fetch unread message count
+        const messagesResponse = await apiService.getConversations(currentUser.id);
+        if (messagesResponse.success && messagesResponse.conversations) {
+          const totalUnreadMessages = messagesResponse.conversations.reduce(
+            (total: number, conv: any) => total + (conv.unreadCount || 0), 
+            0
+          );
+          setUnreadMessageCount(totalUnreadMessages);
+        }
+
+        // Fetch notifications
+        const coordinatorResponse = await apiService.getCoordinatorProfileByUserId(currentUser.id);
+        if (coordinatorResponse.success && coordinatorResponse.user) {
+          const coordinatorId = coordinatorResponse.user.id;
+          const notificationsResponse = await apiService.getCoordinatorNotifications(coordinatorId, currentUser.id) as any;
+          if (notificationsResponse.success && notificationsResponse.notifications) {
+            setNotifications(notificationsResponse.notifications);
+            const unreadNotifications = notificationsResponse.notifications.filter(
+              (notification: any) => !notification.isRead
+            );
+            setUnreadNotificationCount(unreadNotifications.length);
+            
+            // Start auto notification popup during stats counting (after 1 second)
+            if (unreadNotifications.length > 0) {
+              setTimeout(() => {
+                setShowAutoNotifications(true);
+                setNotificationsAnimating(true);
+                
+                // Animate all notifications appearing at once
+                const animations = unreadNotifications.slice(0, 10).map((_: any, index: number) => 
+                  Animated.timing(notificationAnimations[index], {
+                    toValue: 1,
+                    duration: 500,
+                    delay: index * 100, // Stagger the appearance
+                    useNativeDriver: true,
+                  })
+                );
+                
+                Animated.parallel(animations).start(() => {
+                  // After all notifications appear, wait 1.5 seconds then animate them back to icon
+                  setTimeout(() => {
+                    const suckAnimations = unreadNotifications.slice(0, 10).map((_: any, index: number) => 
+                      Animated.timing(notificationAnimations[index], {
+                        toValue: 0,
+                        duration: 1000,
+                        delay: index * 50, // Stagger the sucking effect
+                        useNativeDriver: true,
+                      })
+                    );
+                    
+                    Animated.parallel(suckAnimations).start(() => {
+                      // Add bounce effect to notification icon after sucking
+                      Animated.sequence([
+                        Animated.timing(notificationIconBounce, {
+                          toValue: 1.3,
+                          duration: 200,
+                          useNativeDriver: true,
+                        }),
+                        Animated.timing(notificationIconBounce, {
+                          toValue: 0.9,
+                          duration: 150,
+                          useNativeDriver: true,
+                        }),
+                        Animated.timing(notificationIconBounce, {
+                          toValue: 1.1,
+                          duration: 100,
+                          useNativeDriver: true,
+                        }),
+                        Animated.timing(notificationIconBounce, {
+                          toValue: 1,
+                          duration: 100,
+                          useNativeDriver: true,
+                        }),
+                      ]).start(() => {
+                        // Add shine effect after bounce
+                        Animated.sequence([
+                          Animated.timing(notificationIconShine, {
+                            toValue: 1,
+                            duration: 300,
+                            useNativeDriver: true,
+                          }),
+                          Animated.timing(notificationIconShine, {
+                            toValue: 0,
+                            duration: 200,
+                            useNativeDriver: true,
+                          }),
+                        ]).start();
+                      });
+                      
+                      setShowAutoNotifications(false);
+                      setNotificationsAnimating(false);
+                      // Reset all animations
+                      notificationAnimations.forEach(anim => anim.setValue(0));
+                    });
+                  }, 1500); // Show notifications for 1.5 seconds (shorter to sync with stats)
+                });
+              }, 1000); // Start during stats counting (1 second delay)
+            }
+          } else {
+            setNotifications([]);
+            setUnreadNotificationCount(0);
+          }
+        } else {
+          setNotifications([]);
+          setUnreadNotificationCount(0);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, [currentUser?.id]);
 
   const toggleSidebar = () => {
-    const toValue = sidebarVisible ? -250 : 0;
+    const toValue = sidebarVisible ? 0 : 1;
     setSidebarVisible(!sidebarVisible);
     
     Animated.timing(sidebarAnimation, {
       toValue,
       duration: 300,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   };
 
-  const navigateToScreen = (screenName: string) => {
+  const handleNavigation = (screenName: string) => {
     setActiveScreen(screenName);
-    toggleSidebar();
+    if (sidebarVisible) {
+      toggleSidebar();
+    }
+    
+    // Refresh unread counts when navigating to messages or notifications
+    if (screenName === 'Messages' || screenName === 'Notifications') {
+      refreshUnreadCounts();
+    }
+    
+    // Refresh user profile when navigating to profile page
+    if (screenName === 'Profile') {
+      refreshUserProfile();
+    }
   };
 
-  const handleLogout = async () => {
+  const refreshUnreadCounts = async () => {
+    if (!currentUser?.id) return;
+
     try {
-      await onLogout();
+      // Fetch unread message count
+      const messagesResponse = await apiService.getConversations(currentUser.id);
+      if (messagesResponse.success && messagesResponse.conversations) {
+        const totalUnreadMessages = messagesResponse.conversations.reduce(
+          (total: number, conv: any) => total + (conv.unreadCount || 0), 
+          0
+        );
+        setUnreadMessageCount(totalUnreadMessages);
+      }
+    } catch (error) {
+      console.error('Error refreshing unread counts:', error);
+    }
+  };
+
+  const refreshUserProfile = async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      const profileResponse = await apiService.getProfile(currentUser.id);
+      if (profileResponse.success && profileResponse.user) {
+        console.log('🔄 Refreshing coordinator profile:', profileResponse.user);
+        setUserProfile({
+          first_name: profileResponse.user.first_name || profileResponse.user.firstName || '',
+          last_name: profileResponse.user.last_name || profileResponse.user.lastName || '',
+          profile_picture: profileResponse.user.profile_picture || profileResponse.user.profilePicture,
+        });
+      }
+    } catch (error) {
+      console.error('Error refreshing user profile:', error);
+    }
+  };
+
+  const handleUnreadCountChange = (count: number) => {
+    setUnreadMessageCount(count);
+  };
+
+  const handleUnreadNotificationCountChange = (count: number) => {
+    setUnreadNotificationCount(count);
+  };
+
+  const toggleNotificationModal = () => {
+    setShowNotificationModal(!showNotificationModal);
+  };
+
+  const clearNotification = async (notificationId: string) => {
+    try {
+      // Mark notification as read
+      const response = await apiService.markNotificationAsRead(currentUser?.id || '', notificationId);
+      if (response.success) {
+        // Update local state
+        setNotifications(prev => 
+          prev.map(notif => 
+            notif.id === notificationId 
+              ? { ...notif, isRead: true }
+              : notif
+          )
+        );
+        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Error clearing notification:', error);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      const unreadNotifications = notifications.filter(notif => !notif.isRead);
+      for (const notification of unreadNotifications) {
+        await apiService.markNotificationAsRead(currentUser?.id || '', notification.id);
+      }
+      setNotifications(prev => 
+        prev.map(notif => ({ ...notif, isRead: true }))
+      );
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    try {
+      setShowLogoutModal(false);
+      setShowLogoutSuccess(true);
+      
+      // Start success animation
+      Animated.sequence([
+        Animated.timing(logoutSuccessAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.delay(1500), // Show success message for 1.5 seconds
+        Animated.timing(logoutSuccessAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Execute logout after animation completes
+        onLogout();
+      });
+
+      // Start wave animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(waveAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim, {
+            toValue: 0,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ]),
+        { iterations: 3 } // Wave 3 times
+      ).start();
     } catch (error) {
       console.error('Error during logout:', error);
+      setShowLogoutSuccess(false);
     }
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const renderScreen = () => {
@@ -97,9 +394,9 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
       case 'Submissions':
         return <SubmissionsPage currentUser={currentUser} />;
       case 'Messages':
-        return <MessagesPage />;
+        return <MessagesPage currentUser={currentUser} onUnreadCountChange={handleUnreadCountChange} />;
       case 'Notifications':
-        return <NotificationsPage />;
+        return <NotificationsPage currentUser={currentUser} onUnreadCountChange={handleUnreadNotificationCountChange} />;
       case 'Profile':
         return <ProfilePage currentUser={currentUser} />;
       default:
@@ -107,13 +404,18 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
     }
   };
 
+  const sidebarTranslateX = sidebarAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-300, 0],
+  });
+
   return (
     <View style={styles.container}>
       {/* Main Content */}
       <View style={styles.mainContent}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.menuButton} onPress={toggleSidebar}>
+          <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
             <Ionicons name="menu-outline" size={24} color="#333" />
           </TouchableOpacity>
           
@@ -126,14 +428,34 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
           </View>
           
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Ionicons name="notifications-outline" size={20} color="#666" />
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationCount}>3</Text>
-              </View>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: notificationIconBounce }] }}>
+              <TouchableOpacity style={styles.notificationButton} onPress={toggleNotificationModal}>
+                <Ionicons name="notifications-outline" size={20} color="#fff" />
+                {unreadNotificationCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationCount}>{unreadNotificationCount}</Text>
+                  </View>
+                )}
+                {/* Shine effect overlay */}
+                <Animated.View 
+                  style={[
+                    styles.notificationShine,
+                    {
+                      opacity: notificationIconShine,
+                      transform: [{
+                        translateX: notificationIconShine.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-50, 50],
+                        })
+                      }]
+                    }
+                  ]} 
+                />
+              </TouchableOpacity>
+            </Animated.View>
           </View>
         </View>
+
 
         {/* Screen Content */}
         <View style={styles.screenContainer}>
@@ -141,7 +463,7 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
         </View>
       </View>
 
-      {/* Overlay */}
+      {/* Sidebar Overlay */}
       {sidebarVisible && (
         <TouchableOpacity 
           style={styles.overlay} 
@@ -154,7 +476,7 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
       <Animated.View 
         style={[
           styles.sidebar,
-          { transform: [{ translateX: sidebarAnimation }] }
+          { transform: [{ translateX: sidebarTranslateX }] }
         ]}
       >
         <View style={styles.sidebarHeader}>
@@ -165,15 +487,15 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
           <Text style={styles.sidebarSubtitle}>Coordinator Dashboard</Text>
         </View>
 
-        <View style={styles.navigationContainer}>
+        <View style={styles.navigation}>
           {navigationItems.map((item) => (
             <TouchableOpacity
               key={item.name}
               style={[
-                styles.navigationItem,
-                activeScreen === item.screen && styles.activeNavigationItem
+                styles.navItem,
+                activeScreen === item.screen && styles.activeNavItem
               ]}
-              onPress={() => navigateToScreen(item.screen)}
+              onPress={() => handleNavigation(item.screen)}
             >
               <Ionicons 
                 name={item.icon as any} 
@@ -181,19 +503,19 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
                 color={activeScreen === item.screen ? '#FF8400' : '#666'} 
               />
               <Text style={[
-                styles.navigationText,
-                activeScreen === item.screen && styles.activeNavigationText
+                styles.navText,
+                activeScreen === item.screen && styles.activeNavText
               ]}>
                 {item.name}
               </Text>
-              {item.name === 'Messages' && (
+              {item.name === 'Messages' && unreadMessageCount > 0 && (
                 <View style={styles.messageBadge}>
-                  <Text style={styles.messageBadgeText}>2</Text>
+                  <Text style={styles.messageBadgeText}>{unreadMessageCount}</Text>
                 </View>
               )}
-              {item.name === 'Notifications' && (
+              {item.name === 'Notifications' && unreadNotificationCount > 0 && (
                 <View style={styles.notificationSidebarBadge}>
-                  <Text style={styles.notificationSidebarText}>5</Text>
+                  <Text style={styles.notificationSidebarText}>{unreadNotificationCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -203,10 +525,27 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
         <View style={styles.sidebarFooter}>
           <View style={styles.userInfo}>
             <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>MS</Text>
+              {userProfile?.profile_picture ? (
+                <Image 
+                  source={{ uri: userProfile.profile_picture }} 
+                  style={styles.userAvatarImage}
+                  onLoad={() => console.log('✅ Profile picture loaded successfully')}
+                  onError={(error) => console.log('❌ Profile picture failed to load:', error)}
+                />
+              ) : (
+                <Text style={styles.userAvatarText}>
+                  {userProfile?.first_name?.charAt(0) || currentUser?.email?.charAt(0) || 'C'}
+                  {userProfile?.last_name?.charAt(0) || ''}
+                </Text>
+              )}
             </View>
             <View style={styles.userDetails}>
-              <Text style={styles.userName}>Dr. Maria Santos</Text>
+              <Text style={styles.userName}>
+                {userProfile?.first_name && userProfile?.last_name 
+                  ? `${userProfile.first_name} ${userProfile.last_name}`
+                  : currentUser?.email?.split('@')[0] || 'Coordinator'
+                }
+              </Text>
               <Text style={styles.userRole}>Internship Coordinator</Text>
             </View>
           </View>
@@ -217,6 +556,339 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* Notification Modal */}
+      {showNotificationModal && (
+        <TouchableOpacity 
+          style={styles.notificationModalOverlay}
+          onPress={toggleNotificationModal}
+          activeOpacity={1}
+        >
+          {/* Arrow pointing from notification icon to modal */}
+          <View style={styles.notificationArrow} />
+          
+          <TouchableOpacity 
+            style={styles.notificationModal}
+            onPress={(e) => e.stopPropagation()}
+            activeOpacity={1}
+          >
+            <View style={styles.notificationModalHeader}>
+              <Text style={styles.notificationModalTitle}>Notifications</Text>
+              <TouchableOpacity onPress={clearAllNotifications}>
+                <Text style={styles.clearAllText}>Clear all</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.notificationList} showsVerticalScrollIndicator={false}>
+              {notifications.length > 0 ? (
+                notifications.slice(0, 5).map((notification, index) => (
+                  <View key={notification.id || index} style={styles.notificationItem}>
+                    <View style={styles.notificationIconContainer}>
+                      <View style={[
+                        styles.notificationIcon,
+                        { backgroundColor: notification.type === 'success' ? '#2D5A3D' : 
+                                         notification.type === 'warning' ? '#F4D03F' : 
+                                         notification.type === 'error' ? '#E8A598' : '#1E3A5F' }
+                      ]}>
+                        <Ionicons 
+                          name={notification.type === 'success' ? 'checkmark' : 
+                                notification.type === 'warning' ? 'warning' : 
+                                notification.type === 'error' ? 'close' : 'information'} 
+                          size={16} 
+                          color="#fff" 
+                        />
+                      </View>
+                    </View>
+                    
+                    <View style={styles.notificationContent}>
+                      <Text style={styles.notificationMessage} numberOfLines={2}>
+                        {notification.message || notification.title || 'New notification'}
+                      </Text>
+                      <View style={styles.notificationMeta}>
+                        <Ionicons 
+                          name={notification.isRead ? 'checkmark-circle' : 'time'} 
+                          size={12} 
+                          color={notification.isRead ? '#2D5A3D' : '#F4D03F'} 
+                        />
+                        <Text style={styles.notificationTime}>
+                          {notification.created_at ? 
+                            new Date(notification.created_at).toLocaleDateString() : 
+                            'Just now'
+                          }
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.clearNotificationButton}
+                      onPress={() => clearNotification(notification.id)}
+                    >
+                      <Text style={styles.clearNotificationText}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyNotifications}>
+                  <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
+                  <Text style={styles.emptyNotificationsText}>No notifications</Text>
+                </View>
+              )}
+            </ScrollView>
+            
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => {
+                setShowNotificationModal(false);
+                handleNavigation('Notifications');
+              }}
+            >
+              <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <TouchableOpacity 
+          style={styles.logoutModalOverlay}
+          onPress={cancelLogout}
+          activeOpacity={1}
+        >
+          <TouchableOpacity 
+            style={styles.logoutModal}
+            onPress={(e) => e.stopPropagation()}
+            activeOpacity={1}
+          >
+            <View style={styles.logoutModalHeader}>
+              <Ionicons name="log-out-outline" size={32} color="#dc3545" />
+              <Text style={styles.logoutModalTitle}>Confirm Logout</Text>
+            </View>
+            
+            <Text style={styles.logoutModalMessage}>
+              Are you sure you want to logout? You will need to sign in again to access your account.
+            </Text>
+            
+            <View style={styles.logoutModalButtons}>
+              <TouchableOpacity 
+                style={styles.logoutCancelButton}
+                onPress={cancelLogout}
+              >
+                <Text style={styles.logoutCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.logoutConfirmButton}
+                onPress={confirmLogout}
+              >
+                <Text style={styles.logoutConfirmText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
+
+      {/* Logout Success Animation */}
+      {showLogoutSuccess && (
+        <View style={styles.logoutSuccessOverlay}>
+          <Animated.View 
+            style={[
+              styles.logoutSuccessContainer,
+              {
+                opacity: logoutSuccessAnim,
+                transform: [
+                  {
+                    scale: logoutSuccessAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.8, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.logoutSuccessIcon,
+                {
+                  transform: [
+                    {
+                      scale: logoutSuccessAnim.interpolate({
+                        inputRange: [0, 0.5, 1],
+                        outputRange: [0, 1.2, 1],
+                      }),
+                    },
+                    {
+                      rotate: waveAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['-20deg', '20deg'], // Wave from -20 to +20 degrees
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Ionicons name="hand-left" size={80} color="#F4D03F" />
+            </Animated.View>
+            
+            <Animated.Text 
+              style={[
+                styles.logoutSuccessTitle,
+                {
+                  opacity: logoutSuccessAnim,
+                  transform: [
+                    {
+                      translateY: logoutSuccessAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [20, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              Logout Successful!
+            </Animated.Text>
+            
+            <Animated.Text 
+              style={[
+                styles.logoutSuccessMessage,
+                {
+                  opacity: logoutSuccessAnim,
+                  transform: [
+                    {
+                      translateY: logoutSuccessAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [20, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              You have been logged out successfully.
+            </Animated.Text>
+          </Animated.View>
+        </View>
+      )}
+
+      {/* Auto Notification Popup */}
+      {showAutoNotifications && (() => {
+        const unreadNotifications = notifications.filter(notification => !notification.isRead);
+        const maxNotifications = Math.min(unreadNotifications.length, 10);
+        
+        if (maxNotifications === 0) return null;
+        
+        return (
+          <View style={styles.autoNotificationOverlay}>
+            {/* Animated Notifications */}
+            {unreadNotifications.slice(0, maxNotifications).map((notification, index) => {
+              // Responsive positioning logic
+              const isMobile = width < 400;
+              
+              // Get the actual notification button position
+              const actualNotificationButtonX = isMobile ? width - 30 : width - 40; // Actual button position
+              const actualNotificationButtonY = 25; // Actual button Y position in header
+              
+              // Calculate notification width for proper centering
+              const notificationWidth = isMobile ? Math.min(width - 40, 300) : 320;
+              
+              // Stack notifications vertically with proper spacing
+              const stackOffset = index * 8;
+              
+              // Initial display position (below header)
+              const displayY = 90;
+              const displayX = isMobile ? (width - notificationWidth) / 2 : actualNotificationButtonX - notificationWidth + 20;
+              
+              // Entry animation - notifications appear from below
+              const translateY = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [displayY + 100 + stackOffset, displayY + stackOffset],
+              });
+              
+              const translateX = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0],
+              });
+              
+              const scale = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.8, 1],
+              });
+              
+              const opacity = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 1],
+              });
+              
+              // Sucking animation - notifications move to the notification button position
+              const suckTranslateY = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [actualNotificationButtonY - displayY - stackOffset, displayY + stackOffset], // Move to exact button Y position
+              });
+              
+              const suckTranslateX = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [actualNotificationButtonX - displayX, 0], // Move to button X position
+              });
+              
+              const suckScale = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.01, 1], // Shrink to almost nothing as it reaches the icon
+              });
+              
+              const suckOpacity = notificationAnimations[index].interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 1], // Fade to completely invisible as it reaches the icon
+              });
+              
+              // Calculate left position for proper centering
+              const leftPosition = displayX;
+              
+              return (
+                <Animated.View
+                  key={notification.id || index}
+                  style={[
+                    styles.autoNotificationItem,
+                    {
+                      transform: [
+                        { translateY: notificationsAnimating ? suckTranslateY : translateY },
+                        { translateX: notificationsAnimating ? suckTranslateX : translateX },
+                        { scale: notificationsAnimating ? suckScale : scale },
+                      ],
+                      opacity: notificationsAnimating ? suckOpacity : opacity,
+                      left: leftPosition, // Responsive positioning
+                    },
+                  ]}
+                >
+                  <View style={styles.autoNotificationContent}>
+                    <View style={styles.autoNotificationIconContainer}>
+                      <View style={[
+                        styles.autoNotificationIcon,
+                        { backgroundColor: notification.type === 'success' ? '#2D5A3D' : 
+                                         notification.type === 'warning' ? '#F4D03F' : 
+                                         notification.type === 'error' ? '#E8A598' : '#1E3A5F' }
+                      ]}>
+                        <Ionicons 
+                          name={notification.type === 'success' ? 'checkmark' : 
+                                notification.type === 'warning' ? 'warning' : 
+                                notification.type === 'error' ? 'close' : 'information'} 
+                          size={16} 
+                          color="#fff" 
+                        />
+                      </View>
+                    </View>
+                    
+                    <Text style={styles.autoNotificationText} numberOfLines={2}>
+                      {notification.title || 'New Notification'}
+                    </Text>
+                  </View>
+                </Animated.View>
+              );
+            })}
+          </View>
+        );
+      })()}
     </View>
   );
 }
@@ -224,7 +896,7 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   mainContent: {
     flex: 1,
@@ -233,63 +905,91 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    backgroundColor: '#1E3A5F', // Deep navy blue
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    position: 'relative' as const, // Enable absolute positioning for children
+    elevation: 6,
   },
   menuButton: {
-    padding: 8,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
   },
   headerContent: {
     flex: 1,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    paddingRight: width < 400 ? 60 : 40, // More padding to prevent overlap
+    paddingLeft: width < 400 ? 20 : 0, // Add left padding on mobile
   },
   logo: {
-    marginRight: 8,
+    marginRight: width < 400 ? 8 : 12, // Less margin on mobile
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: width < 400 ? 20 : 24, // Smaller font on mobile
     fontWeight: 'bold' as const,
-    color: '#333',
-    marginRight: 8,
+    color: '#fff',
+    marginRight: width < 400 ? 8 : 12, // Less margin on mobile
+    fontFamily: 'System',
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#FF8400',
-    fontWeight: '600' as const,
+    fontSize: width < 400 ? 14 : 16, // Smaller font on mobile
+    color: '#F4D03F', // Bright yellow
+    fontWeight: 'bold' as const,
+    backgroundColor: 'rgba(244, 208, 63, 0.2)',
+    paddingHorizontal: width < 400 ? 8 : 12, // Smaller padding on mobile
+    paddingVertical: width < 400 ? 4 : 6, // Smaller padding on mobile
+    borderRadius: 20,
+    marginLeft: width < 400 ? 8 : 12, // Add margin on mobile
+    marginRight: width < 400 ? 20 : 30, // Add right margin to prevent overlap
   },
   headerRight: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
+    marginRight: width < 400 ? 15 : 20, // Minimal margin to prevent overlap
+    minWidth: 50, // Ensure minimum width for button
+    position: 'absolute' as const, // Position absolutely to prevent flex conflicts
+    right: width < 400 ? 15 : 20, // Position from right edge
   },
   notificationButton: {
     position: 'relative' as const,
-    padding: 8,
+    padding: width < 400 ? 8 : 12, // Smaller padding on mobile
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    minWidth: width < 400 ? 40 : 48, // Ensure minimum touch target
   },
   notificationBadge: {
     position: 'absolute' as const,
-    top: 4,
-    right: 4,
-    backgroundColor: '#dc3545',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    top: 6,
+    right: 6,
+    backgroundColor: '#E8A598', // Soft coral
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
   notificationCount: {
-    color: '#fff',
-    fontSize: 10,
+    color: '#02050a',
+    fontSize: 12,
     fontWeight: 'bold' as const,
+  },
+  notificationShine: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 8,
+    width: 20,
+    height: 20,
   },
   screenContainer: {
     flex: 1,
@@ -308,92 +1008,97 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    width: 250,
-    backgroundColor: '#fff',
+    width: 300,
+    backgroundColor: '#1E3A5F', // Deep navy blue
     zIndex: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   sidebarHeader: {
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    alignItems: 'center' as const,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   sidebarLogo: {
     marginBottom: 12,
   },
   sidebarTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold' as const,
-    color: '#333',
+    color: '#fff',
     marginBottom: 4,
+    fontFamily: 'System',
   },
   sidebarSubtitle: {
-    fontSize: 14,
-    color: '#FF8400',
+    fontSize: 16,
+    color: '#F4D03F', // Bright yellow
     fontWeight: '600' as const,
   },
-  navigationContainer: {
+  navigation: {
     flex: 1,
-    paddingTop: 16,
+    paddingTop: 8,
   },
-  navigationItem: {
+  navItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
+    paddingVertical: 18,
     paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    position: 'relative' as const,
   },
-  activeNavigationItem: {
-    backgroundColor: '#FF8400' + '10',
-    borderLeftColor: '#FF8400',
+  activeNavItem: {
+    backgroundColor: 'rgba(244, 208, 63, 0.15)',
+    borderRightWidth: 4,
+    borderRightColor: '#F4D03F',
   },
-  navigationText: {
+  navText: {
     marginLeft: 16,
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500' as const,
-    flex: 1,
+    fontSize: 17,
+    color: '#fff',
+    fontWeight: '500',
   },
-  activeNavigationText: {
-    color: '#FF8400',
-    fontWeight: '600' as const,
+  activeNavText: {
+    color: '#F4D03F',
+    fontWeight: 'bold' as const,
   },
   messageBadge: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#2D5A3D', // Forest green
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    marginLeft: 8,
   },
   messageBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold' as const,
   },
   notificationSidebarBadge: {
-    backgroundColor: '#dc3545',
+    backgroundColor: '#F4D03F', // Bright yellow
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    marginLeft: 8,
   },
   notificationSidebarText: {
-    color: '#fff',
-    fontSize: 10,
+    color: '#1E3A5F', // Deep navy blue
+    fontSize: 12,
     fontWeight: 'bold' as const,
   },
   sidebarFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    padding: 16,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 24,
   },
   userInfo: {
     flexDirection: 'row' as const,
@@ -401,31 +1106,37 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FF8400',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F4D03F', // Bright yellow
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
   },
+  userAvatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
   userAvatarText: {
-    color: '#fff',
-    fontSize: 16,
+    color: '#1E3A5F', // Deep navy blue
+    fontSize: 20,
     fontWeight: 'bold' as const,
   },
   userDetails: {
     flex: 1,
   },
   userName: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600' as const,
-    color: '#333',
+    color: '#fff',
     marginBottom: 2,
   },
   userRole: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 14,
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '500' as const,
   },
   logoutButton: {
     flexDirection: 'row' as const,
@@ -435,13 +1146,324 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#dc3545',
-    backgroundColor: 'transparent',
+    borderColor: '#E8A598', // Soft coral
+    backgroundColor: 'rgba(232, 165, 152, 0.2)',
   },
   logoutText: {
     marginLeft: 8,
-    fontSize: 14,
-    color: '#dc3545',
+    fontSize: 16,
+    color: '#E8A598', // Soft coral
     fontWeight: '600' as const,
+  },
+  // Notification Animation Styles
+  notificationAnimationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    pointerEvents: 'none',
+  },
+  autoNotificationItem: {
+    position: 'absolute',
+    top: 0, // Will be positioned by transform
+    left: 0, // Will be positioned by transform
+    width: width < 400 ? Math.min(width - 40, 300) : 320, // Responsive width that fits screen
+    maxWidth: width < 400 ? width - 40 : 320, // Ensure it doesn't exceed screen width
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    marginBottom: 8,
+  },
+  autoNotificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  autoNotificationIconContainer: {
+    marginRight: 12,
+  },
+  autoNotificationIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F4D03F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoNotificationText: {
+    flex: 1,
+    color: '#1E3A5F',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  // Notification Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  notificationModalContent: {
+    backgroundColor: '#F5F1E8', // Soft cream
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    elevation: 10,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  notificationModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  notificationModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E3A5F',
+  },
+  notificationList: {
+    maxHeight: 400,
+  },
+  emptyNotifications: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyNotificationsText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  notificationIconContainer: {
+    marginRight: 12,
+  },
+  notificationIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  notificationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  // Additional missing styles
+  notificationModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 1000,
+  },
+  notificationArrow: {
+    position: 'absolute',
+    top: 60,
+    right: width < 400 ? 45 : 55,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderBottomWidth: 12,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#fff',
+    zIndex: 1001,
+  },
+  notificationModal: {
+    position: 'absolute',
+    top: 70,
+    right: width < 400 ? 20 : 30,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: width < 400 ? width - 40 : 350,
+    maxHeight: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  clearAllText: {
+    color: '#1E3A5F',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearNotificationButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  clearNotificationText: {
+    color: '#1E3A5F',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  viewAllButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+  },
+  viewAllText: {
+    color: '#1E3A5F',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logoutModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  logoutModal: {
+    backgroundColor: '#F5F1E8',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 350,
+    elevation: 10,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  logoutModalHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(30, 58, 95, 0.1)',
+  },
+  logoutModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1E3A5F',
+    textAlign: 'center',
+  },
+  logoutModalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  logoutModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: 20,
+  },
+  logoutCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  logoutCancelText: {
+    color: '#6c757d',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  logoutConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#dc3545',
+    borderRadius: 8,
+  },
+  logoutConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  logoutSuccessOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    zIndex: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutSuccessContainer: {
+    backgroundColor: '#F5F1E8',
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    maxWidth: 300,
+    elevation: 20,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  logoutSuccessIcon: {
+    marginBottom: 20,
+  },
+  logoutSuccessTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1E3A5F',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  logoutSuccessMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  autoNotificationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    pointerEvents: 'none',
   },
 });

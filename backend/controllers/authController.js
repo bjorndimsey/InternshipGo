@@ -11,6 +11,7 @@ function normalizeUserResponse(user) {
     email: user.email,
     google_id: user.google_id,
     profile_picture: user.profile_picture,
+    background_picture: user.background_picture,
     is_active: user.is_active,
     latitude: user.latitude,
     longitude: user.longitude,
@@ -25,23 +26,52 @@ function normalizeUserResponse(user) {
         student_id: user.student_id, // Add the student table ID
         id_number: user.id_number,
         first_name: user.first_name,
+        middle_name: user.middle_name,
         last_name: user.last_name,
         age: user.age,
         year: user.year,
         date_of_birth: user.date_of_birth,
         program: user.program,
         major: user.major,
-        address: user.address
+        address: user.address,
+        skills: user.skills,
+        interests: user.interests,
+        bio: user.bio,
+        phone_number: user.phone_number,
+        linkedin_url: user.linkedin_url,
+        github_url: user.github_url,
+        portfolio_url: user.portfolio_url,
+        gpa: user.gpa,
+        expected_graduation: user.expected_graduation,
+        availability: user.availability,
+        preferred_location: user.preferred_location,
+        work_experience: user.work_experience,
+        projects: user.projects,
+        achievements: user.achievements
       };
     
     case 'Coordinator':
       return {
         ...baseUser,
         first_name: user.first_name,
+        middle_name: user.middle_name,
         last_name: user.last_name,
         program: user.program,
         phone_number: user.phone_number,
-        address: user.address
+        address: user.address,
+        skills: user.skills,
+        industryFocus: user.industry_focus,
+        companyPreferences: user.company_preferences,
+        bio: user.bio,
+        linkedinUrl: user.linkedin_url,
+        workExperience: user.work_experience,
+        achievements: user.achievements,
+        specializations: user.specializations,
+        yearsOfExperience: user.years_of_experience,
+        managedCompanies: user.managed_companies,
+        successfulPlacements: user.successful_placements,
+        rating: user.rating,
+        location: user.location
       };
     
     case 'Admin Coordinator':
@@ -59,7 +89,20 @@ function normalizeUserResponse(user) {
         ...baseUser,
         company_name: user.company_name,
         industry: user.industry,
-        address: user.address
+        address: user.address,
+        qualifications: user.qualifications,
+        skills_required: user.skills_required,
+        company_description: user.company_description,
+        website: user.website,
+        phone_number: user.phone_number,
+        contact_person: user.contact_person,
+        company_size: user.company_size,
+        founded_year: user.founded_year,
+        benefits: user.benefits,
+        work_environment: user.work_environment,
+        available_intern_slots: user.available_intern_slots,
+        total_intern_capacity: user.total_intern_capacity,
+        current_intern_count: user.current_intern_count
       };
     
     case 'System Admin':
@@ -267,6 +310,204 @@ class AuthController {
 
     } catch (error) {
       console.error('Get profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+      });
+    }
+  }
+
+  // Update user profile
+  static async updateProfile(req, res) {
+    try {
+      const { userId } = req.params;
+      const updateData = req.body;
+      
+      console.log('🔄 Updating profile for user ID:', userId);
+      console.log('🔄 Update data:', updateData);
+      
+      // Find the user first
+      let user;
+      if (userId && userId.length > 15 && /^\d+$/.test(userId)) {
+        user = await User.findByGoogleId(userId);
+      } else {
+        user = await User.findById(userId);
+      }
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      // Update profile picture in users table if provided
+      if (updateData.profilePicture) {
+        const { query } = require('../config/supabase');
+        await query('users', 'update', 
+          { 
+            profile_picture: updateData.profilePicture,
+            updated_at: new Date().toISOString()
+          }, 
+          { id: user.id }
+        );
+      }
+      
+      // Update background picture in users table if provided
+      if (updateData.backgroundPicture) {
+        const { query } = require('../config/supabase');
+        await query('users', 'update', 
+          { 
+            background_picture: updateData.backgroundPicture,
+            updated_at: new Date().toISOString()
+          }, 
+          { id: user.id }
+        );
+      }
+      
+      // Update based on user type
+      if (user.user_type === 'Company') {
+        // Update company profile
+        const companyUpdateData = {
+          company_name: updateData.companyName,
+          industry: updateData.industry,
+          address: updateData.address,
+          qualifications: updateData.qualifications,
+          skills_required: updateData.skillsRequired,
+          company_description: updateData.companyDescription,
+          website: updateData.website,
+          phone_number: updateData.phoneNumber,
+          contact_person: updateData.contactPerson,
+          company_size: updateData.companySize,
+          founded_year: updateData.foundedYear ? parseInt(updateData.foundedYear) : null,
+          benefits: updateData.benefits,
+          work_environment: updateData.workEnvironment,
+          available_intern_slots: updateData.availableInternSlots ? parseInt(updateData.availableInternSlots) : 0,
+          total_intern_capacity: updateData.totalInternCapacity ? parseInt(updateData.totalInternCapacity) : 0,
+          current_intern_count: updateData.currentInternCount ? parseInt(updateData.currentInternCount) : 0,
+          updated_at: new Date().toISOString()
+        };
+        
+        // Remove undefined values
+        Object.keys(companyUpdateData).forEach(key => {
+          if (companyUpdateData[key] === undefined) {
+            delete companyUpdateData[key];
+          }
+        });
+        
+        const { query } = require('../config/supabase');
+        const result = await query('companies', 'update', companyUpdateData, { user_id: user.id });
+        
+        if (!result.data) {
+          return res.status(404).json({
+            success: false,
+            message: 'Company profile not found'
+          });
+        }
+      } else if (user.user_type === 'Coordinator') {
+        // Update coordinator profile
+        const coordinatorUpdateData = {
+          first_name: updateData.first_name,
+          last_name: updateData.last_name,
+          program: updateData.program,
+          phone_number: updateData.phone_number,
+          address: updateData.address,
+          skills: updateData.skills,
+          industry_focus: updateData.industryFocus,
+          company_preferences: updateData.companyPreferences,
+          bio: updateData.bio,
+          linkedin_url: updateData.linkedinUrl,
+          work_experience: updateData.workExperience,
+          achievements: updateData.achievements,
+          specializations: updateData.specializations,
+          years_of_experience: updateData.yearsOfExperience ? parseInt(updateData.yearsOfExperience) : null,
+          managed_companies: updateData.managedCompanies ? parseInt(updateData.managedCompanies) : null,
+          successful_placements: updateData.successfulPlacements ? parseInt(updateData.successfulPlacements) : null,
+          rating: updateData.rating ? parseFloat(updateData.rating) : null,
+          location: updateData.location,
+          updated_at: new Date().toISOString()
+        };
+        
+        // Remove undefined values
+        Object.keys(coordinatorUpdateData).forEach(key => {
+          if (coordinatorUpdateData[key] === undefined) {
+            delete coordinatorUpdateData[key];
+          }
+        });
+        
+        const { query } = require('../config/supabase');
+        const result = await query('coordinators', 'update', coordinatorUpdateData, { user_id: user.id });
+        
+        if (!result.data) {
+          return res.status(404).json({
+            success: false,
+            message: 'Coordinator profile not found'
+          });
+        }
+      } else if (user.user_type === 'Student') {
+        // Update student profile
+        const studentUpdateData = {
+          first_name: updateData.first_name,
+          last_name: updateData.last_name,
+          age: updateData.age ? parseInt(updateData.age) : undefined,
+          year: updateData.year,
+          date_of_birth: updateData.date_of_birth,
+          program: updateData.program,
+          major: updateData.major,
+          address: updateData.address,
+          skills: updateData.skills,
+          interests: updateData.interests,
+          bio: updateData.bio,
+          phone_number: updateData.phone_number,
+          linkedin_url: updateData.linkedin_url,
+          github_url: updateData.github_url,
+          portfolio_url: updateData.portfolio_url,
+          gpa: updateData.gpa ? parseFloat(updateData.gpa) : undefined,
+          expected_graduation: updateData.expected_graduation,
+          availability: updateData.availability,
+          preferred_location: updateData.preferred_location,
+          work_experience: updateData.work_experience,
+          projects: updateData.projects,
+          achievements: updateData.achievements,
+          updated_at: new Date().toISOString()
+        };
+        
+        // Remove undefined values
+        Object.keys(studentUpdateData).forEach(key => {
+          if (studentUpdateData[key] === undefined) {
+            delete studentUpdateData[key];
+          }
+        });
+        
+        const { query } = require('../config/supabase');
+        const result = await query('students', 'update', studentUpdateData, { user_id: user.id });
+        
+        if (!result.data) {
+          return res.status(404).json({
+            success: false,
+            message: 'Student profile not found'
+          });
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Profile update not supported for this user type'
+        });
+      }
+      
+      // Get updated user data
+      const updatedUser = await User.findById(user.id);
+      const normalizedUser = normalizeUserResponse(updatedUser);
+      
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        user: normalizedUser
+      });
+      
+    } catch (error) {
+      console.error('Update profile error:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error',

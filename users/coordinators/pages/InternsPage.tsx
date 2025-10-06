@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   TextInput,
   Modal,
   Platform,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -107,8 +108,25 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [successMessage, setSuccessMessage] = useState('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedInternDetails, setSelectedInternDetails] = useState<Intern | null>(null);
+  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [showYearSelector, setShowYearSelector] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
-  const schoolYears = ['2023-2024', '2024-2025', '2025-2026'];
+  const schoolYears = [
+    '2023-2024', 
+    '2024-2025', 
+    '2025-2026', 
+    '2026-2027', 
+    '2027-2028', 
+    '2028-2029', 
+    '2029-2030', 
+    '2030-2031', 
+    '2031-2032', 
+    '2032-2033', 
+    '2033-2034', 
+    '2034-2035'
+  ];
 
   useEffect(() => {
     fetchInterns();
@@ -125,6 +143,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       if (!currentUser) {
         console.log('No current user found');
         setInterns([]);
+        setLoading(false);
         return;
       }
 
@@ -139,6 +158,13 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         // Transform the data to match the Intern interface and fetch requirements
         const transformedInterns: Intern[] = await Promise.all(
           response.interns.map(async (intern: any) => {
+            console.log('🔍 Intern data received:', {
+              id: intern.id,
+              first_name: intern.first_name,
+              last_name: intern.last_name,
+              profile_picture: intern.profile_picture,
+              profilePicture: intern.profilePicture
+            });
             // Fetch requirements and submissions for this student
             const [requirements, submissions] = await Promise.all([
               fetchStudentRequirements(intern.student_id),
@@ -203,6 +229,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           lastName: intern.last_name,
           email: intern.email,
           phoneNumber: intern.phone_number || 'N/A',
+          profilePicture: intern.profile_picture || intern.profilePicture,
           studentId: intern.id_number,
           academicYear: intern.year,
           major: intern.major,
@@ -513,6 +540,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   // Requirements management functions
   const handleAddRequirement = () => {
     setEditingRequirement(null);
+    setSelectedFile(null);
     setNewRequirement({
       name: '',
       description: '',
@@ -538,30 +566,104 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   };
 
   const handleSaveRequirement = async () => {
+    console.log('🚀 handleSaveRequirement called');
+    console.log('📋 newRequirement:', newRequirement);
+    console.log('👤 currentUser:', currentUser);
+    
     if (!newRequirement.name.trim()) {
+      console.log('❌ No requirement name provided');
       Alert.alert('Error', 'Please enter a requirement name');
       return;
     }
 
+    // Check if coordinator has assigned interns
+    if (interns.length === 0) {
+      console.log('❌ No interns assigned to this coordinator');
+      Alert.alert(
+        'No Students Assigned', 
+        'You need to assign students to your coordinator account before creating requirements. Please add students first.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
+      let finalFileUrl = newRequirement.fileUrl;
+      let finalFileName = newRequirement.fileName;
+
+      // If there's a selected file but no uploaded URL, upload it first
+      if (selectedFile && !newRequirement.fileUrl) {
+        console.log('📤 File selected but not uploaded, uploading to Cloudinary...');
+        
+        try {
+          setUploadingFile(true);
+          
+          // For React Native, we need to handle the file differently
+          let fileToUpload;
+          
+          if (Platform.OS === 'web') {
+            // Web: Convert to File object
+            fileToUpload = new File([selectedFile.uri], selectedFile.name, {
+              type: 'application/pdf',
+            });
+          } else {
+            // React Native: Use the asset directly
+            fileToUpload = selectedFile;
+          }
+
+          console.log('📄 File to upload:', fileToUpload);
+
+          // Upload to Cloudinary using the dedicated requirements method
+          const uploadResult = await CloudinaryService.uploadRequirementPDF(fileToUpload, selectedFile.name);
+          
+          console.log('📊 Upload result:', uploadResult);
+          
+          if (uploadResult.success && uploadResult.url) {
+            console.log('✅ File uploaded successfully:', uploadResult.url);
+            finalFileUrl = uploadResult.url;
+            finalFileName = selectedFile.name;
+          } else {
+            console.error('❌ Upload failed:', uploadResult.error);
+            throw new Error(uploadResult.error || 'Upload failed');
+          }
+        } catch (uploadError) {
+          console.error('❌ Error uploading file:', uploadError);
+          const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown error occurred';
+          Alert.alert('Error', `Failed to upload file: ${errorMessage}`);
+          return;
+        } finally {
+          setUploadingFile(false);
+        }
+      }
+
       const requirementData = {
         name: newRequirement.name.trim(),
         description: newRequirement.description.trim(),
         isRequired: newRequirement.isRequired,
         dueDate: newRequirement.dueDate || null, // Convert empty string to null
-        fileUrl: newRequirement.fileUrl,
-        fileName: newRequirement.fileName,
+        fileUrl: finalFileUrl || undefined,
+        fileName: finalFileName || undefined,
         coordinatorId: currentUser?.id || '',
       };
 
+      console.log('📝 Saving requirement with data:', requirementData);
+      console.log('📄 Selected file:', selectedFile);
+      console.log('🔗 File URL in requirement:', newRequirement.fileUrl);
+      console.log('👥 Current interns count:', interns.length);
+      console.log('👥 Current filtered interns count:', filteredInterns.length);
+      
       let response;
       if (editingRequirement) {
         // Update existing requirement
+        console.log('🔄 Updating existing requirement:', editingRequirement.id);
         response = await apiService.updateRequirement(editingRequirement.id, requirementData);
       } else {
         // Create new requirement
+        console.log('➕ Creating new requirement');
         response = await apiService.createRequirement(requirementData);
       }
+      
+      console.log('📝 API Response:', response);
 
             if (response.success) {
               const requirement: Requirement = {
@@ -581,7 +683,11 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               await fetchInterns();
 
               // Show success modal
-              setSuccessMessage(`Requirement "${newRequirement.name.trim()}" ${editingRequirement ? 'updated' : 'created'} successfully!`);
+              const studentCount = interns.length;
+              const successMsg = editingRequirement 
+                ? `Requirement "${newRequirement.name.trim()}" updated successfully!`
+                : `Requirement "${newRequirement.name.trim()}" created and assigned to ${studentCount} student${studentCount !== 1 ? 's' : ''}!`;
+              setSuccessMessage(successMsg);
               setShowSuccessModal(true);
               
               // Close the requirements modal and reset form
@@ -595,6 +701,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 fileName: '',
               });
               setEditingRequirement(null);
+              setSelectedFile(null);
             } else {
               Alert.alert('Error', response.message || 'Failed to save requirement');
             }
@@ -648,106 +755,254 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     }
   };
 
+  const handleFilePicker = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
 
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        console.log('File selected:', file);
+        setSelectedFile(file);
+        
+        // Update the requirement with file info (don't set fileUrl yet, wait for upload)
+        setNewRequirement(prev => ({
+          ...prev,
+          fileName: file.name,
+          fileUrl: '', // Don't set local URI, wait for Cloudinary upload
+        }));
+      }
+    } catch (error) {
+      console.error('Error picking file:', error);
+      Alert.alert('Error', 'Failed to pick file. Please try again.');
+    }
+  };
+
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    setNewRequirement(prev => ({
+      ...prev,
+      fileUrl: '',
+      fileName: '',
+    }));
+  };
+
+  const handleYearSelect = (year: string) => {
+    setSelectedSchoolYear(year);
+    setShowYearSelector(false);
+  };
+
+  const closeYearSelector = () => {
+    setShowYearSelector(false);
+  };
+
+  const toggleCardExpansion = (internId: string) => {
+    setExpandedCard(expandedCard === internId ? null : internId);
+  };
+
+  // Enhanced Progress Bar Component
+  const ProgressBar = ({ progress, color = '#F4D03F' }: { progress: number; color?: string }) => {
+    const progressAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+      Animated.timing(progressAnim, {
+        toValue: progress,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start();
+    }, [progress]);
+    
+    return (
+      <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarBackground}>
+          <Animated.View 
+            style={[
+              styles.progressBarFill, 
+              { 
+                backgroundColor: color,
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                })
+              }
+            ]} 
+          />
+        </View>
+        <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+      </View>
+    );
+  };
+
+  // Skeleton Components
+  const SkeletonInternCard = () => {
+    return (
+      <View style={styles.skeletonInternCard}>
+        <View style={styles.skeletonInternHeader}>
+          <View style={styles.skeletonProfileContainer}>
+            <View style={styles.skeletonProfileImage} />
+          </View>
+          <View style={styles.skeletonInternInfo}>
+            <View style={styles.skeletonTextLine} />
+            <View style={[styles.skeletonTextLine, { width: '70%' }]} />
+            <View style={[styles.skeletonTextLine, { width: '60%' }]} />
+            <View style={[styles.skeletonTextLine, { width: '50%' }]} />
+          </View>
+          <View style={styles.skeletonStatusContainer}>
+            <View style={styles.skeletonStatusBadge} />
+          </View>
+        </View>
+
+        <View style={styles.skeletonInternDetails}>
+          <View style={styles.skeletonContactInfo}>
+            <View style={styles.skeletonContactItem} />
+            <View style={styles.skeletonContactItem} />
+          </View>
+
+          <View style={styles.skeletonRequirementsContainer}>
+            <View style={styles.skeletonRequirementsHeader}>
+              <View style={[styles.skeletonTextLine, { width: '40%' }]} />
+              <View style={[styles.skeletonTextLine, { width: '20%' }]} />
+            </View>
+            <View style={styles.skeletonProgressBar}>
+              <View style={styles.skeletonProgressFill} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.skeletonActionButtons}>
+          <View style={styles.skeletonActionButton} />
+          <View style={styles.skeletonActionButton} />
+          <View style={styles.skeletonActionButton} />
+        </View>
+      </View>
+    );
+  };
 
   const InternCard = ({ intern }: { intern: Intern }) => {
     const requirementsProgress = getRequirementsProgress(intern.requirements);
+    const isExpanded = expandedCard === intern.id;
+    
+    console.log('🖼️ InternCard profile picture:', {
+      id: intern.id,
+      name: `${intern.firstName} ${intern.lastName}`,
+      profilePicture: intern.profilePicture
+    });
     
     return (
-      <View style={styles.internCard}>
-        <View style={styles.internHeader}>
-          <View style={styles.profileContainer}>
-            {intern.profilePicture ? (
-              <Image source={{ uri: intern.profilePicture }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.profilePlaceholder}>
-                <Text style={styles.profileText}>
-                  {intern.firstName.charAt(0)}{intern.lastName.charAt(0)}
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.internInfo}>
-            <Text style={styles.internName}>
-              {intern.firstName} {intern.lastName}
-            </Text>
-            <Text style={styles.studentId}>{intern.studentId}</Text>
-            <Text style={styles.major}>{intern.major}</Text>
-            <Text style={styles.academicYear}>{intern.academicYear}</Text>
-          </View>
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
-              <Text style={styles.statusText}>{getStatusText(intern.status)}</Text>
+      <View style={[
+        styles.internCard,
+        isExpanded && styles.expandedInternCard
+      ]}>
+        <TouchableOpacity 
+          onPress={() => toggleCardExpansion(intern.id)}
+          style={styles.cardTouchable}
+        >
+          <View style={styles.internHeader}>
+            <View style={styles.profileContainer}>
+              {intern.profilePicture ? (
+                <Image 
+                  source={{ uri: intern.profilePicture }} 
+                  style={styles.profileImage}
+                  onError={(error) => {
+                    console.log('❌ Image load error for intern:', intern.id, error.nativeEvent.error);
+                  }}
+                  onLoad={() => {
+                    console.log('✅ Image loaded successfully for intern:', intern.id);
+                  }}
+                />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileText}>
+                    {intern.firstName.charAt(0)}{intern.lastName.charAt(0)}
+                  </Text>
+                </View>
+              )}
             </View>
-          </View>
-        </View>
-
-        <View style={styles.internDetails}>
-          <View style={styles.contactInfo}>
-            <View style={styles.contactItem}>
-              <MaterialIcons name="email" size={16} color="#666" />
-              <Text style={styles.contactText}>{intern.email}</Text>
-            </View>
-            <View style={styles.contactItem}>
-              <MaterialIcons name="phone" size={16} color="#666" />
-              <Text style={styles.contactText}>{intern.phoneNumber}</Text>
-            </View>
-          </View>
-
-          {intern.internshipCompany && (
-            <View style={styles.internshipInfo}>
-              <Text style={styles.internshipLabel}>Current Internship:</Text>
-              <Text style={styles.internshipCompany}>{intern.internshipCompany}</Text>
-              <Text style={styles.internshipDates}>
-                {intern.internshipStartDate} - {intern.internshipEndDate}
+            <View style={styles.internInfo}>
+              <Text style={styles.internName}>
+                {intern.firstName} {intern.lastName}
               </Text>
+              <Text style={styles.studentId}>{intern.studentId}</Text>
+              <Text style={styles.major}>{intern.major}</Text>
+              <Text style={styles.academicYear}>{intern.academicYear}</Text>
             </View>
-          )}
-
-          <View style={styles.requirementsContainer}>
-            <View style={styles.requirementsHeader}>
-              <Text style={styles.requirementsLabel}>Requirements Progress:</Text>
-              <Text style={styles.requirementsProgress}>{requirementsProgress}%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill, 
-                  { 
-                    width: `${requirementsProgress}%`,
-                    backgroundColor: requirementsProgress === 100 ? '#34a853' : '#fbbc04'
-                  }
-                ]} 
+            <View style={styles.statusContainer}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
+                <Text style={styles.statusText}>{getStatusText(intern.status)}</Text>
+              </View>
+              <MaterialIcons 
+                name={isExpanded ? "expand-less" : "expand-more"} 
+                size={24} 
+                color="#F4D03F" 
+                style={styles.expandIcon}
               />
             </View>
           </View>
-        </View>
 
-        <View style={styles.actionButtons}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.viewButton]} 
-            onPress={() => handleViewDetails(intern)}
-          >
-            <MaterialIcons name="visibility" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>View Details</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.requirementsButton]} 
-            onPress={() => handleRequirements(intern)}
-          >
-            <MaterialIcons name="assignment" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Requirements</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.deleteButton]} 
-            onPress={() => handleDeleteIntern(intern)}
-          >
-            <MaterialIcons name="delete" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.internDetails}>
+            <View style={styles.contactInfo}>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="email" size={16} color="#666" />
+                <Text style={styles.contactText}>{intern.email}</Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="phone" size={16} color="#666" />
+                <Text style={styles.contactText}>{intern.phoneNumber}</Text>
+              </View>
+            </View>
+
+            <View style={styles.requirementsContainer}>
+              <Text style={styles.requirementsLabel}>Requirements Progress:</Text>
+              <ProgressBar 
+                progress={requirementsProgress} 
+                color={requirementsProgress === 100 ? '#2D5A3D' : '#F4D03F'} 
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            {intern.internshipCompany && (
+              <View style={styles.internshipInfo}>
+                <Text style={styles.internshipLabel}>Current Internship:</Text>
+                <Text style={styles.internshipCompany}>{intern.internshipCompany}</Text>
+                <Text style={styles.internshipDates}>
+                  {intern.internshipStartDate} - {intern.internshipEndDate}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.expandedActionButtons}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewDetails(intern)}
+              >
+                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>View Details</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.requirementsButton]} 
+                onPress={() => handleRequirements(intern)}
+              >
+                <MaterialIcons name="assignment" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Requirements</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.deleteButton]} 
+                onPress={() => handleDeleteIntern(intern)}
+              >
+                <MaterialIcons name="delete" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -835,14 +1090,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
-        <Text style={styles.loadingText}>Loading interns...</Text>
-      </View>
-    );
-  }
+  console.log('🔍 InternsPage render - loading state:', loading, 'filteredInterns length:', filteredInterns.length);
 
   return (
     <View style={styles.container}>
@@ -863,7 +1111,10 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         
         <View style={styles.filterContainer}>
           <Text style={styles.filterLabel}>School Year:</Text>
-          <TouchableOpacity style={styles.yearSelector}>
+          <TouchableOpacity 
+            style={styles.yearSelector}
+            onPress={() => setShowYearSelector(true)}
+          >
             <Text style={styles.yearText}>{selectedSchoolYear}</Text>
             <MaterialIcons name="arrow-drop-down" size={20} color="#666" />
           </TouchableOpacity>
@@ -891,33 +1142,56 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{filteredInterns.length}</Text>
-          <Text style={styles.statLabel}>Total Interns</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#34a853' }]}>
-            {filteredInterns.filter(i => i.status === 'active').length}
-          </Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#4285f4' }]}>
-            {filteredInterns.filter(i => i.status === 'graduated').length}
-          </Text>
-          <Text style={styles.statLabel}>Graduated</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
-            {filteredInterns.filter(i => getRequirementsProgress(i.requirements) < 100).length}
-          </Text>
-          <Text style={styles.statLabel}>Incomplete</Text>
-        </View>
+        {loading ? (
+          // Show skeleton stats
+          (() => {
+            console.log('📊 Showing skeleton stats, loading state:', loading);
+            return Array.from({ length: 4 }).map((_, index) => (
+              <View key={`skeleton-stat-${index}`} style={styles.skeletonStatItem}>
+                <View style={styles.skeletonStatNumber} />
+                <View style={styles.skeletonStatLabel} />
+              </View>
+            ));
+          })()
+        ) : (
+          <>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{filteredInterns.length}</Text>
+              <Text style={styles.statLabel}>Total Interns</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: '#34a853' }]}>
+                {filteredInterns.filter(i => i.status === 'active').length}
+              </Text>
+              <Text style={styles.statLabel}>Active</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: '#4285f4' }]}>
+                {filteredInterns.filter(i => i.status === 'graduated').length}
+              </Text>
+              <Text style={styles.statLabel}>Graduated</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
+                {filteredInterns.filter(i => getRequirementsProgress(i.requirements) < 100).length}
+              </Text>
+              <Text style={styles.statLabel}>Incomplete</Text>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Interns List */}
       <ScrollView style={styles.internsList} showsVerticalScrollIndicator={false}>
-        {filteredInterns.length === 0 ? (
+        {loading ? (
+          // Show skeleton loading
+          (() => {
+            console.log('🔄 Showing skeleton loading, loading state:', loading);
+            return Array.from({ length: 3 }).map((_, index) => (
+              <SkeletonInternCard key={`skeleton-${index}`} />
+            ));
+          })()
+        ) : filteredInterns.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="school" size={64} color="#ccc" />
             <Text style={styles.emptyStateTitle}>No interns found</Text>
@@ -1059,20 +1333,44 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               {studentFound && (
                 <View style={styles.studentFoundContainer}>
                   <Text style={styles.studentFoundTitle}>Student Found:</Text>
-                  <View style={styles.studentInfo}>
-                    <Text style={styles.studentName}>
-                      {studentFound.first_name} {studentFound.last_name}
-                    </Text>
-                    <Text style={styles.studentDetails}>
-                      ID: {studentFound.id_number} | {studentFound.major}
-                    </Text>
-                    <Text style={styles.studentDetails}>
-                      Email: {studentFound.email}
-                    </Text>
+                  
+                  <View style={styles.studentFoundProfile}>
+                    <View style={styles.studentFoundProfileContainer}>
+                      {studentFound.profile_picture || studentFound.profilePicture ? (
+                        <Image 
+                          source={{ uri: studentFound.profile_picture || studentFound.profilePicture }} 
+                          style={styles.studentFoundProfileImage}
+                          onError={(error) => {
+                            console.log('❌ Student found profile image error:', error.nativeEvent.error);
+                          }}
+                          onLoad={() => {
+                            console.log('✅ Student found profile image loaded');
+                          }}
+                        />
+                      ) : (
+                        <View style={styles.studentFoundProfilePlaceholder}>
+                          <Text style={styles.studentFoundProfileText}>
+                            {studentFound.first_name.charAt(0)}{studentFound.last_name.charAt(0)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <View style={styles.studentInfo}>
+                      <Text style={styles.studentName}>
+                        {studentFound.first_name} {studentFound.last_name}
+                      </Text>
+                      <Text style={styles.studentDetails}>
+                        ID: {studentFound.id_number} | {studentFound.major}
+                      </Text>
+                      <Text style={styles.studentDetails}>
+                        Email: {studentFound.email}
+                      </Text>
+                    </View>
                   </View>
                   
                   <TouchableOpacity
-                    style={styles.addButton}
+                    style={[styles.addButton, styles.internButton]}
                     onPress={addStudentAsIntern}
                   >
                     <MaterialIcons name="add" size={20} color="#fff" />
@@ -1098,6 +1396,11 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <Text style={styles.modalTitle}>
                 {editingRequirement ? 'Edit Requirement' : 'Add New Requirement'}
               </Text>
+              {!editingRequirement && (
+                <Text style={styles.requirementScopeText}>
+                  Will be assigned to {interns.length} student{interns.length !== 1 ? 's' : ''}
+                </Text>
+              )}
               <TouchableOpacity
                 style={styles.closeModalButton}
                 onPress={() => setShowRequirementsModal(false)}
@@ -1167,15 +1470,62 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 </TouchableOpacity>
               </View>
 
+              {/* File Upload Section */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Attach PDF File</Text>
+                
+                {!selectedFile ? (
+                  <TouchableOpacity
+                    style={styles.filePickerButton}
+                    onPress={handleFilePicker}
+                  >
+                    <MaterialIcons name="attach-file" size={20} color="#4285f4" />
+                    <Text style={styles.filePickerText}>Select PDF File</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.fileSelectedContainer}>
+                    <View style={styles.fileInfo}>
+                      <MaterialIcons name="description" size={20} color="#4285f4" />
+                      <Text style={styles.fileName}>{selectedFile.name}</Text>
+                    </View>
+                    <View style={styles.fileActions}>
+                      <TouchableOpacity
+                        style={styles.removeFileButton}
+                        onPress={handleRemoveFile}
+                      >
+                        <MaterialIcons name="close" size={16} color="#ea4335" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                
+                {newRequirement.fileUrl && (
+                  <View style={styles.uploadedFileContainer}>
+                    <MaterialIcons name="check-circle" size={16} color="#34a853" />
+                    <Text style={styles.uploadedFileText}>File will be uploaded with requirement</Text>
+                  </View>
+                )}
+              </View>
+
 
               <View style={styles.buttonRow}>
                 <TouchableOpacity
-                  style={[styles.saveButton, styles.primaryButton]}
+                  style={[styles.saveButton, styles.primaryButton, uploadingFile && styles.disabledButton]}
                   onPress={handleSaveRequirement}
+                  disabled={uploadingFile}
                 >
-                  <MaterialIcons name="save" size={20} color="#fff" />
+                  {uploadingFile ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <MaterialIcons name="save" size={20} color="#fff" />
+                  )}
                   <Text style={styles.saveButtonText}>
-                    {editingRequirement ? 'Update' : 'Add'} Requirement
+                    {uploadingFile 
+                      ? 'Uploading & Adding...' 
+                      : editingRequirement 
+                        ? 'Update' 
+                        : 'Add'
+                    } Requirement
                   </Text>
                 </TouchableOpacity>
 
@@ -1304,12 +1654,18 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                     {selectedInternDetails.profilePicture ? (
                       <Image 
                         source={{ uri: selectedInternDetails.profilePicture }} 
-                        style={styles.profileImage}
+                        style={styles.detailsProfileImage}
                         resizeMode="cover"
+                        onError={(error) => {
+                          console.log('❌ Details modal image load error:', error.nativeEvent.error);
+                        }}
+                        onLoad={() => {
+                          console.log('✅ Details modal image loaded successfully');
+                        }}
                       />
                     ) : (
-                      <View style={styles.profileImagePlaceholder}>
-                        <MaterialIcons name="person" size={60} color="#fff" />
+                      <View style={styles.detailsProfileImagePlaceholder}>
+                        <MaterialIcons name="person" size={80} color="#fff" />
                       </View>
                     )}
                   </View>
@@ -1418,6 +1774,48 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         </View>
       </Modal>
 
+      {/* Year Selector Modal */}
+      <Modal
+        visible={showYearSelector}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeYearSelector}
+      >
+        <View style={styles.yearModalOverlay}>
+          <View style={styles.yearModalContent}>
+            <View style={styles.yearModalHeader}>
+              <Text style={styles.yearModalTitle}>Select School Year</Text>
+              <TouchableOpacity onPress={closeYearSelector}>
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.yearModalBody}>
+              {schoolYears.map((year) => (
+                <TouchableOpacity
+                  key={year}
+                  style={[
+                    styles.yearOption,
+                    selectedSchoolYear === year && styles.yearOptionSelected
+                  ]}
+                  onPress={() => handleYearSelect(year)}
+                >
+                  <Text style={[
+                    styles.yearOptionText,
+                    selectedSchoolYear === year && styles.yearOptionTextSelected
+                  ]}>
+                    {year}
+                  </Text>
+                  {selectedSchoolYear === year && (
+                    <MaterialIcons name="check" size={20} color="#1E3A5F" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -1425,24 +1823,32 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   searchSection: {
     backgroundColor: '#fff',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 20,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchContainer: {
     marginBottom: 15,
@@ -1451,17 +1857,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   searchIcon: {
     marginRight: 10,
+    color: '#F4D03F',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
   },
   filterContainer: {
     flexDirection: 'row',
@@ -1474,7 +1883,7 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
     fontWeight: '500',
   },
   yearSelector: {
@@ -1483,55 +1892,82 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   yearText: {
     fontSize: 14,
-    color: '#1a1a2e',
+    color: '#02050a',
     marginRight: 4,
   },
   statsContainer: {
     flexDirection: 'row',
-    padding: 20,
-    gap: 15,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 16,
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     textAlign: 'center',
+    fontWeight: '600',
   },
   internsList: {
     flex: 1,
     padding: 20,
   },
   internCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 20,
     marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  expandedInternCard: {
+    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  cardTouchable: {
+    padding: 20,
+  },
+  expandedContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  expandIcon: {
+    marginLeft: 8,
+  },
+  expandedActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 16,
   },
   internHeader: {
     flexDirection: 'row',
@@ -1545,18 +1981,23 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
   },
+  detailsProfileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
   profilePlaceholder: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+    borderRadius: 35,
+    backgroundColor: '#2D5A3D', // Forest green
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#fff',
   },
   internInfo: {
     flex: 1,
@@ -1564,25 +2005,29 @@ const styles = StyleSheet.create({
   internName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 6,
   },
   studentId: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#F4D03F', // Bright yellow
+    marginBottom: 4,
+    fontWeight: '500',
   },
   major: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#fff',
+    marginBottom: 4,
+    opacity: 0.9,
   },
   academicYear: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    opacity: 0.8,
   },
   statusContainer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -1607,56 +2052,67 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginLeft: 8,
+    opacity: 0.9,
   },
   internshipInfo: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     padding: 10,
     borderRadius: 8,
     marginBottom: 10,
   },
   internshipLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     marginBottom: 4,
+    opacity: 0.8,
   },
   internshipCompany: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#F4D03F',
     marginBottom: 2,
   },
   internshipDates: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    opacity: 0.8,
   },
   requirementsContainer: {
     marginTop: 10,
-  },
-  requirementsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
   },
   requirementsLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    color: '#fff',
+    opacity: 0.9,
+    fontWeight: '500',
+    marginBottom: 8,
   },
-  requirementsProgress: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a2e',
+  // Animated Progress Bar Styles
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
+  progressBarBackground: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
     overflow: 'hidden',
   },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#F4D03F',
+    fontWeight: 'bold',
+    marginLeft: 12,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1668,36 +2124,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     flex: 1,
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
+  },
+  requirementsButton: {
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   deleteButton: {
     backgroundColor: '#ea4335',
   },
   actionButtonText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#F5F1E8',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#02050a',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#666',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -1710,10 +2170,15 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1726,8 +2191,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
     flex: 1,
+  },
+  requirementScopeText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   modalHeaderActions: {
     flexDirection: 'row',
@@ -1752,7 +2223,7 @@ const styles = StyleSheet.create({
   },
   requirementLabel: {
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
     marginLeft: 12,
   },
   completedRequirement: {
@@ -1769,18 +2240,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   internButton: {
-    backgroundColor: '#34a853',
-  },
-  requirementsButton: {
-    backgroundColor: '#fbbc04',
+    backgroundColor: '#2D5A3D', // Forest green
+    elevation: 3,
+    shadowColor: '#2D5A3D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   sendButton: {
     backgroundColor: '#ea4335',
   },
   addButtonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     marginLeft: 6,
   },
   addInternForm: {
@@ -1790,7 +2263,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 4,
   },
   formSubLabel: {
@@ -1804,7 +2277,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 8,
   },
   textInput: {
@@ -1814,7 +2287,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
     backgroundColor: '#fff',
   },
   pickerContainer: {
@@ -1830,12 +2303,12 @@ const styles = StyleSheet.create({
   },
   pickerText: {
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
   },
   searchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4285f4',
+    backgroundColor: '#1E3A5F', // Deep navy blue
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -1868,10 +2341,36 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 10,
   },
+  studentFoundProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  studentFoundProfileContainer: {
+    marginRight: 16,
+  },
+  studentFoundProfileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  studentFoundProfilePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#2D5A3D',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  studentFoundProfileText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
   studentFoundTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 12,
   },
   studentInfo: {
@@ -1880,7 +2379,7 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 4,
   },
   studentDetails: {
@@ -2020,7 +2519,7 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#02050a',
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -2154,7 +2653,7 @@ const styles = StyleSheet.create({
   requirementName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#02050a',
   },
   // Download Modal Styles
   downloadModalContent: {
@@ -2193,7 +2692,7 @@ const styles = StyleSheet.create({
   downloadRequirementName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 2,
   },
   downloadRequirementDescription: {
@@ -2327,10 +2826,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  detailsProfileImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#6c757d',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 4,
     textAlign: 'center',
   },
@@ -2354,7 +2861,7 @@ const styles = StyleSheet.create({
   detailsSectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#02050a',
     marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
@@ -2374,7 +2881,7 @@ const styles = StyleSheet.create({
   },
   detailsValue: {
     fontSize: 14,
-    color: '#1a1a2e',
+    color: '#02050a',
     flex: 1,
   },
   requirementRow: {
@@ -2387,5 +2894,247 @@ const styles = StyleSheet.create({
   requirementStatus: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  // File Picker Styles
+  filePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#4285f4',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+  },
+  filePickerText: {
+    fontSize: 16,
+    color: '#4285f4',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  fileSelectedContainer: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+  },
+  fileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  fileName: {
+    fontSize: 14,
+    color: '#1a1a2e',
+    marginLeft: 8,
+    flex: 1,
+  },
+  fileActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4285f4',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  uploadButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  removeFileButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#ffebee',
+  },
+  uploadedFileText: {
+    fontSize: 12,
+    color: '#2e7d32',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  // Skeleton Loading Styles
+  skeletonInternCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  skeletonInternHeader: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  skeletonProfileContainer: {
+    marginRight: 15,
+  },
+  skeletonProfileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  skeletonInternInfo: {
+    flex: 1,
+  },
+  skeletonTextLine: {
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  skeletonStatusContainer: {
+    alignItems: 'flex-end',
+  },
+  skeletonStatusBadge: {
+    width: 60,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  skeletonInternDetails: {
+    marginBottom: 15,
+  },
+  skeletonContactInfo: {
+    marginBottom: 10,
+  },
+  skeletonContactItem: {
+    height: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 7,
+    marginBottom: 4,
+    width: '80%',
+  },
+  skeletonRequirementsContainer: {
+    marginTop: 10,
+  },
+  skeletonRequirementsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  skeletonProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  skeletonProgressFill: {
+    height: '100%',
+    width: '60%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 3,
+  },
+  skeletonActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  skeletonActionButton: {
+    flex: 1,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+  },
+  skeletonStatItem: {
+    flex: 1,
+    backgroundColor: '#1E3A5F',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  skeletonStatNumber: {
+    width: 40,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  skeletonStatLabel: {
+    width: 60,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 6,
+  },
+  // Year Selector Modal Styles
+  yearModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  yearModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  yearModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  yearModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#02050a',
+  },
+  yearModalBody: {
+    maxHeight: 400,
+    padding: 20,
+  },
+  yearOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#f8f9fa',
+  },
+  yearOptionSelected: {
+    backgroundColor: '#e3f2fd',
+    borderWidth: 1,
+    borderColor: '#1E3A5F',
+  },
+  yearOptionText: {
+    fontSize: 16,
+    color: '#02050a',
+    fontWeight: '500',
+  },
+  yearOptionTextSelected: {
+    color: '#1E3A5F',
+    fontWeight: '700',
   },
 });

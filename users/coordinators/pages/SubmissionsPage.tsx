@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Platform,
   TextInput,
   Switch,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
@@ -80,10 +81,39 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
   const [feedback, setFeedback] = useState('');
   const [submissionCounts, setSubmissionCounts] = useState<{[key: string]: number}>({});
   const [statusFilter, setStatusFilter] = useState<'all' | 'done' | 'pending'>('all');
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchSubmissions();
     fetchRequirements();
+    
+    // Animate on mount
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [selectedStatus]);
 
   // Pre-fetch submission counts for all requirements
@@ -92,6 +122,28 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
       preFetchSubmissionCounts();
     }
   }, [requirements]);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
 
   const fetchSubmissions = async () => {
     if (!currentUser) {
@@ -131,6 +183,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
 
     try {
       setLoadingRequirements(true);
+      setShowSkeleton(true);
       console.log('📋 Fetching requirements for coordinator:', currentUser.id);
       
       // Step 1: Fetch requirements that the current coordinator added (from student_requirements table)
@@ -157,6 +210,10 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
       setRequirements([]);
     } finally {
       setLoadingRequirements(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
@@ -427,6 +484,31 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
     return submissions;
   };
 
+
+  // Skeleton Components
+  const SkeletonRequirementCard = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonRequirementCard}>
+        <View style={styles.skeletonRequirementRow}>
+          <View style={styles.skeletonRequirementInfo}>
+            <Animated.View style={[styles.skeletonRequirementNumber, { opacity: shimmerOpacity }]} />
+            <View style={styles.skeletonRequirementDetails}>
+              <Animated.View style={[styles.skeletonTextLine, { opacity: shimmerOpacity }]} />
+              <Animated.View style={[styles.skeletonTextLine, { width: '80%', opacity: shimmerOpacity }]} />
+              <Animated.View style={[styles.skeletonTextLine, { width: '60%', opacity: shimmerOpacity }]} />
+            </View>
+          </View>
+          <Animated.View style={[styles.skeletonSubmissionCountButton, { opacity: shimmerOpacity }]} />
+        </View>
+      </View>
+    );
+  };
+
   if (!currentUser) {
     return (
       <View style={styles.loadingContainer}>
@@ -438,18 +520,18 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading submissions...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
         <Text style={styles.title}>Requirements & Submissions</Text>
         <Text style={styles.subtitle}>View requirements and track student submissions</Text>
-      </View>
+      </Animated.View>
 
       {/* Status Filter */}
       <View style={styles.filterContainer}>
@@ -524,92 +606,100 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
       </View>
 
       {/* Requirements List */}
-      <ScrollView style={styles.submissionsList}>
-        {loadingRequirements ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading requirements...</Text>
-          </View>
+      <Animated.ScrollView style={[styles.submissionsList, { transform: [{ scale: scaleAnim }] }]}>
+        {showSkeleton ? (
+          <>
+            <SkeletonRequirementCard />
+            <SkeletonRequirementCard />
+            <SkeletonRequirementCard />
+          </>
         ) : requirements.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="assignment" size={64} color="#ccc" />
+            <MaterialIcons name="assignment" size={64} color="#02050a" />
             <Text style={styles.emptyText}>No requirements found</Text>
             <Text style={styles.emptySubtext}>
               No requirements assigned to your students yet
             </Text>
           </View>
         ) : (
-          requirements.map((requirement, index) => (
-            <TouchableOpacity
-              key={requirement.id}
-              style={styles.requirementCard}
-            >
-              <View style={styles.requirementRow}>
-                <View style={styles.requirementInfo}>
-                  <Text style={styles.requirementNumber}>{index + 1}.</Text>
-                  <View style={styles.requirementDetails}>
-                    <Text style={styles.requirementName}>{requirement.requirement_name}</Text>
-                    <Text style={styles.requirementDescription}>{requirement.requirement_description}</Text>
-                    <View style={styles.requirementMeta}>
+          requirements.map((requirement, index) => {
+            const submissionCount = submissionCounts[requirement.requirement_id] || 0;
+            
+            return (
+              <View
+                key={requirement.id}
+                style={styles.requirementCard}
+              >
+                <View style={styles.requirementRow}>
+                  <View style={styles.requirementInfo}>
+                    <Text style={styles.requirementNumber}>{index + 1}.</Text>
+                    <View style={styles.requirementDetails}>
+                      <Text style={styles.requirementName}>{requirement.requirement_name}</Text>
+                      <Text style={styles.requirementDescription}>
+                        {requirement.requirement_description}
+                      </Text>
                       <Text style={styles.requirementDate}>
                         Due: {requirement.due_date ? formatDate(requirement.due_date) : 'No due date'}
                       </Text>
-                      <View style={[styles.requirementBadge, { backgroundColor: requirement.is_required ? '#FF6B35' : '#4CAF50' }]}>
-                        <Text style={styles.requirementBadgeText}>
-                          {requirement.is_required ? 'REQUIRED' : 'OPTIONAL'}
-                        </Text>
-                      </View>
                     </View>
                   </View>
+                  
+                  <View style={styles.requirementRightSection}>
+                    <View style={[styles.requirementBadge, { backgroundColor: requirement.is_required ? '#E8A598' : '#2D5A3D' }]}>
+                      <Text style={styles.requirementBadgeText}>
+                        {requirement.is_required ? 'REQUIRED' : 'OPTIONAL'}
+                      </Text>
+                    </View>
+                    
+                    <TouchableOpacity
+                      style={styles.submissionCountButton}
+                      onPress={async () => {
+                        // Fetch submissions for this specific requirement
+                        console.log('👥 People icon clicked for requirement:', requirement.requirement_id);
+                        const submissions = await fetchSubmissionsForRequirement(requirement.requirement_id);
+                        
+                        // Show submission details modal
+                        const modalData = {
+                          id: 0,
+                          student_id: 0,
+                          student: {
+                            first_name: '',
+                            last_name: '',
+                            id_number: '',
+                            program: '',
+                            major: '',
+                            university: ''
+                          },
+                          requirement_id: requirement.requirement_id,
+                          requirement_name: requirement.requirement_name,
+                          requirement_description: requirement.requirement_description,
+                          due_date: requirement.due_date,
+                          submitted_file_url: '',
+                          submitted_file_name: '',
+                          submitted_file_size: 0,
+                          submitted_at: '',
+                          status: 'submitted',
+                          coordinator_feedback: '',
+                          coordinator_reviewed_at: '',
+                          submissions: submissions // Add the fetched submissions
+                        } as any;
+                        
+                        setSelectedSubmission(modalData);
+                        setShowDetailsModal(true);
+                      }}
+                    >
+                      <MaterialIcons name="people" size={24} color="#F4D03F" />
+                      <Text style={styles.submissionCountText}>
+                        {submissionCount}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                
-                <TouchableOpacity
-                  style={styles.submissionCountButton}
-                  onPress={async () => {
-                    // Fetch submissions for this specific requirement
-                    console.log('👥 People icon clicked for requirement:', requirement.requirement_id);
-                    const submissions = await fetchSubmissionsForRequirement(requirement.requirement_id);
-                    
-                    // Show submission details modal
-                    const modalData = {
-                      id: 0,
-                      student_id: 0,
-                      student: {
-                        first_name: '',
-                        last_name: '',
-                        id_number: '',
-                        program: '',
-                        major: '',
-                        university: ''
-                      },
-                      requirement_id: requirement.requirement_id,
-                      requirement_name: requirement.requirement_name,
-                      requirement_description: requirement.requirement_description,
-                      due_date: requirement.due_date,
-                      submitted_file_url: '',
-                      submitted_file_name: '',
-                      submitted_file_size: 0,
-                      submitted_at: '',
-                      status: 'submitted',
-                      coordinator_feedback: '',
-                      coordinator_reviewed_at: '',
-                      submissions: submissions // Add the fetched submissions
-                    } as any;
-                    
-                    setSelectedSubmission(modalData);
-                    setShowDetailsModal(true);
-                  }}
-                >
-                  <MaterialIcons name="people" size={24} color="#007AFF" />
-                  <Text style={styles.submissionCountText}>
-                    {submissionCounts[requirement.requirement_id] || 0}
-                  </Text>
-                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          ))
+            );
+          })
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Submission Details Modal */}
       <Modal
@@ -624,7 +714,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
               style={styles.closeButton}
               onPress={() => setShowDetailsModal(false)}
             >
-              <MaterialIcons name="close" size={24} color="#666" />
+              <MaterialIcons name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
 
@@ -813,47 +903,61 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
           )}
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   header: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#F4D03F', // Bright yellow
     marginTop: 4,
+    opacity: 0.9,
   },
   filterContainer: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    marginBottom: 20,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   filterButton: {
     paddingHorizontal: 16,
@@ -863,7 +967,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   filterButtonActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   filterButtonText: {
     fontSize: 14,
@@ -875,25 +979,27 @@ const styles = StyleSheet.create({
   },
   submissionsList: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 20,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+    backgroundColor: '#F5F1E8',
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#02050a',
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 16,
+    color: '#02050a',
     marginTop: 8,
     textAlign: 'center',
+    opacity: 0.7,
   },
   submissionCard: {
     backgroundColor: 'white',
@@ -970,84 +1076,116 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.3,
   },
   closeButton: {
-    padding: 4,
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   modalContent: {
     flex: 1,
     padding: 20,
   },
   detailSection: {
-    marginBottom: 24,
+    marginBottom: 16,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   detailLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1E3A5F',
     marginBottom: 8,
+    letterSpacing: -0.2,
   },
   detailValue: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    color: '#02050a',
+    marginBottom: 6,
+    fontWeight: '500',
   },
   detailDescription: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#02050a',
     lineHeight: 20,
+    opacity: 0.8,
   },
   inputLabel: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 16,
+    color: '#1E3A5F',
+    marginBottom: 12,
+    fontWeight: '600',
   },
   textArea: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#333',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#02050a',
     textAlignVertical: 'top',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 20,
-    paddingTop: 20,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   statusButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 8,
     flex: 1,
     marginHorizontal: 4,
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   statusButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
-    marginLeft: 4,
+    marginLeft: 6,
+    letterSpacing: 0.1,
   },
   // Tab Navigation Styles
   tabContainer: {
@@ -1080,30 +1218,39 @@ const styles = StyleSheet.create({
   },
   // Requirement Card Styles
   requirementCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+    minHeight: 100, // Ensure enough height for absolute positioning
+    padding: 20,
   },
   requirementRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    position: 'relative',
   },
   requirementInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
+  requirementRightSection: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: '100%',
+    position: 'relative',
+  },
   requirementNumber: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#F4D03F', // Bright yellow
     marginRight: 12,
     marginTop: 2,
   },
@@ -1111,31 +1258,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   requirementName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
     marginBottom: 4,
+    letterSpacing: -0.3,
   },
   requirementDescription: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginBottom: 8,
     lineHeight: 20,
-  },
-  requirementMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    opacity: 0.9,
   },
   requirementDate: {
     fontSize: 12,
-    color: '#FF6B35',
+    color: '#E8A598', // Soft coral
     fontWeight: '500',
+    marginTop: 4,
   },
   requirementBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    marginRight: 60, // Space for the submission count button
   },
   requirementBadgeText: {
     color: 'white',
@@ -1147,15 +1296,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
-    backgroundColor: '#f0f8ff',
-    borderRadius: 8,
+    backgroundColor: '#2D5A3D', // Dark green/teal
+    borderRadius: 12,
     minWidth: 60,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    shadowColor: '#2D5A3D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   submissionCountText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#F4D03F',
     marginTop: 4,
+  },
+  // Skeleton Loading Styles
+  skeletonRequirementCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+    opacity: 0.7,
+    padding: 20,
+  },
+  skeletonRequirementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  skeletonRequirementInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  skeletonRequirementNumber: {
+    width: 20,
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 10,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  skeletonRequirementDetails: {
+    flex: 1,
+  },
+  skeletonTextLine: {
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  skeletonSubmissionCountButton: {
+    width: 60,
+    height: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
   },
   // Student Submission Item Styles
   studentSubmissionItem: {
@@ -1164,40 +1367,56 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fff',
     borderRadius: 8,
     marginBottom: 8,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   studentSubmissionInfo: {
     flex: 1,
   },
   studentSubmissionName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E3A5F',
+    marginBottom: 3,
+    letterSpacing: -0.2,
   },
   studentSubmissionDate: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
+    fontSize: 13,
+    color: '#02050a',
+    marginBottom: 3,
+    opacity: 0.7,
   },
   studentSubmissionFile: {
-    fontSize: 12,
-    color: '#007AFF',
+    fontSize: 13,
+    color: '#2D5A3D',
+    fontWeight: '500',
   },
   // Toggle Container Styles
   toggleContainer: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    marginBottom: 20,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   toggleLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#02050a',
     marginBottom: 12,
   },
   toggleButtons: {
@@ -1214,7 +1433,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleButtonActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   toggleButtonText: {
     fontSize: 14,
@@ -1234,17 +1453,21 @@ const styles = StyleSheet.create({
   downloadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f8ff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: '#2D5A3D',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 6,
     marginLeft: 8,
+    shadowColor: '#2D5A3D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   downloadButtonText: {
     fontSize: 12,
-    color: '#007AFF',
+    color: '#fff',
     marginLeft: 4,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   // Student Submission Right Styles
   studentSubmissionRight: {
@@ -1258,19 +1481,20 @@ const styles = StyleSheet.create({
   switchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   switchLabel: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    color: '#1E3A5F',
+    fontWeight: '600',
   },
   feedbackText: {
     fontSize: 11,
-    color: '#666',
+    color: '#02050a',
     marginTop: 4,
     fontStyle: 'italic',
     textAlign: 'right',
+    opacity: 0.8,
   },
 });
 

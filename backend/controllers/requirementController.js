@@ -112,6 +112,7 @@ const createRequirement = async (req, res) => {
     console.log('👨‍🏫 Found coordinator with id:', coordinator.id);
     
     // Get only the students assigned to this coordinator
+    // Note: interns.coordinator_id stores the user_id, not the coordinators.id
     const internsResult = await query('interns', 'select', null, { coordinator_id: coordinatorId });
     const interns = internsResult.data || [];
     console.log('👥 Found interns for coordinator:', interns.length);
@@ -157,8 +158,8 @@ const createRequirement = async (req, res) => {
         return null; // Skip this student
       }
       
-      // Use the coordinator.id we already fetched
-      const coordinatorIdForRequirement = coordinator.id;
+      // Use the coordinators.id for coordinator_id in student_requirements (foreign key constraint)
+      const coordinatorIdForRequirement = coordinator.id; // This is the coordinators.id
       
       const requirementData = {
         student_id: student.id,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   TextInput,
   FlatList,
   Platform,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
@@ -55,6 +56,8 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showTypeSelector, setShowTypeSelector] = useState(false);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -64,14 +67,65 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
     type: 'meeting' as Event['type'],
     maxAttendees: '',
   });
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchEvents();
+    
+    // Animate on mount
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
+      setShowSkeleton(true);
       
       if (!currentUser) {
         console.log('No current user found');
@@ -79,7 +133,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
         return;
       }
 
-      console.log('📅 Fetching events for coordinator:', currentUser.id);
+      console.log('📅 Fetching events for company:', currentUser.id);
       const response = await apiService.getEvents(currentUser.id);
       
       if (response.success && response.events) {
@@ -96,6 +150,10 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
       Alert.alert('Error', 'Failed to fetch events. Please try again.');
     } finally {
       setLoading(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
@@ -285,68 +343,166 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
     return events.filter(event => event.date === date);
   };
 
-  const EventCard = ({ event }: { event: Event }) => (
-    <View style={styles.eventCard}>
-      <View style={styles.eventHeader}>
-        <View style={[styles.eventTypeIcon, { backgroundColor: getEventTypeColor(event.type) }]}>
-          <MaterialIcons 
-            name={getEventTypeIcon(event.type)} 
-            size={20} 
-            color="#fff" 
+  const toggleCardExpansion = (eventId: string) => {
+    setExpandedCard(expandedCard === eventId ? null : eventId);
+  };
+
+  // Enhanced Progress Bar Component
+  const ProgressBar = ({ progress, color = '#F4D03F' }: { progress: number; color?: string }) => {
+    const progressAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+      Animated.timing(progressAnim, {
+        toValue: progress,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start();
+    }, [progress]);
+    
+    return (
+      <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarBackground}>
+          <Animated.View 
+            style={[
+              styles.progressBarFill, 
+              { 
+                backgroundColor: color,
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                })
+              }
+            ]} 
           />
         </View>
-        <View style={styles.eventInfo}>
-          <Text style={styles.eventTitle}>{event.title}</Text>
-          <Text style={styles.eventDate}>
-            {formatDate(event.date)} at {event.time}
-          </Text>
+        <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+      </View>
+    );
+  };
+
+  // Skeleton Components
+  const SkeletonEventCard = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonEventCard}>
+        <View style={styles.skeletonEventHeader}>
+          <Animated.View style={[styles.skeletonEventTypeIcon, { opacity: shimmerOpacity }]} />
+          <View style={styles.skeletonEventInfo}>
+            <Animated.View style={[styles.skeletonTextLine, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonTextLine, { width: '70%', opacity: shimmerOpacity }]} />
+          </View>
+        </View>
+        
+        <View style={styles.skeletonEventDetails}>
+          <Animated.View style={[styles.skeletonTextLine, { width: '90%', opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonTextLine, { width: '60%', opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonTextLine, { width: '80%', opacity: shimmerOpacity }]} />
         </View>
       </View>
+    );
+  };
 
-      <View style={styles.eventDetails}>
-        <Text style={styles.eventDescription}>{event.description}</Text>
-        
-        <View style={styles.eventMeta}>
-          <View style={styles.metaItem}>
-            <MaterialIcons name="location-on" size={16} color="#666" />
-            <Text style={styles.metaText}>{event.location}</Text>
+  const EventCard = ({ event }: { event: Event }) => {
+    const isExpanded = expandedCard === event.id;
+    const attendanceProgress = event.maxAttendees ? (event.attendees / event.maxAttendees) * 100 : 0;
+    
+    return (
+      <View style={[
+        styles.eventCard,
+        isExpanded && styles.expandedEventCard
+      ]}>
+        <TouchableOpacity 
+          onPress={() => toggleCardExpansion(event.id)}
+          style={styles.cardTouchable}
+        >
+          <View style={styles.eventHeader}>
+            <View style={[styles.eventTypeIcon, { backgroundColor: getEventTypeColor(event.type) }]}>
+              <MaterialIcons 
+                name={getEventTypeIcon(event.type)} 
+                size={20} 
+                color="#fff" 
+              />
+            </View>
+            <View style={styles.eventInfo}>
+              <Text style={styles.eventTitle}>{event.title}</Text>
+              <Text style={styles.eventDate}>
+                {formatDate(event.date)} at {event.time}
+              </Text>
+            </View>
+            <MaterialIcons 
+              name={isExpanded ? "expand-less" : "expand-more"} 
+              size={24} 
+              color="#F4D03F" 
+              style={styles.expandIcon}
+            />
           </View>
-          <View style={styles.metaItem}>
-            <MaterialIcons name="people" size={16} color="#666" />
-            <Text style={styles.metaText}>
-              {event.attendees}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attendees
+
+          <View style={styles.eventDetails}>
+            <Text style={styles.eventDescription} numberOfLines={2}>
+              {event.description}
             </Text>
+            
+            {event.maxAttendees && (
+              <View style={styles.attendanceContainer}>
+                <Text style={styles.attendanceLabel}>Attendance Progress</Text>
+                <ProgressBar 
+                  progress={attendanceProgress} 
+                  color={attendanceProgress >= 80 ? '#2D5A3D' : attendanceProgress >= 50 ? '#F4D03F' : '#E8A598'} 
+                />
+              </View>
+            )}
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
 
-      <View style={styles.eventActions}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewEvent(event)}
-        >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.editButton]} 
-          onPress={() => Alert.alert('Edit Event', `Edit functionality for ${event.title}`)}
-        >
-          <MaterialIcons name="edit" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]} 
-          onPress={() => handleDeleteEvent(event)}
-        >
-          <MaterialIcons name="delete" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            <View style={styles.eventMeta}>
+              <View style={styles.metaItem}>
+                <MaterialIcons name="location-on" size={16} color="#F4D03F" />
+                <Text style={styles.metaText}>{event.location}</Text>
+              </View>
+              <View style={styles.metaItem}>
+                <MaterialIcons name="people" size={16} color="#F4D03F" />
+                <Text style={styles.metaText}>
+                  {event.attendees}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attendees
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.expandedActionButtons}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewEvent(event)}
+              >
+                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>View</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.editButton]} 
+                onPress={() => Alert.alert('Edit Event', `Edit functionality for ${event.title}`)}
+              >
+                <MaterialIcons name="edit" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Edit</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.deleteButton]} 
+                onPress={() => handleDeleteEvent(event)}
+              >
+                <MaterialIcons name="delete" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   const CalendarView = () => {
     const today = new Date();
@@ -441,24 +597,27 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading events...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <Animated.ScrollView 
+      style={[styles.container, { opacity: fadeAnim }]} 
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.contentWrapper}>
         {/* Header */}
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
           <Text style={styles.headerTitle}>Events Management</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity 
               style={styles.calendarButton}
               onPress={() => setShowCalendar(!showCalendar)}
             >
-              <MaterialIcons name="calendar-today" size={20} color="#4285f4" />
+              <MaterialIcons name="calendar-today" size={20} color="#F4D03F" />
               <Text style={styles.calendarButtonText}>Calendar</Text>
             </TouchableOpacity>
             <TouchableOpacity 
@@ -469,7 +628,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
               <Text style={styles.createButtonText}>Create Event</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Calendar View */}
         {showCalendar && (
@@ -477,6 +636,36 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
             <CalendarView />
           </View>
         )}
+
+        {/* Events List */}
+        <Animated.View style={[styles.eventsList, { transform: [{ scale: scaleAnim }] }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Upcoming Events</Text>
+            <Text style={styles.sectionSubtitle}>
+              {getUpcomingEvents().length} event{getUpcomingEvents().length !== 1 ? 's' : ''} scheduled
+            </Text>
+          </View>
+
+          {showSkeleton ? (
+            <>
+              <SkeletonEventCard />
+              <SkeletonEventCard />
+              <SkeletonEventCard />
+            </>
+          ) : getUpcomingEvents().length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="event" size={64} color="#02050a" />
+              <Text style={styles.emptyStateTitle}>No upcoming events</Text>
+              <Text style={styles.emptyStateText}>
+                Create your first event to get started with event management.
+              </Text>
+            </View>
+          ) : (
+            getUpcomingEvents().map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))
+          )}
+        </Animated.View>
 
       </View>
 
@@ -720,14 +909,14 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
           </View>
         </Modal>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   contentWrapper: {
     flex: 1,
@@ -739,30 +928,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1E3A5F', // Deep navy blue
     padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#fff',
     letterSpacing: -0.5,
   },
   headerActions: {
@@ -776,15 +965,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#4285f4',
-    backgroundColor: '#f8f9fa',
-    shadowColor: '#4285f4',
+    borderColor: '#F4D03F',
+    backgroundColor: 'rgba(244, 208, 63, 0.1)',
+    shadowColor: '#F4D03F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   calendarButtonText: {
-    color: '#4285f4',
+    color: '#F4D03F',
     fontSize: 15,
     fontWeight: '600',
     marginLeft: 6,
@@ -796,8 +985,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#4285f4',
-    shadowColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
+    shadowColor: '#2D5A3D',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -1003,17 +1192,38 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   eventCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 20,
     marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
+    elevation: 4,
+    shadowColor: '#1E3A5F',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+    overflow: 'hidden',
+  },
+  expandedEventCard: {
+    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  cardTouchable: {
+    padding: 24,
+  },
+  expandedContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  expandIcon: {
+    marginLeft: 8,
+  },
+  expandedActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 16,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -1038,13 +1248,13 @@ const styles = StyleSheet.create({
   eventTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 6,
     letterSpacing: -0.3,
   },
   eventDate: {
     fontSize: 15,
-    color: '#666',
+    color: '#F4D03F', // Bright yellow
     fontWeight: '500',
   },
   eventStatus: {
@@ -1065,9 +1275,45 @@ const styles = StyleSheet.create({
   },
   eventDescription: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     lineHeight: 20,
     marginBottom: 10,
+    opacity: 0.9,
+  },
+  attendanceContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+  },
+  attendanceLabel: {
+    fontSize: 12,
+    color: '#fff',
+    opacity: 0.9,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  // Animated Progress Bar Styles
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressBarBackground: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#F4D03F',
+    fontWeight: 'bold',
+    marginLeft: 12,
   },
   eventMeta: {
     gap: 8,
@@ -1078,8 +1324,9 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginLeft: 8,
+    opacity: 0.9,
   },
   eventActions: {
     flexDirection: 'row',
@@ -1100,13 +1347,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   viewButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   editButton: {
-    backgroundColor: '#34a853',
+    backgroundColor: '#F4D03F', // Bright yellow
   },
   deleteButton: {
-    backgroundColor: '#ea4335',
+    backgroundColor: '#E8A598', // Soft coral
   },
   actionButtonText: {
     color: '#fff',
@@ -1117,20 +1364,60 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#F5F1E8',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#02050a',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#02050a',
     textAlign: 'center',
     lineHeight: 22,
+    opacity: 0.7,
+  },
+  // Skeleton Loading Styles
+  skeletonEventCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+    opacity: 0.7,
+    padding: 24,
+  },
+  skeletonEventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  skeletonEventTypeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginRight: 16,
+  },
+  skeletonEventInfo: {
+    flex: 1,
+  },
+  skeletonTextLine: {
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  skeletonEventDetails: {
+    marginBottom: 15,
   },
   modalOverlay: {
     flex: 1,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   Alert,
   TextInput,
   Modal,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
 import LocationPicker from '../../../components/LocationPicker';
 import LocationPictures from '../../../components/LocationPictures';
+import CloudinaryService from '../../../lib/cloudinaryService';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +29,20 @@ interface CompanyProfile {
   industry: string;
   address: string;
   profilePicture?: string;
+  backgroundPicture?: string;
+  qualifications?: string;
+  skillsRequired?: string;
+  companyDescription?: string;
+  website?: string;
+  phoneNumber?: string;
+  contactPerson?: string;
+  companySize?: string;
+  foundedYear?: number;
+  benefits?: string;
+  workEnvironment?: string;
+  availableInternSlots?: number;
+  totalInternCapacity?: number;
+  currentInternCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,21 +67,91 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showLocationPictures, setShowLocationPictures] = useState(false);
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
+  const [uploadingBackgroundPicture, setUploadingBackgroundPicture] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showSkeleton, setShowSkeleton] = useState(true);
   const [editData, setEditData] = useState({
     companyName: '',
     industry: '',
     address: '',
+    qualifications: '',
+    skillsRequired: '',
+    companyDescription: '',
+    website: '',
+    phoneNumber: '',
+    contactPerson: '',
+    companySize: '',
+    foundedYear: '',
+    benefits: '',
+    workEnvironment: '',
+    availableInternSlots: '',
+    totalInternCapacity: '',
+    currentInternCount: '',
   });
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (currentUser) {
       fetchProfile();
+      
+      // Animate on mount
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
   }, [currentUser]);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
 
   const fetchProfile = async () => {
     try {
       setLoading(true);
+      setShowSkeleton(true);
       
       if (!currentUser) {
         throw new Error('No current user found');
@@ -75,25 +161,54 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
       
       if (response.success && response.user) {
         const userData = response.user;
+        console.log('🔍 Raw API response:', userData);
         
         // Map the API response to our CompanyProfile interface
         const companyProfile: CompanyProfile = {
           id: userData.id.toString(),
-          userType: userData.userType,
+          userType: userData.user_type,
           email: userData.email,
-          companyName: userData.companyName || '',
+          companyName: userData.company_name || '',
           industry: userData.industry || '',
           address: userData.address || '',
-          profilePicture: userData.profilePicture,
-          createdAt: userData.createdAt,
-          updatedAt: userData.updatedAt,
+          profilePicture: userData.profile_picture,
+          backgroundPicture: userData.background_picture,
+          qualifications: userData.qualifications || '',
+          skillsRequired: userData.skills_required || '',
+          companyDescription: userData.company_description || '',
+          website: userData.website || '',
+          phoneNumber: userData.phone_number || '',
+          contactPerson: userData.contact_person || '',
+          companySize: userData.company_size || '',
+          foundedYear: userData.founded_year,
+          benefits: userData.benefits || '',
+          workEnvironment: userData.work_environment || '',
+          availableInternSlots: userData.available_intern_slots || 0,
+          totalInternCapacity: userData.total_intern_capacity || 0,
+          currentInternCount: userData.current_intern_count || 0,
+          createdAt: userData.created_at,
+          updatedAt: userData.updated_at,
         };
         
+        console.log('🔍 Mapped company profile:', companyProfile);
         setProfile(companyProfile);
         setEditData({
           companyName: companyProfile.companyName,
           industry: companyProfile.industry,
           address: companyProfile.address,
+          qualifications: companyProfile.qualifications || '',
+          skillsRequired: companyProfile.skillsRequired || '',
+          companyDescription: companyProfile.companyDescription || '',
+          website: companyProfile.website || '',
+          phoneNumber: companyProfile.phoneNumber || '',
+          contactPerson: companyProfile.contactPerson || '',
+          companySize: companyProfile.companySize || '',
+          foundedYear: companyProfile.foundedYear?.toString() || '',
+          benefits: companyProfile.benefits || '',
+          workEnvironment: companyProfile.workEnvironment || '',
+          availableInternSlots: companyProfile.availableInternSlots?.toString() || '',
+          totalInternCapacity: companyProfile.totalInternCapacity?.toString() || '',
+          currentInternCount: companyProfile.currentInternCount?.toString() || '',
         });
       } else {
         // Check if this is a Google user that needs setup
@@ -138,24 +253,146 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
       }
     } finally {
       setLoading(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
   const handleEditProfile = () => {
+    // Populate editData with all current profile values
+    if (profile) {
+      setEditData({
+        companyName: profile.companyName,
+        industry: profile.industry,
+        address: profile.address,
+        qualifications: profile.qualifications || '',
+        skillsRequired: profile.skillsRequired || '',
+        companyDescription: profile.companyDescription || '',
+        website: profile.website || '',
+        phoneNumber: profile.phoneNumber || '',
+        contactPerson: profile.contactPerson || '',
+        companySize: profile.companySize || '',
+        foundedYear: profile.foundedYear?.toString() || '',
+        benefits: profile.benefits || '',
+        workEnvironment: profile.workEnvironment || '',
+        availableInternSlots: profile.availableInternSlots?.toString() || '',
+        totalInternCapacity: profile.totalInternCapacity?.toString() || '',
+        currentInternCount: profile.currentInternCount?.toString() || '',
+      });
+    }
     setShowEditModal(true);
   };
 
-  const handleSaveProfile = () => {
-    if (!profile) return;
+  const handleEditSection = (section: string) => {
+    setEditingSection(section);
+    
+    // Populate editData with current profile values for this section
+    if (profile) {
+      const sectionFields = getSectionFields(section);
+      const newEditData = { ...editData };
+      
+      sectionFields.forEach(field => {
+        if (field === 'foundedYear' || field === 'availableInternSlots' || field === 'totalInternCapacity' || field === 'currentInternCount') {
+          (newEditData as any)[field] = (profile as any)[field]?.toString() || '';
+        } else {
+          (newEditData as any)[field] = (profile as any)[field] || '';
+        }
+      });
+      
+      setEditData(newEditData);
+    }
+    
+    setShowEditModal(true);
+  };
 
-    const updatedProfile = {
-      ...profile,
-      ...editData,
-    };
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setShowSuccessModal(true);
+  };
+
+  const closeSuccessModal = () => {
+    setShowSuccessModal(false);
+    setSuccessMessage('');
+  };
+
+  const getSectionFields = (section: string) => {
+    switch (section) {
+      case 'company-details':
+        return ['companyDescription', 'website', 'phoneNumber', 'contactPerson', 'companySize', 'foundedYear'];
+      case 'qualifications-skills':
+        return ['qualifications', 'skillsRequired'];
+      case 'work-environment':
+        return ['workEnvironment', 'benefits'];
+      case 'internship-capacity':
+        return ['availableInternSlots', 'totalInternCapacity', 'currentInternCount'];
+      default:
+        return [];
+    }
+  };
+
+  const getSectionTitle = (section: string) => {
+    switch (section) {
+      case 'company-details':
+        return 'Edit Company Details';
+      case 'qualifications-skills':
+        return 'Edit Qualifications & Skills';
+      case 'work-environment':
+        return 'Edit Work Environment & Benefits';
+      case 'internship-capacity':
+        return 'Edit Internship Capacity';
+      default:
+        return 'Edit Profile';
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profile || !currentUser) return;
+
+    try {
+      // Only send the fields that are being edited based on the current section
+      let dataToSend = {};
+      
+      if (editingSection) {
+        // If editing a specific section, only send those fields
+        const sectionFields = getSectionFields(editingSection);
+        sectionFields.forEach(field => {
+          if ((editData as any)[field] !== undefined && (editData as any)[field] !== '') {
+            (dataToSend as any)[field] = (editData as any)[field];
+          }
+        });
+      } else {
+        // If editing the main profile, send all fields
+        dataToSend = { ...editData };
+      }
+
+      console.log('📤 Sending data to API:', dataToSend);
+      const response = await apiService.updateProfile(currentUser.id, dataToSend);
+      
+      if (response.success) {
+        // Update only the fields that were actually sent
+        const updatedProfile = { ...profile };
+        
+        Object.keys(dataToSend).forEach(key => {
+          if (key === 'foundedYear' || key === 'availableInternSlots' || key === 'totalInternCapacity' || key === 'currentInternCount') {
+            (updatedProfile as any)[key] = (dataToSend as any)[key] ? parseInt((dataToSend as any)[key]) : 0;
+          } else {
+            (updatedProfile as any)[key] = (dataToSend as any)[key];
+          }
+        });
 
     setProfile(updatedProfile);
     setShowEditModal(false);
-    Alert.alert('Success', 'Profile updated successfully');
+        setEditingSection(null);
+        showSuccess('Profile updated successfully!');
+      } else {
+        Alert.alert('Error', response.message || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
   };
 
   const handleChangePassword = () => {
@@ -166,12 +403,169 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
     );
   };
 
-  const handleUploadLogo = () => {
-    Alert.alert(
-      'Upload Logo',
-      'Logo upload functionality will be implemented soon.',
-      [{ text: 'OK' }]
-    );
+  const handleUploadProfilePicture = async () => {
+    try {
+      // Create a file input element for web
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      
+      document.body.appendChild(input);
+      input.click();
+      
+      input.onchange = async (event) => {
+        const target = event.target as HTMLInputElement;
+        const file = target.files?.[0];
+        
+        if (!file) {
+          document.body.removeChild(input);
+          return;
+        }
+        
+        if (!file.type.startsWith('image/')) {
+          Alert.alert('Invalid File', 'Please select an image file.');
+          document.body.removeChild(input);
+          return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+          Alert.alert('File Too Large', 'Please select an image smaller than 5MB.');
+          document.body.removeChild(input);
+          return;
+        }
+        
+        setUploadingProfilePicture(true);
+        
+        try {
+          const uploadResult = await CloudinaryService.uploadImage(
+            file,
+            'internship-avatars/company-profiles',
+            {
+              transformation: 'w_400,h_400,c_fill,q_auto,f_auto'
+            }
+          );
+          
+          if (uploadResult.success && uploadResult.url) {
+            // Update the profile picture in the database
+            const response = await apiService.updateProfile(currentUser!.id, {
+              profilePicture: uploadResult.url
+            });
+            
+            if (response.success) {
+              const updatedProfile = {
+                ...profile!,
+                profilePicture: uploadResult.url
+              };
+              
+              setProfile(updatedProfile);
+              setSuccessMessage('Profile picture updated successfully!');
+              setShowSuccessModal(true);
+            } else {
+              Alert.alert('Error', response.message || 'Failed to update profile picture in database.');
+            }
+          } else {
+            Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload image. Please try again.');
+          }
+        } catch (error) {
+          console.error('Profile picture upload error:', error);
+          Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
+        } finally {
+          setUploadingProfilePicture(false);
+          document.body.removeChild(input);
+        }
+      };
+      
+      input.oncancel = () => {
+        document.body.removeChild(input);
+      };
+      
+    } catch (error) {
+      console.error('Profile picture upload error:', error);
+      Alert.alert('Error', 'Failed to open file picker. Please try again.');
+    }
+  };
+
+  const handleUploadBackgroundPicture = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      
+      document.body.appendChild(input);
+      input.click();
+      
+      input.onchange = async (event) => {
+        const target = event.target as HTMLInputElement;
+        const file = target.files?.[0];
+        
+        if (!file) {
+          document.body.removeChild(input);
+          return;
+        }
+        
+        if (!file.type.startsWith('image/')) {
+          Alert.alert('Invalid File', 'Please select an image file.');
+          document.body.removeChild(input);
+          return;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) {
+          Alert.alert('File Too Large', 'Please select an image smaller than 10MB.');
+          document.body.removeChild(input);
+          return;
+        }
+        
+        setUploadingBackgroundPicture(true);
+        
+        try {
+          const uploadResult = await CloudinaryService.uploadImage(
+            file,
+            'internship-avatars/company-backgrounds',
+            {
+              transformation: 'w_1200,h_400,c_fill,q_auto,f_auto'
+            }
+          );
+          
+          if (uploadResult.success && uploadResult.url) {
+            // Update the background picture in the database
+            const response = await apiService.updateProfile(currentUser!.id, {
+              backgroundPicture: uploadResult.url
+            });
+            
+            if (response.success) {
+              const updatedProfile = {
+                ...profile!,
+                backgroundPicture: uploadResult.url
+              };
+              
+              setProfile(updatedProfile);
+              setSuccessMessage('Background picture updated successfully!');
+              setShowSuccessModal(true);
+            } else {
+              Alert.alert('Error', response.message || 'Failed to update background picture in database.');
+            }
+          } else {
+            Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload image. Please try again.');
+          }
+        } catch (error) {
+          console.error('Background picture upload error:', error);
+          Alert.alert('Error', 'Failed to upload background picture. Please try again.');
+        } finally {
+          setUploadingBackgroundPicture(false);
+          document.body.removeChild(input);
+        }
+      };
+      
+      input.oncancel = () => {
+        document.body.removeChild(input);
+      };
+      
+    } catch (error) {
+      console.error('Background picture upload error:', error);
+      Alert.alert('Error', 'Failed to open file picker. Please try again.');
+    }
   };
 
   const handleLocationPicker = () => {
@@ -198,11 +592,91 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
     setShowLocationPictures(false);
   };
 
+  const SectionHeader = ({ title, sectionId, hasData }: { title: string; sectionId: string; hasData: boolean }) => (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleContainer}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {width < 768 && (
+          <View style={styles.sectionBadge}>
+            <MaterialIcons name="business" size={16} color="#02050a" />
+            <Text style={styles.sectionBadgeText}>Info</Text>
+          </View>
+        )}
+      </View>
+      <TouchableOpacity
+        style={styles.editSectionButton}
+        onPress={() => handleEditSection(sectionId)}
+      >
+        <MaterialIcons name="edit" size={width < 768 ? 18 : 16} color="#02050a" />
+        <Text style={styles.editSectionButtonText}>
+          {hasData ? 'Edit' : 'Add'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Skeleton Components
+  const SkeletonProfileCard = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonInfoCard}>
+        <View style={styles.skeletonCardHeader}>
+          <Animated.View style={[styles.skeletonCardIcon, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonCardTitle, { opacity: shimmerOpacity }]} />
+        </View>
+        <View style={styles.skeletonCardContent}>
+          <Animated.View style={[styles.skeletonCardSubtitle, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonCardSubtitle, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonCardSubtitle, { opacity: shimmerOpacity }]} />
+        </View>
+        <Animated.View style={[styles.skeletonCardEditButton, { opacity: shimmerOpacity }]} />
+      </View>
+    );
+  };
+
+  const SkeletonCoverPhoto = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <Animated.View style={[styles.skeletonCoverPhoto, { opacity: shimmerOpacity }]}>
+        <Animated.View style={[styles.skeletonCoverPhotoIcon, { opacity: shimmerOpacity }]} />
+        <Animated.View style={[styles.skeletonCoverPhotoText, { opacity: shimmerOpacity }]} />
+      </Animated.View>
+    );
+  };
+
+  const SkeletonProfileSection = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonProfileSection}>
+        <View style={styles.skeletonProfileImageContainer}>
+          <Animated.View style={[styles.skeletonProfileImage, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonProfileUploadButton, { opacity: shimmerOpacity }]} />
+        </View>
+        <View style={styles.skeletonProfileInfo}>
+          <Animated.View style={[styles.skeletonCompanyName, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonCompanyIndustry, { opacity: shimmerOpacity }]} />
+        </View>
+      </View>
+    );
+  };
+
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
@@ -231,90 +705,482 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Profile Header */}
-      <View style={styles.profileHeader}>
-        <View style={styles.profileImageContainer}>
-          {profile.profilePicture ? (
-            <Image source={{ uri: profile.profilePicture }} style={styles.profileImage} />
+    <Animated.ScrollView 
+      style={[styles.container, { opacity: fadeAnim }]} 
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Cover Photo Header */}
+      <Animated.View style={[styles.coverPhotoContainer, { transform: [{ translateY: slideAnim }] }]}>
+        {showSkeleton ? (
+          <SkeletonCoverPhoto />
+        ) : (
+          <>
+            {/* Cover Photo */}
+            {profile.backgroundPicture ? (
+              <Image source={{ uri: profile.backgroundPicture }} style={styles.coverPhoto} />
+            ) : (
+              <View style={styles.coverPhotoPlaceholder}>
+                <MaterialIcons name="landscape" size={64} color="#F4D03F" />
+                <Text style={styles.coverPhotoPlaceholderText}>Add Cover Photo</Text>
+              </View>
+            )}
+            
+            {/* Edit Cover Button */}
+            <TouchableOpacity 
+              style={styles.editCoverButton} 
+              onPress={handleUploadBackgroundPicture}
+              disabled={uploadingBackgroundPicture}
+            >
+              {uploadingBackgroundPicture ? (
+                <ActivityIndicator size="small" color="#1E3A5F" />
+              ) : (
+                <>
+                  <MaterialIcons name="camera-alt" size={16} color="#1E3A5F" />
+                  <Text style={styles.editCoverText}>Edit Cover</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
+      </Animated.View>
+
+      {/* Profile Picture and Name Section */}
+      <Animated.View style={[styles.profileSection, { transform: [{ scale: scaleAnim }] }]}>
+        {showSkeleton ? (
+          <SkeletonProfileSection />
+        ) : (
+          <>
+            <View style={styles.profileImageContainer}>
+              {profile.profilePicture ? (
+                <Image source={{ uri: profile.profilePicture }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileText}>{profile.companyName.charAt(0)}</Text>
+                </View>
+              )}
+              <TouchableOpacity 
+                style={styles.profileUploadButton} 
+                onPress={handleUploadProfilePicture}
+                disabled={uploadingProfilePicture}
+              >
+                {uploadingProfilePicture ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <MaterialIcons name="camera-alt" size={16} color="#fff" />
+                )}
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.profileInfo}>
+              <Text style={styles.companyName}>{profile.companyName}</Text>
+              <Text style={styles.companyIndustry}>{profile.industry}</Text>
+            </View>
+            
+            <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
+              <MaterialIcons name="edit" size={18} color="#F4D03F" />
+              <Text style={styles.editProfileButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </Animated.View>
+
+      {/* About Section */}
+      <Animated.View style={[styles.aboutSection, { transform: [{ translateY: slideAnim }] }]}>
+        <Text style={styles.aboutTitle}>About</Text>
+        
+        {showSkeleton ? (
+          <View style={styles.cardsGrid}>
+            {/* Left Column Skeleton */}
+            <View style={styles.leftColumn}>
+              <SkeletonProfileCard />
+              <SkeletonProfileCard />
+            </View>
+            {/* Right Column Skeleton */}
+            <View style={styles.rightColumn}>
+              <SkeletonProfileCard />
+              <SkeletonProfileCard />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.cardsGrid}>
+            {/* Left Column */}
+            <View style={styles.leftColumn}>
+              {/* Company Information Card */}
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="business" size={24} color="#02050a" />
+                  </View>
+                  <Text style={styles.cardTitle}>Company Information</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardSubtitle}>Industry: {profile.industry || 'Not specified'}</Text>
+                  <Text style={styles.cardSubtitle}>Address: {profile.address || 'Not specified'}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={() => handleEditSection('company-details')}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Contact Information Card */}
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="email" size={24} color="#02050a" />
+                  </View>
+                  <Text style={styles.cardTitle}>Contact Information</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardSubtitle}>{profile.email}</Text>
+                  {profile.phoneNumber && (
+                    <Text style={styles.cardSubtitle}>{profile.phoneNumber}</Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={() => handleEditSection('company-details')}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Website Card */}
+              {profile.website && (
+                <View style={styles.infoCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardIcon}>
+                      <MaterialIcons name="language" size={24} color="#02050a" />
+                    </View>
+                    <Text style={styles.cardTitle}>Website</Text>
+                  </View>
+                  <View style={styles.cardContent}>
+                    <Text style={styles.cardSubtitle}>{profile.website}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.cardEditButton} 
+                    onPress={() => handleEditSection('company-details')}
+                  >
+                    <MaterialIcons name="add" size={16} color="#02050a" />
+                    <Text style={styles.cardEditButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Right Column */}
+            <View style={styles.rightColumn}>
+              {/* Company Details Card */}
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="info" size={24} color="#02050a" />
+                  </View>
+                  <Text style={styles.cardTitle}>Company Details</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  {profile.companySize && (
+                    <Text style={styles.cardSubtitle}>Size: {profile.companySize}</Text>
+                  )}
+                  {profile.foundedYear && (
+                    <Text style={styles.cardSubtitle}>Founded: {profile.foundedYear}</Text>
+                  )}
+                  {profile.contactPerson && (
+                    <Text style={styles.cardSubtitle}>Contact: {profile.contactPerson}</Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={() => handleEditSection('company-details')}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Internship Capacity Card */}
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="group" size={24} color="#02050a" />
+                  </View>
+                  <Text style={styles.cardTitle}>Internship Capacity</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardSubtitle}>Available Slots: {profile.availableInternSlots}</Text>
+                  <Text style={styles.cardSubtitle}>Total Capacity: {profile.totalInternCapacity}</Text>
+                  <Text style={styles.cardSubtitle}>Current Interns: {profile.currentInternCount}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={() => handleEditSection('internship-capacity')}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Edit Profile Card */}
+              <TouchableOpacity style={styles.editCard} onPress={handleEditProfile}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="edit" size={24} color="#02050a" />
+                  </View>
+                  <Text style={styles.cardTitle}>Edit Profile</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardSubtitle}>Update your company information</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={handleEditProfile}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Animated.View>
+
+      {/* Company Details */}
+      <View style={styles.section}>
+        <SectionHeader 
+          title="Company Details" 
+          sectionId="company-details"
+          hasData={!!(profile.companyDescription || profile.website || profile.phoneNumber || profile.contactPerson || profile.companySize || profile.foundedYear)}
+        />
+        <View style={styles.infoCard}>
+          {profile.companyDescription || profile.website || profile.phoneNumber || profile.contactPerson || profile.companySize || profile.foundedYear ? (
+            <>
+              {profile.companyDescription && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="description" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Description</Text>
+                    <Text style={styles.infoValue}>{profile.companyDescription}</Text>
+            </View>
+          </View>
+              )}
+              {profile.website && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="language" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Website</Text>
+                    <Text style={styles.infoValue}>{profile.website}</Text>
+            </View>
+          </View>
+              )}
+              {profile.phoneNumber && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="phone" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Phone Number</Text>
+                    <Text style={styles.infoValue}>{profile.phoneNumber}</Text>
+            </View>
+          </View>
+              )}
+              {profile.contactPerson && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="person" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Contact Person</Text>
+                    <Text style={styles.infoValue}>{profile.contactPerson}</Text>
+            </View>
+          </View>
+              )}
+              {profile.companySize && (
+                <View style={styles.infoItem}>
+                  <MaterialIcons name="group" size={20} color="#02050a" />
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Company Size</Text>
+                    <Text style={styles.infoValue}>{profile.companySize}</Text>
+                  </View>
+                </View>
+              )}
+              {profile.foundedYear && (
+                <View style={styles.infoItem}>
+                  <MaterialIcons name="calendar-today" size={20} color="#02050a" />
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Founded Year</Text>
+                    <Text style={styles.infoValue}>{profile.foundedYear}</Text>
+                  </View>
+                </View>
+              )}
+            </>
           ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>{profile.companyName.charAt(0)}</Text>
+            <View style={styles.emptyState}>
+              <MaterialIcons name="business" size={48} color="#F4D03F" />
+              <Text style={styles.emptyStateText}>No company details added yet</Text>
+              <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.uploadButton} onPress={handleUploadLogo}>
-            <MaterialIcons name="camera-alt" size={20} color="#fff" />
-          </TouchableOpacity>
         </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.companyName}>{profile.companyName}</Text>
-          <Text style={styles.industry}>{profile.industry}</Text>
-          <Text style={styles.email}>{profile.email}</Text>
-        </View>
-        <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-          <MaterialIcons name="edit" size={20} color="#4285f4" />
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Company Information */}
+      {/* Qualifications & Skills */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Company Information</Text>
+        <SectionHeader 
+          title="Qualifications & Skills" 
+          sectionId="qualifications-skills"
+          hasData={!!(profile.qualifications || profile.skillsRequired)}
+        />
+        <View style={styles.infoCard}>
+          {profile.qualifications || profile.skillsRequired ? (
+            <>
+              {profile.qualifications && (
+          <View style={styles.infoItem}>
+            <MaterialIcons name="school" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Required Qualifications</Text>
+                    <Text style={styles.infoValue}>{profile.qualifications}</Text>
+            </View>
+          </View>
+              )}
+              {profile.skillsRequired && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="build" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Skills Required</Text>
+                    <Text style={styles.infoValue}>{profile.skillsRequired}</Text>
+            </View>
+          </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="school" size={48} color="#F4D03F" />
+              <Text style={styles.emptyStateText}>No qualifications & skills added yet</Text>
+              <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Work Environment & Benefits */}
+      <View style={styles.section}>
+        <SectionHeader 
+          title="Work Environment & Benefits" 
+          sectionId="work-environment"
+          hasData={!!(profile.workEnvironment || profile.benefits)}
+        />
+        <View style={styles.infoCard}>
+          {profile.workEnvironment || profile.benefits ? (
+            <>
+              {profile.workEnvironment && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="work" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Work Environment</Text>
+                    <Text style={styles.infoValue}>{profile.workEnvironment}</Text>
+            </View>
+          </View>
+              )}
+              {profile.benefits && (
+          <View style={styles.infoItem}>
+                  <MaterialIcons name="card-giftcard" size={20} color="#02050a" />
+            <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Benefits</Text>
+                    <Text style={styles.infoValue}>{profile.benefits}</Text>
+            </View>
+          </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="work" size={48} color="#F4D03F" />
+              <Text style={styles.emptyStateText}>No work environment & benefits added yet</Text>
+              <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Internship Capacity */}
+      <View style={styles.section}>
+        <SectionHeader 
+          title="Internship Capacity" 
+          sectionId="internship-capacity"
+          hasData={!!(profile.availableInternSlots || profile.totalInternCapacity || profile.currentInternCount)}
+        />
         <View style={styles.infoCard}>
           <View style={styles.infoItem}>
-            <MaterialIcons name="business" size={20} color="#666" />
+            <MaterialIcons name="group-add" size={20} color="#02050a" />
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Company Name</Text>
-              <Text style={styles.infoValue}>{profile.companyName}</Text>
+              <Text style={styles.infoLabel}>Available Intern Slots</Text>
+              <Text style={styles.infoValue}>{profile.availableInternSlots || 0}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
-            <MaterialIcons name="work" size={20} color="#666" />
+            <MaterialIcons name="business-center" size={20} color="#02050a" />
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Industry</Text>
-              <Text style={styles.infoValue}>{profile.industry}</Text>
+              <Text style={styles.infoLabel}>Total Intern Capacity</Text>
+              <Text style={styles.infoValue}>{profile.totalInternCapacity || 0}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
-            <MaterialIcons name="location-on" size={20} color="#666" />
+            <MaterialIcons name="people" size={20} color="#02050a" />
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Address</Text>
-              <Text style={styles.infoValue}>{profile.address}</Text>
+              <Text style={styles.infoLabel}>Current Intern Count</Text>
+              <Text style={styles.infoValue}>{profile.currentInternCount || 0}</Text>
             </View>
           </View>
-          <View style={styles.infoItem}>
-            <MaterialIcons name="email" size={20} color="#666" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{profile.email}</Text>
+          {profile.totalInternCapacity && profile.currentInternCount && (
+            <View style={styles.infoItem}>
+              <MaterialIcons name="trending-up" size={20} color="#02050a" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Capacity Utilization</Text>
+              <Text style={styles.infoValue}>
+                  {Math.round((profile.currentInternCount / profile.totalInternCapacity) * 100)}%
+              </Text>
             </View>
           </View>
+          )}
         </View>
       </View>
 
       {/* Account Information */}
       <View style={styles.section}>
+        <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Account Information</Text>
+          <View style={styles.sectionBadge}>
+            <MaterialIcons name="account-circle" size={16} color="#02050a" />
+            <Text style={styles.sectionBadgeText}>Account</Text>
+          </View>
+        </View>
         <View style={styles.infoCard}>
+          <View style={styles.infoGrid}>
           <View style={styles.infoItem}>
-            <MaterialIcons name="person" size={20} color="#666" />
+              <View style={styles.infoIconContainer}>
+                <MaterialIcons name="person" size={20} color="#02050a" />
+              </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>User Type</Text>
               <Text style={styles.infoValue}>{profile.userType}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
-            <MaterialIcons name="schedule" size={20} color="#666" />
+              <View style={styles.infoIconContainer}>
+                <MaterialIcons name="schedule" size={20} color="#02050a" />
+              </View>
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Created At</Text>
+                <Text style={styles.infoLabel}>Member Since</Text>
               <Text style={styles.infoValue}>{new Date(profile.createdAt).toLocaleDateString()}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
-            <MaterialIcons name="update" size={20} color="#666" />
+              <View style={styles.infoIconContainer}>
+                <MaterialIcons name="update" size={20} color="#02050a" />
+              </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Last Updated</Text>
               <Text style={styles.infoValue}>{new Date(profile.updatedAt).toLocaleDateString()}</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -322,32 +1188,63 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
 
       {/* Account Settings */}
       <View style={styles.section}>
+        <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Account Settings</Text>
+          <View style={styles.sectionBadge}>
+            <MaterialIcons name="settings" size={16} color="#02050a" />
+            <Text style={styles.sectionBadgeText}>Settings</Text>
+          </View>
+        </View>
         <View style={styles.settingsCard}>
           <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
-            <MaterialIcons name="lock" size={24} color="#666" />
+            <View style={styles.settingIconContainer}>
+              <MaterialIcons name="lock" size={20} color="#02050a" />
+            </View>
+            <View style={styles.settingContent}>
             <Text style={styles.settingText}>Change Password</Text>
-            <MaterialIcons name="arrow-forward-ios" size={16} color="#666" />
+              <Text style={styles.settingSubtext}>Update your account password</Text>
+            </View>
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.settingItem} onPress={handleLocationPicker}>
-            <MaterialIcons name="location-on" size={20} color="#4285f4" />
+            <View style={styles.settingIconContainer}>
+            <MaterialIcons name="location-on" size={20} color="#02050a" />
+            </View>
+            <View style={styles.settingContent}>
             <Text style={styles.settingText}>Set Location</Text>
-            <MaterialIcons name="chevron-right" size={20} color="#666" />
+              <Text style={styles.settingSubtext}>Update company location</Text>
+            </View>
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.settingItem} onPress={handleLocationPictures}>
-            <MaterialIcons name="photo-camera" size={20} color="#4285f4" />
+            <View style={styles.settingIconContainer}>
+            <MaterialIcons name="photo-camera" size={20} color="#02050a" />
+            </View>
+            <View style={styles.settingContent}>
             <Text style={styles.settingText}>Location Pictures</Text>
-            <MaterialIcons name="chevron-right" size={20} color="#666" />
+              <Text style={styles.settingSubtext}>Manage location photos</Text>
+            </View>
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.settingItem}>
-            <MaterialIcons name="notifications" size={24} color="#666" />
+            <View style={styles.settingIconContainer}>
+              <MaterialIcons name="notifications" size={20} color="#02050a" />
+            </View>
+            <View style={styles.settingContent}>
             <Text style={styles.settingText}>Notification Settings</Text>
-            <MaterialIcons name="arrow-forward-ios" size={16} color="#666" />
+              <Text style={styles.settingSubtext}>Manage notifications</Text>
+            </View>
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.settingItem}>
-            <MaterialIcons name="privacy-tip" size={24} color="#666" />
+            <View style={styles.settingIconContainer}>
+              <MaterialIcons name="privacy-tip" size={20} color="#02050a" />
+            </View>
+            <View style={styles.settingContent}>
             <Text style={styles.settingText}>Privacy Settings</Text>
-            <MaterialIcons name="arrow-forward-ios" size={16} color="#666" />
+              <Text style={styles.settingSubtext}>Control your privacy</Text>
+            </View>
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
         </View>
       </View>
@@ -362,16 +1259,23 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <Text style={styles.modalTitle}>
+                {editingSection ? getSectionTitle(editingSection) : 'Edit Profile'}
+              </Text>
               <TouchableOpacity
                 style={styles.closeModalButton}
-                onPress={() => setShowEditModal(false)}
+                onPress={() => {
+                  setShowEditModal(false);
+                  setEditingSection(null);
+                }}
               >
                 <MaterialIcons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
+              {(!editingSection || editingSection === 'company-details') && (
+                <>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Company Name *</Text>
                 <TextInput
@@ -403,12 +1307,175 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                   numberOfLines={3}
                 />
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Company Description</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                      value={editData.companyDescription}
+                      onChangeText={(text) => setEditData({...editData, companyDescription: text})}
+                      placeholder="Describe your company"
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Website</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editData.website}
+                  onChangeText={(text) => setEditData({...editData, website: text})}
+                      placeholder="https://www.company.com"
+                  keyboardType="url"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editData.phoneNumber}
+                  onChangeText={(text) => setEditData({...editData, phoneNumber: text})}
+                      placeholder="+1 (555) 123-4567"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Contact Person</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editData.contactPerson}
+                  onChangeText={(text) => setEditData({...editData, contactPerson: text})}
+                      placeholder="Name of contact person"
+                />
+              </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Company Size</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.companySize}
+                      onChangeText={(text) => setEditData({...editData, companySize: text})}
+                      placeholder="e.g., 1-10, 11-50, 51-200, 201-500, 500+"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Founded Year</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.foundedYear}
+                      onChangeText={(text) => setEditData({...editData, foundedYear: text})}
+                      placeholder="e.g., 2020"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </>
+              )}
+
+              {editingSection === 'qualifications-skills' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Required Qualifications</Text>
+                    <TextInput
+                      style={[styles.textInput, styles.textArea]}
+                      value={editData.qualifications}
+                      onChangeText={(text) => setEditData({...editData, qualifications: text})}
+                      placeholder="List required qualifications for interns"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Skills Required</Text>
+                    <TextInput
+                      style={[styles.textInput, styles.textArea]}
+                      value={editData.skillsRequired}
+                      onChangeText={(text) => setEditData({...editData, skillsRequired: text})}
+                      placeholder="List required skills for interns"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+                </>
+              )}
+
+              {editingSection === 'work-environment' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Work Environment</Text>
+                    <TextInput
+                      style={[styles.textInput, styles.textArea]}
+                      value={editData.workEnvironment}
+                      onChangeText={(text) => setEditData({...editData, workEnvironment: text})}
+                      placeholder="Describe the work environment"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Benefits</Text>
+                    <TextInput
+                      style={[styles.textInput, styles.textArea]}
+                      value={editData.benefits}
+                      onChangeText={(text) => setEditData({...editData, benefits: text})}
+                      placeholder="List benefits offered to interns"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+                </>
+              )}
+
+              {editingSection === 'internship-capacity' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Available Intern Slots</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.availableInternSlots}
+                      onChangeText={(text) => setEditData({...editData, availableInternSlots: text})}
+                      placeholder="Number of open internship positions"
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Total Intern Capacity</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.totalInternCapacity}
+                      onChangeText={(text) => setEditData({...editData, totalInternCapacity: text})}
+                      placeholder="Maximum interns the company can accommodate"
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Current Intern Count</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.currentInternCount}
+                      onChangeText={(text) => setEditData({...editData, currentInternCount: text})}
+                      placeholder="Number of interns currently placed"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowEditModal(false)}
+                onPress={() => {
+                  setShowEditModal(false);
+                  setEditingSection(null);
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -453,103 +1520,114 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           }}
         />
       </Modal>
-    </ScrollView>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <View style={styles.successIconContainer}>
+              <MaterialIcons name="check-circle" size={64} color="#4caf50" />
+            </View>
+            <Text style={styles.successTitle}>Success!</Text>
+            <Text style={styles.successMessage}>{successMessage}</Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={closeSuccessModal}
+            >
+              <Text style={styles.successButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </Animated.ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#ea4335',
+    color: '#E8A598', // Soft coral
     marginTop: 16,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
     textAlign: 'center',
+    fontWeight: '400',
   },
   profileHeader: {
     backgroundColor: '#fff',
-    padding: 20,
-    alignItems: 'center',
+    padding: width < 768 ? 16 : 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  profileImageContainer: {
+    borderBottomColor: '#e8eaed',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
     position: 'relative',
-    marginBottom: 15,
+    minHeight: width < 768 ? 320 : 400,
+    overflow: 'hidden',
   },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  profileHeaderContent: {
+    flexDirection: width < 768 ? 'column' : 'row',
+    alignItems: width < 768 ? 'center' : 'flex-start',
+    marginBottom: width < 768 ? 20 : 24,
+    position: 'relative',
+    zIndex: 5,
+    marginTop: width < 768 ? 140 : 180,
+    paddingHorizontal: width < 768 ? 12 : 16,
   },
-  profilePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#e0e0e0',
-    justifyContent: 'center',
+  industryContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  profileText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  uploadButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#4285f4',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileInfo: {
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  companyName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   industry: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: width < 768 ? 18 : 16,
+    color: '#5f6368',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  emailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   email: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: width < 768 ? 16 : 14,
+    color: '#5f6368',
+    marginLeft: 6,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -569,17 +1647,28 @@ const styles = StyleSheet.create({
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingHorizontal: width < 768 ? 24 : 28,
+    paddingVertical: width < 768 ? 14 : 16,
+    borderRadius: width < 768 ? 14 : 18,
+    backgroundColor: 'rgba(66, 133, 244, 0.9)',
+    shadowColor: '#4285f4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+    alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: '#4285f4',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    minWidth: width < 768 ? 140 : 160,
   },
   editButtonText: {
-    color: '#4285f4',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
+    color: '#fff',
+    fontSize: width < 768 ? 16 : 18,
+    fontWeight: '700',
+    marginLeft: width < 768 ? 8 : 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   statsSection: {
     flexDirection: 'row',
@@ -611,42 +1700,135 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   section: {
-    padding: 20,
+    backgroundColor: '#F5F1E8', // Soft cream background
+    padding: width < 768 ? 16 : 20,
+    marginVertical: 8,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#1E3A5F', // Deep navy blue border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  sectionHeader: {
+    flexDirection: width < 768 ? 'column' : 'row',
+    justifyContent: width < 768 ? 'flex-start' : 'space-between',
+    alignItems: width < 768 ? 'flex-start' : 'center',
+    marginBottom: 16,
+    gap: width < 768 ? 12 : 0,
+  },
+  sectionTitleContainer: {
+    flexDirection: width < 768 ? 'column' : 'row',
+    alignItems: width < 768 ? 'flex-start' : 'center',
+    gap: width < 768 ? 8 : 0,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: width < 768 ? 20 : 22,
     fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 15,
+    color: '#1E3A5F', // Deep navy blue
+    fontFamily: 'System',
   },
-  infoCard: {
-    backgroundColor: '#fff',
+  sectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F4D03F', // Bright yellow
+    borderRadius: 16,
+    alignSelf: width < 768 ? 'flex-start' : 'auto',
+  },
+  sectionBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#02050a', // Dark navy text
+    marginLeft: 4,
+  },
+  editSectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: width < 768 ? 16 : 12,
+    paddingVertical: width < 768 ? 10 : 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F4D03F', // Bright yellow
+    minHeight: width < 768 ? 44 : 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editSectionButtonText: {
+    color: '#02050a', // Dark navy text
+    fontSize: width < 768 ? 16 : 14,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: width < 768 ? 60 : 40,
+  },
+  emptyStateText: {
+    fontSize: width < 768 ? 18 : 16,
+    color: '#1E3A5F', // Deep navy blue
+    marginTop: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: width < 768 ? 16 : 14,
+    color: '#F4D03F', // Bright yellow
+    marginTop: 4,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  infoGrid: {
+    gap: width < 768 ? 20 : 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: width < 768 ? 12 : 8,
+    backgroundColor: '#1E3A5F', // Deep navy blue
     borderRadius: 12,
-    padding: 20,
-    elevation: 2,
+    padding: 16,
+    marginVertical: 4,
+    borderWidth: 2,
+    borderColor: '#F4D03F', // Bright yellow border
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 2,
   },
-  infoItem: {
-    flexDirection: 'row',
+  infoIconContainer: {
+    width: width < 768 ? 48 : 40,
+    height: width < 768 ? 48 : 40,
+    borderRadius: width < 768 ? 24 : 20,
+    backgroundColor: '#F4D03F', // Bright yellow
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    marginRight: width < 768 ? 20 : 16,
   },
   infoContent: {
     flex: 1,
-    marginLeft: 12,
   },
   infoLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    fontSize: width < 768 ? 14 : 13,
+    color: '#F4D03F', // Bright yellow
+    marginBottom: 4,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   infoValue: {
-    fontSize: 16,
-    color: '#1a1a2e',
+    fontSize: width < 768 ? 18 : 16,
+    color: '#fff', // White text on navy background
     fontWeight: '500',
+    lineHeight: width < 768 ? 24 : 22,
   },
   moaCard: {
     backgroundColor: '#fff',
@@ -751,51 +1933,80 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   settingsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    elevation: 2,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    borderWidth: 2,
+    borderColor: '#F4D03F', // Bright yellow border
+    overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: width < 768 ? 24 : 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    minHeight: width < 768 ? 72 : 64,
+  },
+  settingIconContainer: {
+    width: width < 768 ? 48 : 40,
+    height: width < 768 ? 48 : 40,
+    borderRadius: width < 768 ? 24 : 20,
+    backgroundColor: '#F4D03F', // Bright yellow
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: width < 768 ? 20 : 16,
+  },
+  settingContent: {
+    flex: 1,
   },
   settingText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1a1a2e',
-    marginLeft: 12,
+    fontSize: width < 768 ? 18 : 16,
+    color: '#fff', // White text on navy background
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  settingSubtext: {
+    fontSize: width < 768 ? 16 : 14,
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: width < 768 ? 16 : 20,
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: width < 768 ? 16 : 20,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: width < 768 ? width - 32 : 500,
     maxHeight: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: width < 768 ? 20 : 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#e8eaed',
+    backgroundColor: '#f8f9fa',
+    borderTopLeftRadius: width < 768 ? 16 : 20,
+    borderTopRightRadius: width < 768 ? 16 : 20,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: width < 768 ? 18 : 20,
     fontWeight: 'bold',
     color: '#1a1a2e',
   },
@@ -803,58 +2014,71 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   modalBody: {
-    padding: 20,
-    maxHeight: 400,
+    padding: width < 768 ? 20 : 24,
+    maxHeight: width < 768 ? 500 : 400,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: width < 768 ? 24 : 20,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: width < 768 ? 16 : 14,
+    fontWeight: '600',
     color: '#1a1a2e',
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
+    borderColor: '#e8eaed',
+    borderRadius: 12,
+    paddingHorizontal: width < 768 ? 20 : 16,
+    paddingVertical: width < 768 ? 18 : 14,
+    fontSize: width < 768 ? 18 : 16,
     color: '#1a1a2e',
+    backgroundColor: '#f8f9fa',
+    minHeight: width < 768 ? 56 : 48,
   },
   textArea: {
-    height: 80,
+    height: width < 768 ? 120 : 100,
     textAlignVertical: 'top',
   },
   modalFooter: {
     flexDirection: 'row',
-    padding: 20,
-    gap: 12,
+    padding: width < 768 ? 20 : 24,
+    gap: width < 768 ? 12 : 16,
+    backgroundColor: '#f8f9fa',
+    borderBottomLeftRadius: width < 768 ? 16 : 20,
+    borderBottomRightRadius: width < 768 ? 16 : 20,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: width < 768 ? 16 : 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#e8eaed',
     alignItems: 'center',
+    backgroundColor: '#fff',
+    minHeight: width < 768 ? 52 : 48,
   },
   cancelButtonText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: width < 768 ? 18 : 16,
+    color: '#5f6368',
+    fontWeight: '600',
   },
   saveButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: width < 768 ? 16 : 14,
+    borderRadius: 12,
     backgroundColor: '#4285f4',
     alignItems: 'center',
+    shadowColor: '#4285f4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: width < 768 ? 52 : 48,
   },
   saveButtonText: {
-    fontSize: 16,
+    fontSize: width < 768 ? 18 : 16,
     color: '#fff',
     fontWeight: '600',
   },
@@ -870,5 +2094,599 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  successModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: width < 768 ? 20 : 40,
+  },
+  successModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: width < 768 ? 20 : 24,
+    padding: width < 768 ? 32 : 40,
+    alignItems: 'center',
+    maxWidth: width < 768 ? width - 40 : 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  successIconContainer: {
+    marginBottom: width < 768 ? 20 : 24,
+  },
+  successTitle: {
+    fontSize: width < 768 ? 24 : 28,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: width < 768 ? 12 : 16,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: width < 768 ? 16 : 18,
+    color: '#5f6368',
+    textAlign: 'center',
+    lineHeight: width < 768 ? 24 : 26,
+    marginBottom: width < 768 ? 24 : 32,
+  },
+  successButton: {
+    backgroundColor: '#4caf50',
+    paddingHorizontal: width < 768 ? 32 : 40,
+    paddingVertical: width < 768 ? 14 : 16,
+    borderRadius: width < 768 ? 12 : 14,
+    shadowColor: '#4caf50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: width < 768 ? 120 : 140,
+  },
+  successButtonText: {
+    color: '#fff',
+    fontSize: width < 768 ? 16 : 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  backgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: width < 768 ? 200 : 250,
+    width: '100%',
+    resizeMode: 'cover',
+  },
+  backgroundPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: width < 768 ? 200 : 250,
+    width: '100%',
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backgroundPlaceholderText: {
+    fontSize: width < 768 ? 14 : 16,
+    color: '#999',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  backgroundUploadButton: {
+    position: 'absolute',
+    top: width < 768 ? 16 : 20,
+    right: width < 768 ? 16 : 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: width < 768 ? 20 : 24,
+    width: width < 768 ? 40 : 48,
+    height: width < 768 ? 40 : 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  backgroundOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: width < 768 ? 200 : 250,
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 1,
+  },
+  companyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: width < 768 ? 16 : 20,
+    paddingVertical: width < 768 ? 8 : 10,
+    borderRadius: width < 768 ? 18 : 22,
+    marginTop: width < 768 ? 12 : 16,
+    marginBottom: width < 768 ? 8 : 12,
+    alignSelf: 'flex-start',
+  },
+  companyBadgeText: {
+    fontSize: width < 768 ? 12 : 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginLeft: width < 768 ? 6 : 8,
+  },
+  contactInfo: {
+    marginTop: width < 768 ? 16 : 20,
+    paddingHorizontal: width < 768 ? 4 : 8,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: width < 768 ? 8 : 10,
+    paddingVertical: width < 768 ? 2 : 4,
+  },
+  contactText: {
+    fontSize: width < 768 ? 13 : 15,
+    color: '#fff',
+    marginLeft: width < 768 ? 8 : 10,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: width < 768 ? 20 : 24,
+    paddingTop: width < 768 ? 20 : 24,
+    paddingHorizontal: width < 768 ? 8 : 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    gap: width < 768 ? 12 : 16,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: width < 768 ? 16 : 20,
+    paddingVertical: width < 768 ? 8 : 10,
+    borderRadius: width < 768 ? 18 : 22,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+  },
+  statusDot: {
+    width: width < 768 ? 8 : 10,
+    height: width < 768 ? 8 : 10,
+    borderRadius: width < 768 ? 4 : 5,
+    backgroundColor: '#4caf50',
+    marginRight: width < 768 ? 6 : 8,
+  },
+  statusText: {
+    fontSize: width < 768 ? 12 : 14,
+    fontWeight: '600',
+    color: '#fff',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  // Cover Photo Styles
+  coverPhotoContainer: {
+    position: 'relative',
+    height: width < 768 ? 200 : 300,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  coverPhoto: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  coverPhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  coverPhotoPlaceholderText: {
+    fontSize: width < 768 ? 16 : 18,
+    color: '#F4D03F', // Bright yellow
+    marginTop: 12,
+    fontWeight: '600',
+  },
+  editCoverButton: {
+    position: 'absolute',
+    top: width < 768 ? 16 : 20,
+    right: width < 768 ? 16 : 20,
+    backgroundColor: '#F4D03F', // Bright yellow
+    paddingHorizontal: width < 768 ? 12 : 16,
+    paddingVertical: width < 768 ? 8 : 10,
+    borderRadius: width < 768 ? 20 : 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  editCoverText: {
+    fontSize: width < 768 ? 12 : 14,
+    color: '#02050a', // Dark navy text
+    marginLeft: 6,
+    fontWeight: 'bold',
+  },
+  // Profile Section Styles
+  profileSection: {
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    padding: width < 768 ? 16 : 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  profileImageContainer: {
+    position: 'relative',
+    marginRight: width < 768 ? 16 : 20,
+  },
+  profileImage: {
+    width: width < 768 ? 80 : 100,
+    height: width < 768 ? 80 : 100,
+    borderRadius: width < 768 ? 40 : 50,
+    borderWidth: 4,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  } as any,
+  profilePlaceholder: {
+    width: width < 768 ? 80 : 100,
+    height: width < 768 ? 80 : 100,
+    borderRadius: width < 768 ? 40 : 50,
+    backgroundColor: '#F4D03F', // Bright yellow
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  profileText: {
+    fontSize: width < 768 ? 32 : 40,
+    fontWeight: 'bold',
+    color: '#02050a', // Dark navy text
+  },
+  profileUploadButton: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#2D5A3D', // Forest green
+    borderRadius: width < 768 ? 16 : 20,
+    width: width < 768 ? 32 : 36,
+    height: width < 768 ? 32 : 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  profileInfo: {
+    flex: 1,
+    marginRight: width < 768 ? 12 : 16,
+  },
+  companyName: {
+    fontSize: width < 768 ? 24 : 28,
+    fontWeight: 'bold',
+    color: '#fff', // White text on navy background
+    marginBottom: width < 768 ? 4 : 6,
+    fontFamily: 'System',
+  },
+  companyIndustry: {
+    fontSize: width < 768 ? 14 : 16,
+    color: '#F4D03F', // Bright yellow
+    fontWeight: '600',
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F4D03F', // Bright yellow
+    paddingHorizontal: width < 768 ? 16 : 20,
+    paddingVertical: width < 768 ? 10 : 12,
+    borderRadius: width < 768 ? 8 : 10,
+    borderWidth: 2,
+    borderColor: '#F4D03F',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editProfileButtonText: {
+    fontSize: width < 768 ? 14 : 16,
+    color: '#02050a', // Dark navy text
+    marginLeft: 6,
+    fontWeight: 'bold',
+  },
+  // About Section Styles
+  aboutSection: {
+    backgroundColor: '#F5F1E8', // Soft cream background
+    padding: width < 768 ? 16 : 24,
+  },
+  aboutTitle: {
+    fontSize: width < 768 ? 24 : 28,
+    fontWeight: 'bold',
+    color: '#1E3A5F', // Deep navy blue
+    marginBottom: width < 768 ? 16 : 20,
+    fontFamily: 'System',
+  },
+  cardsGrid: {
+    flexDirection: 'row',
+    gap: width < 768 ? 12 : 16,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  leftColumn: {
+    flex: 1,
+    gap: width < 768 ? 12 : 16,
+    minWidth: width < 768 ? '48%' : '45%',
+    maxWidth: width < 768 ? '48%' : '45%',
+  },
+  rightColumn: {
+    flex: 1,
+    gap: width < 768 ? 12 : 16,
+    minWidth: width < 768 ? '48%' : '45%',
+    maxWidth: width < 768 ? '48%' : '45%',
+  },
+  infoCard: {
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: width < 768 ? 12 : 16,
+    padding: width < 768 ? 12 : 16,
+    borderWidth: 2,
+    borderColor: '#F4D03F', // Bright yellow border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    flexDirection: 'column',
+    alignItems: 'center',
+    minHeight: width < 768 ? 180 : 160,
+    marginBottom: width < 768 ? 8 : 0,
+    width: '100%',
+  },
+  editCard: {
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: width < 768 ? 12 : 16,
+    padding: width < 768 ? 12 : 16,
+    borderWidth: 2,
+    borderColor: '#F4D03F', // Bright yellow border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    flexDirection: 'column',
+    alignItems: 'center',
+    minHeight: width < 768 ? 180 : 160,
+    marginBottom: width < 768 ? 8 : 0,
+    width: '100%',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: width < 768 ? 8 : 12,
+    width: '100%',
+  },
+  cardIcon: {
+    width: width < 768 ? 32 : 36,
+    height: width < 768 ? 32 : 36,
+    borderRadius: width < 768 ? 16 : 18,
+    backgroundColor: '#F4D03F', // Bright yellow
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  cardContent: {
+    flex: 1,
+    alignItems: 'center',
+    textAlign: 'center',
+    marginBottom: width < 768 ? 8 : 12,
+  },
+  cardTitle: {
+    fontSize: width < 768 ? 14 : 16,
+    fontWeight: 'bold',
+    color: '#fff', // White text on navy background
+    marginBottom: width < 768 ? 4 : 6,
+    fontFamily: 'System',
+    textAlign: width < 768 ? 'center' : 'left',
+  },
+  cardSubtitle: {
+    fontSize: width < 768 ? 11 : 13,
+    color: '#F4D03F', // Bright yellow
+    marginBottom: width < 768 ? 2 : 4,
+    lineHeight: width < 768 ? 14 : 16,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  cardEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F4D03F', // Bright yellow
+    paddingHorizontal: width < 768 ? 8 : 12,
+    paddingVertical: width < 768 ? 4 : 6,
+    borderRadius: width < 768 ? 12 : 16,
+    borderWidth: 2,
+    borderColor: '#F4D03F',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    alignSelf: 'center',
+  },
+  cardEditButtonText: {
+    fontSize: width < 768 ? 10 : 12,
+    color: '#02050a', // Dark navy text
+    marginLeft: 4,
+    fontWeight: 'bold',
+  },
+  // Skeleton Loading Styles
+  skeletonInfoCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: width < 768 ? 12 : 16,
+    padding: width < 768 ? 12 : 16,
+    borderWidth: 2,
+    borderColor: '#F4D03F',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    flexDirection: 'column',
+    alignItems: 'center',
+    minHeight: width < 768 ? 180 : 160,
+    marginBottom: width < 768 ? 8 : 0,
+    width: '100%',
+    opacity: 0.7,
+  },
+  skeletonCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: width < 768 ? 8 : 12,
+    width: '100%',
+  },
+  skeletonCardIcon: {
+    width: width < 768 ? 32 : 36,
+    height: width < 768 ? 32 : 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: width < 768 ? 16 : 18,
+    marginRight: 8,
+  },
+  skeletonCardTitle: {
+    width: '60%',
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+  },
+  skeletonCardContent: {
+    flex: 1,
+    alignItems: 'center',
+    marginBottom: width < 768 ? 8 : 12,
+    width: '100%',
+  },
+  skeletonCardSubtitle: {
+    width: '80%',
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 3,
+    marginBottom: width < 768 ? 2 : 4,
+  },
+  skeletonCardEditButton: {
+    width: 60,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: width < 768 ? 12 : 16,
+    alignSelf: 'center',
+  },
+  // Cover Photo Skeleton Styles
+  skeletonCoverPhoto: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1E3A5F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.7,
+  },
+  skeletonCoverPhotoIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 32,
+    marginBottom: 12,
+  },
+  skeletonCoverPhotoText: {
+    width: 120,
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 8,
+  },
+  // Profile Section Skeleton Styles
+  skeletonProfileSection: {
+    backgroundColor: '#1E3A5F',
+    padding: width < 768 ? 16 : 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    opacity: 0.7,
+  },
+  skeletonProfileImageContainer: {
+    position: 'relative',
+    marginRight: width < 768 ? 16 : 20,
+  },
+  skeletonProfileImage: {
+    width: width < 768 ? 80 : 100,
+    height: width < 768 ? 80 : 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: width < 768 ? 40 : 50,
+    borderWidth: 4,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  skeletonProfileUploadButton: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: width < 768 ? 16 : 20,
+    width: width < 768 ? 32 : 36,
+    height: width < 768 ? 32 : 36,
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  skeletonProfileInfo: {
+    flex: 1,
+    marginRight: width < 768 ? 12 : 16,
+  },
+  skeletonCompanyName: {
+    width: '70%',
+    height: width < 768 ? 24 : 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 6,
+    marginBottom: width < 768 ? 4 : 6,
+  },
+  skeletonCompanyIndustry: {
+    width: '50%',
+    height: width < 768 ? 14 : 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
   },
 });

@@ -1,4 +1,5 @@
 const { query } = require('../config/supabase');
+const CompanyController = require('./companyController');
 
 class ApplicationController {
   // Submit a new application
@@ -17,7 +18,8 @@ class ApplicationController {
         expectedStartDate,
         expectedEndDate,
         availability,
-        motivation
+        motivation,
+        hoursOfInternship
       } = req.body;
 
       // Validate required fields
@@ -59,6 +61,7 @@ class ApplicationController {
         expected_end_date: expectedEndDate || null,
         availability: availability || null,
         motivation: motivation || null,
+        hours_of_internship: hoursOfInternship || null,
         status: 'pending',
         applied_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
@@ -154,9 +157,23 @@ class ApplicationController {
     try {
       const { companyId } = req.params;
 
+      // First, check if companyId is actually a user_id and find the corresponding company
+      let actualCompanyId = parseInt(companyId);
+      
+      // Check if this is a user_id by looking for a company with this user_id
+      const companyByUserId = await query('companies', 'select', null, {
+        user_id: parseInt(companyId)
+      });
+      
+      if (companyByUserId.data && companyByUserId.data.length > 0) {
+        // This is a user_id, get the actual company_id
+        actualCompanyId = companyByUserId.data[0].id;
+        console.log(`Found company_id: ${actualCompanyId} for user_id: ${companyId}`);
+      }
+
       // Get applications for the company
       const applicationsResult = await query('applications', 'select', null, {
-        company_id: parseInt(companyId)
+        company_id: actualCompanyId
       });
 
       if (!applicationsResult.data || applicationsResult.data.length === 0) {
@@ -169,27 +186,28 @@ class ApplicationController {
       // Get student and user details for each application
       const applicationsWithDetails = await Promise.all(
         applicationsResult.data.map(async (application) => {
-          // Get student details
-          const studentResult = await query('students', 'select', null, {
-            user_id: application.student_id
+          // Get student user details first (since student_id references users.id)
+          const userResult = await query('users', 'select', null, {
+            id: application.student_id
           });
           
-          if (studentResult.data && studentResult.data.length > 0) {
-            const student = studentResult.data[0];
+          if (userResult.data && userResult.data.length > 0) {
+            const user = userResult.data[0];
             
-            // Get student user details
-            const userResult = await query('users', 'select', null, {
-              id: application.student_id
+            // Get student details using the user_id
+            const studentResult = await query('students', 'select', null, {
+              user_id: application.student_id
             });
             
-            const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
+            const student = studentResult.data && studentResult.data.length > 0 ? studentResult.data[0] : null;
             
             return {
               ...application,
-              first_name: student.first_name,
-              last_name: student.last_name,
-              major: student.major,
-              year: student.year,
+              first_name: student?.first_name || user.first_name || 'N/A',
+              last_name: student?.last_name || user.last_name || 'N/A',
+              major: student?.major || 'N/A',
+              year: student?.year || 'N/A',
+              id_number: student?.id_number || 'N/A',
               student_email: user?.email,
               student_profile_picture: user?.profile_picture,
               student_latitude: user?.latitude,
@@ -228,6 +246,20 @@ class ApplicationController {
         });
       }
 
+      // First, get the current application to check its status and get company_id
+      const currentApplicationResult = await query('applications', 'select', null, { id: parseInt(id) });
+      
+      if (!currentApplicationResult.data || currentApplicationResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Application not found'
+        });
+      }
+
+      const currentApplication = currentApplicationResult.data[0];
+      const wasApproved = currentApplication.status === 'approved';
+      const willBeApproved = status === 'approved';
+
       const updateData = {
         status: status,
         notes: notes || null,
@@ -239,6 +271,17 @@ class ApplicationController {
       const result = await query('applications', 'update', updateData, { id: parseInt(id) });
 
       if (result.data) {
+        // Handle slot deduction/addition based on approval status changes
+        if (willBeApproved && !wasApproved) {
+          // Application is being approved - deduct a slot
+          console.log(`🎯 Application ${id} approved - deducting slot for company ${currentApplication.company_id}`);
+          await CompanyController.deductCompanySlot(currentApplication.company_id);
+        } else if (!willBeApproved && wasApproved) {
+          // Application is being unapproved (rejected/pending) - add back a slot
+          console.log(`🔄 Application ${id} unapproved - adding back slot for company ${currentApplication.company_id}`);
+          await CompanyController.addCompanySlot(currentApplication.company_id);
+        }
+
         res.json({
           success: true,
           message: 'Application status updated successfully',
@@ -265,9 +308,23 @@ class ApplicationController {
     try {
       const { companyId } = req.params;
 
+      // First, check if companyId is actually a user_id and find the corresponding company
+      let actualCompanyId = parseInt(companyId);
+      
+      // Check if this is a user_id by looking for a company with this user_id
+      const companyByUserId = await query('companies', 'select', null, {
+        user_id: parseInt(companyId)
+      });
+      
+      if (companyByUserId.data && companyByUserId.data.length > 0) {
+        // This is a user_id, get the actual company_id
+        actualCompanyId = companyByUserId.data[0].id;
+        console.log(`Found company_id: ${actualCompanyId} for user_id: ${companyId}`);
+      }
+
       // Get approved applications for the company
       const applicationsResult = await query('applications', 'select', null, {
-        company_id: parseInt(companyId),
+        company_id: actualCompanyId,
         status: 'approved'
       });
 
@@ -281,27 +338,28 @@ class ApplicationController {
       // Get student and user details for each application
       const applicationsWithDetails = await Promise.all(
         applicationsResult.data.map(async (application) => {
-          // Get student details
-          const studentResult = await query('students', 'select', null, {
-            user_id: application.student_id
+          // Get student user details first (since student_id references users.id)
+          const userResult = await query('users', 'select', null, {
+            id: application.student_id
           });
           
-          if (studentResult.data && studentResult.data.length > 0) {
-            const student = studentResult.data[0];
+          if (userResult.data && userResult.data.length > 0) {
+            const user = userResult.data[0];
             
-            // Get student user details
-            const userResult = await query('users', 'select', null, {
-              id: application.student_id
+            // Get student details using the user_id
+            const studentResult = await query('students', 'select', null, {
+              user_id: application.student_id
             });
             
-            const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
+            const student = studentResult.data && studentResult.data.length > 0 ? studentResult.data[0] : null;
             
             return {
               ...application,
-              first_name: student.first_name,
-              last_name: student.last_name,
-              major: student.major,
-              year: student.year,
+              first_name: student?.first_name || user.first_name || 'N/A',
+              last_name: student?.last_name || user.last_name || 'N/A',
+              major: student?.major || 'N/A',
+              year: student?.year || 'N/A',
+              id_number: student?.id_number || 'N/A',
               student_email: user?.email,
               student_profile_picture: user?.profile_picture,
               student_latitude: user?.latitude,
@@ -364,23 +422,26 @@ class ApplicationController {
         company.profile_picture = user?.profile_picture;
       }
 
-      // Get student details
-      const studentResult = await query('students', 'select', null, {
-        user_id: application.student_id
+      // Get student user details first (since student_id references users.id)
+      const userResult = await query('users', 'select', null, {
+        id: application.student_id
       });
       
       let student = null;
-      if (studentResult.data && studentResult.data.length > 0) {
-        student = studentResult.data[0];
+      let user = null;
+      if (userResult.data && userResult.data.length > 0) {
+        user = userResult.data[0];
         
-        // Get student user details
-        const userResult = await query('users', 'select', null, {
-          id: application.student_id
+        // Get student details using the user_id
+        const studentResult = await query('students', 'select', null, {
+          user_id: application.student_id
         });
         
-        const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
-        student.email = user?.email;
-        student.profile_picture = user?.profile_picture;
+        if (studentResult.data && studentResult.data.length > 0) {
+          student = studentResult.data[0];
+          student.email = user?.email;
+          student.profile_picture = user?.profile_picture;
+        }
       }
 
       const applicationWithDetails = {

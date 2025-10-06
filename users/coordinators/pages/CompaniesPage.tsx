@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   TextInput,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
@@ -40,10 +41,62 @@ export default function CompaniesPage() {
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  // Shimmer animation for skeleton loading
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchCompanies();
+    
+    // Animate on mount
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
+
+  // Shimmer animation for skeleton loading
+  useEffect(() => {
+    if (showSkeleton) {
+      const shimmerAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shimmerAnimation.start();
+      return () => shimmerAnimation.stop();
+    }
+  }, [showSkeleton]);
 
   useEffect(() => {
     filterCompanies();
@@ -52,6 +105,7 @@ export default function CompaniesPage() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
+      setShowSkeleton(true);
       
       console.log('Fetching approved companies...');
       
@@ -98,6 +152,10 @@ export default function CompaniesPage() {
       setCompanies([]);
     } finally {
       setLoading(false);
+      // Hide skeleton after a short delay to show the animation
+      setTimeout(() => {
+        setShowSkeleton(false);
+      }, 1000);
     }
   };
 
@@ -160,116 +218,196 @@ export default function CompaniesPage() {
     }
   };
 
-  const CompanyCard = ({ company }: { company: Company }) => (
-    <View style={styles.companyCard}>
-      <View style={styles.companyHeader}>
-        <View style={styles.profileContainer}>
-          {company.profilePicture ? (
-            <Image source={{ uri: company.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>{company.name.charAt(0)}</Text>
+  const toggleCardExpansion = (companyId: string) => {
+    setExpandedCard(expandedCard === companyId ? null : companyId);
+  };
+
+  // Enhanced Progress Bar Component
+  const ProgressBar = ({ progress, color = '#F4D03F' }: { progress: number; color?: string }) => {
+    const progressAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+      Animated.timing(progressAnim, {
+        toValue: progress,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start();
+    }, [progress]);
+    
+    return (
+      <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarBackground}>
+          <Animated.View 
+            style={[
+              styles.progressBarFill, 
+              { 
+                backgroundColor: color,
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                })
+              }
+            ]} 
+          />
+        </View>
+        <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+      </View>
+    );
+  };
+
+  // Skeleton Components
+  const SkeletonCompanyCard = () => {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+
+    return (
+      <View style={styles.skeletonCompanyCard}>
+        <View style={styles.skeletonCompanyHeader}>
+          <View style={styles.skeletonProfileContainer}>
+            <Animated.View style={[styles.skeletonProfileImage, { opacity: shimmerOpacity }]} />
+          </View>
+          <View style={styles.skeletonCompanyInfo}>
+            <Animated.View style={[styles.skeletonTextLine, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonTextLine, { width: '70%', opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonTextLine, { width: '60%', opacity: shimmerOpacity }]} />
+          </View>
+          <Animated.View style={[styles.skeletonStatusBadge, { opacity: shimmerOpacity }]} />
+        </View>
+        
+        <View style={styles.skeletonCompanyDetails}>
+          <Animated.View style={[styles.skeletonTextLine, { width: '80%', opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonTextLine, { width: '60%', opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonTextLine, { width: '90%', opacity: shimmerOpacity }]} />
+        </View>
+      </View>
+    );
+  };
+
+  const CompanyCard = ({ company }: { company: Company }) => {
+    const isExpanded = expandedCard === company.id;
+    const slotsProgress = company.totalSlots > 0 ? (company.availableSlots / company.totalSlots) * 100 : 0;
+    
+    return (
+      <View style={[
+        styles.companyCard,
+        isExpanded && styles.expandedCompanyCard
+      ]}>
+        <TouchableOpacity 
+          onPress={() => toggleCardExpansion(company.id)}
+          style={styles.cardTouchable}
+        >
+          <View style={styles.companyHeader}>
+            <View style={styles.profileContainer}>
+              {company.profilePicture ? (
+                <Image source={{ uri: company.profilePicture }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileText}>{company.name.charAt(0)}</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-        <View style={styles.companyInfo}>
-          <Text style={styles.companyName}>{company.name}</Text>
-          <Text style={styles.companyIndustry}>{company.industry}</Text>
-          <Text style={styles.contactPerson}>Contact: {company.contactPerson}</Text>
-        </View>
-        <View style={styles.statusContainer}>
-          <View style={[styles.moaBadge, { backgroundColor: getMOAStatusColor(company.moaStatus) }]}>
-            <Text style={styles.moaText}>{getMOAStatusText(company.moaStatus)}</Text>
+            <View style={styles.companyInfo}>
+              <Text style={styles.companyName}>{company.name}</Text>
+              <Text style={styles.companyIndustry}>{company.industry}</Text>
+              <Text style={styles.contactPerson}>Contact: {company.contactPerson}</Text>
+            </View>
+            <View style={styles.statusContainer}>
+              <View style={[styles.moaBadge, { backgroundColor: getMOAStatusColor(company.moaStatus) }]}>
+                <Text style={styles.moaText}>{getMOAStatusText(company.moaStatus)}</Text>
+              </View>
+              <MaterialIcons 
+                name={isExpanded ? "expand-less" : "expand-more"} 
+                size={24} 
+                color="#F4D03F" 
+                style={styles.expandIcon}
+              />
+            </View>
           </View>
-        </View>
-      </View>
 
-      <View style={styles.companyDetails}>
-        <View style={styles.locationContainer}>
-          <MaterialIcons name="location-on" size={16} color="#666" />
-          <Text style={styles.locationText}>{company.location}</Text>
-        </View>
-        
-        <View style={styles.contactContainer}>
-          <View style={styles.contactItem}>
-            <MaterialIcons name="email" size={16} color="#666" />
-            <Text style={styles.contactText}>{company.contactEmail}</Text>
+          <View style={styles.companyDetails}>
+            <View style={styles.slotsContainer}>
+              <Text style={styles.slotLabel}>Available Slots</Text>
+              <ProgressBar 
+                progress={slotsProgress} 
+                color={company.availableSlots > 0 ? '#2D5A3D' : '#E8A598'} 
+              />
+            </View>
           </View>
-          <View style={styles.contactItem}>
-            <MaterialIcons name="phone" size={16} color="#666" />
-            <Text style={styles.contactText}>{company.contactPhone}</Text>
-          </View>
-        </View>
-        
-        <View style={styles.slotsContainer}>
-          <View style={styles.slotInfo}>
-            <Text style={styles.slotLabel}>Available Slots</Text>
-            <Text style={styles.slotValue}>{company.availableSlots}/{company.totalSlots}</Text>
-          </View>
-          <View style={styles.slotBar}>
-            <View 
-              style={[
-                styles.slotFill, 
-                { 
-                  width: `${(company.availableSlots / company.totalSlots) * 100}%`,
-                  backgroundColor: company.availableSlots > 0 ? '#34a853' : '#ea4335'
-                }
-              ]} 
-            />
-          </View>
-        </View>
-
-        <View style={styles.moaContainer}>
-          <Text style={styles.moaLabel}>MOA Status:</Text>
-          <Text style={styles.moaDate}>
-            {company.moaExpiryDate ? `Expires: ${company.moaExpiryDate}` : 'No expiry date'}
-          </Text>
-        </View>
-
-        <Text style={styles.description} numberOfLines={2}>
-          {company.description}
-        </Text>
-
-        <Text style={styles.partnershipDate}>
-          Partnership since: {company.partnershipDate}
-        </Text>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewDetails(company)}
-        >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.removeButton]} 
-          onPress={() => handleRemoveCompany(company)}
-        >
-          <MaterialIcons name="remove" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Remove</Text>
-        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            <View style={styles.locationContainer}>
+              <MaterialIcons name="location-on" size={16} color="#F4D03F" />
+              <Text style={styles.locationText}>{company.location}</Text>
+            </View>
+            
+            <View style={styles.contactContainer}>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="email" size={16} color="#F4D03F" />
+                <Text style={styles.contactText}>{company.contactEmail}</Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="phone" size={16} color="#F4D03F" />
+                <Text style={styles.contactText}>{company.contactPhone}</Text>
+              </View>
+            </View>
+
+            <View style={styles.moaContainer}>
+              <Text style={styles.moaLabel}>MOA Status:</Text>
+              <Text style={styles.moaDate}>
+                {company.moaExpiryDate ? `Expires: ${company.moaExpiryDate}` : 'No expiry date'}
+              </Text>
+            </View>
+
+            <Text style={styles.description} numberOfLines={3}>
+              {company.description}
+            </Text>
+
+            <Text style={styles.partnershipDate}>
+              Partnership since: {company.partnershipDate}
+            </Text>
+
+            <View style={styles.expandedActionButtons}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewDetails(company)}
+              >
+                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>View</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.removeButton]} 
+                onPress={() => handleRemoveCompany(company)}
+              >
+                <MaterialIcons name="remove" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#1E3A5F" />
         <Text style={styles.loadingText}>Loading companies...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       {/* Search Section */}
-      <View style={styles.searchSection}>
+      <Animated.View style={[styles.searchSection, { transform: [{ translateY: slideAnim }] }]}>
         <View style={styles.searchInputContainer}>
-          <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <MaterialIcons name="search" size={20} color="#F4D03F" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search approved companies..."
@@ -278,39 +416,48 @@ export default function CompaniesPage() {
             placeholderTextColor="#999"
           />
         </View>
-      </View>
+      </Animated.View>
 
       {/* Stats */}
-      <View style={styles.statsContainer}>
+      <Animated.View style={[styles.statsContainer, { transform: [{ scale: scaleAnim }] }]}>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{filteredCompanies.length}</Text>
           <Text style={styles.statLabel}>Approved Companies</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#34a853' }]}>
+          <Text style={[styles.statNumber, { color: '#2D5A3D' }]}>
             {filteredCompanies.filter(c => c.moaStatus === 'active').length}
           </Text>
           <Text style={styles.statLabel}>Active MOA</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#ea4335' }]}>
+          <Text style={[styles.statNumber, { color: '#E8A598' }]}>
             {filteredCompanies.filter(c => c.moaStatus === 'expired').length}
           </Text>
           <Text style={styles.statLabel}>Expired MOA</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
+          <Text style={[styles.statNumber, { color: '#F4D03F' }]}>
             {filteredCompanies.reduce((sum, company) => sum + company.availableSlots, 0)}
           </Text>
           <Text style={styles.statLabel}>Available Slots</Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Companies List */}
-      <ScrollView style={styles.companiesList} showsVerticalScrollIndicator={false}>
-        {filteredCompanies.length === 0 ? (
+      <Animated.ScrollView 
+        style={[styles.companiesList, { transform: [{ scale: scaleAnim }] }]} 
+        showsVerticalScrollIndicator={false}
+      >
+        {showSkeleton ? (
+          <>
+            <SkeletonCompanyCard />
+            <SkeletonCompanyCard />
+            <SkeletonCompanyCard />
+          </>
+        ) : filteredCompanies.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="business-center" size={64} color="#ccc" />
+            <MaterialIcons name="business-center" size={64} color="#02050a" />
             <Text style={styles.emptyStateTitle}>No approved companies found</Text>
             <Text style={styles.emptyStateText}>
               {searchQuery 
@@ -324,39 +471,48 @@ export default function CompaniesPage() {
             <CompanyCard key={company.id} company={company} />
           ))
         )}
-      </ScrollView>
-    </View>
+      </Animated.ScrollView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F1E8', // Soft cream background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    backgroundColor: '#F5F1E8',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#02050a',
+    fontWeight: '500',
   },
   searchSection: {
     backgroundColor: '#fff',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 20,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   searchIcon: {
     marginRight: 10,
@@ -365,50 +521,75 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#02050a',
   },
   statsContainer: {
     flexDirection: 'row',
-    padding: 20,
-    gap: 15,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 16,
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#fff',
     textAlign: 'center',
+    fontWeight: '600',
   },
   companiesList: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
   },
   companyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: '#1E3A5F', // Deep navy blue
+    borderRadius: 20,
     marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  expandedCompanyCard: {
+    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  cardTouchable: {
+    padding: 20,
+  },
+  expandedContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  expandIcon: {
+    marginLeft: 8,
+  },
+  expandedActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 16,
   },
   companyHeader: {
     flexDirection: 'row',
@@ -426,14 +607,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#2D5A3D', // Forest green
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#fff',
   },
   companyInfo: {
     flex: 1,
@@ -441,20 +622,23 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 4,
   },
   companyIndustry: {
     fontSize: 14,
-    color: '#666',
+    color: '#F4D03F', // Bright yellow
     marginBottom: 4,
+    fontWeight: '500',
   },
   contactPerson: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff',
+    opacity: 0.8,
   },
   statusContainer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   moaBadge: {
     paddingHorizontal: 8,
@@ -476,8 +660,9 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginLeft: 4,
+    opacity: 0.9,
   },
   contactContainer: {
     marginBottom: 10,
@@ -489,35 +674,44 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginLeft: 8,
+    opacity: 0.9,
   },
   slotsContainer: {
     marginBottom: 10,
-  },
-  slotInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
   },
   slotLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    color: '#fff',
+    opacity: 0.9,
+    fontWeight: '500',
+    marginBottom: 8,
   },
-  slotValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a2e',
+  // Animated Progress Bar Styles
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  slotBar: {
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
+  progressBarBackground: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
     overflow: 'hidden',
   },
-  slotFill: {
+  progressBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#F4D03F',
+    fontWeight: 'bold',
+    marginLeft: 12,
   },
   moaContainer: {
     flexDirection: 'row',
@@ -526,23 +720,27 @@ const styles = StyleSheet.create({
   },
   moaLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     marginRight: 8,
+    opacity: 0.9,
   },
   moaDate: {
     fontSize: 12,
-    color: '#999',
+    color: '#F4D03F',
+    fontWeight: '500',
   },
   description: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff',
     lineHeight: 20,
     marginBottom: 8,
+    opacity: 0.9,
   },
   partnershipDate: {
     fontSize: 12,
-    color: '#999',
+    color: '#F4D03F',
     fontStyle: 'italic',
+    fontWeight: '500',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -559,10 +757,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#2D5A3D', // Forest green
   },
   removeButton: {
-    backgroundColor: '#ea4335',
+    backgroundColor: '#E8A598', // Soft coral
   },
   actionButtonText: {
     color: '#fff',
@@ -572,19 +770,66 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#F5F1E8',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#02050a',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#02050a',
     textAlign: 'center',
     lineHeight: 22,
+    opacity: 0.7,
+  },
+  // Skeleton Loading Styles
+  skeletonCompanyCard: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 20,
+    marginBottom: 15,
+    elevation: 4,
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    overflow: 'hidden',
+    opacity: 0.7,
+    padding: 20,
+  },
+  skeletonCompanyHeader: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  skeletonProfileContainer: {
+    marginRight: 15,
+  },
+  skeletonProfileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  skeletonCompanyInfo: {
+    flex: 1,
+  },
+  skeletonTextLine: {
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  skeletonStatusBadge: {
+    width: 60,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+  },
+  skeletonCompanyDetails: {
+    marginBottom: 15,
   },
 });

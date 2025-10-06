@@ -11,6 +11,9 @@ router.post('/login', AuthController.login);
 // GET /api/auth/profile/:userId - Get user profile
 router.get('/profile/:userId', AuthController.getProfile);
 
+// PUT /api/auth/profile/:userId - Update user profile
+router.put('/profile/:userId', AuthController.updateProfile);
+
 // POST /api/auth/check-google-user - Check if Google user exists
 router.post('/check-google-user', AuthController.checkGoogleUser);
 

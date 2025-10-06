@@ -51,6 +51,12 @@ export default function ResumeUploadModal({
   const [availability, setAvailability] = useState('');
   const [expectedStartDate, setExpectedStartDate] = useState('');
   const [expectedEndDate, setExpectedEndDate] = useState('');
+  const [hoursOfInternship, setHoursOfInternship] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorTitle, setErrorTitle] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleFilePicker = async (fileType: 'resume' | 'transcript') => {
     try {
@@ -138,30 +144,40 @@ export default function ResumeUploadModal({
         expectedEndDate: expectedEndDate || undefined,
         availability: availability.trim() || undefined,
         motivation: motivation.trim() || undefined,
+        hoursOfInternship: hoursOfInternship.trim() || undefined,
       };
 
       const response = await apiService.submitApplication(applicationData);
 
       if (response.success) {
-        Alert.alert(
-          'Application Submitted!',
-          `Your application for ${position} at ${companyName} has been submitted successfully.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                onApplicationSubmitted();
-                handleClose();
-              }
-            }
-          ]
-        );
+        // Show success modal instead of alert
+        setSuccessMessage(`Your application for ${position} at ${companyName} has been submitted successfully!`);
+        setShowSuccessModal(true);
       } else {
         throw new Error(response.message || 'Failed to submit application');
       }
     } catch (error) {
       console.error('Application submission error:', error);
-      Alert.alert('Error', 'Failed to submit application. Please try again.');
+      
+      // Check if it's a specific error message from the API
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (errorMessage.includes('already applied')) {
+        showError(
+          'Application Already Submitted',
+          `You have already applied to ${companyName}. Please wait for the company to review your existing application.`
+        );
+      } else if (errorMessage.includes('Missing required fields')) {
+        showError(
+          'Missing Information',
+          'Please fill in all required fields before submitting your application.'
+        );
+      } else {
+        showError(
+          'Submission Failed',
+          'Failed to submit your application. Please check your connection and try again.'
+        );
+      }
     } finally {
       setUploading(false);
     }
@@ -174,7 +190,27 @@ export default function ResumeUploadModal({
     setAvailability('');
     setExpectedStartDate('');
     setExpectedEndDate('');
+    setHoursOfInternship('');
     onClose();
+  };
+
+  const showError = (title: string, message: string) => {
+    setErrorTitle(title);
+    setErrorMessage(message);
+    setShowErrorModal(true);
+  };
+
+  const closeErrorModal = () => {
+    setShowErrorModal(false);
+    setErrorMessage('');
+    setErrorTitle('');
+  };
+
+  const closeSuccessModal = () => {
+    setShowSuccessModal(false);
+    setSuccessMessage('');
+    onApplicationSubmitted();
+    handleClose();
   };
 
   const removeFile = (fileId: string) => {
@@ -307,6 +343,17 @@ export default function ResumeUploadModal({
                   />
                 </View>
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Total Hours of Internship</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={hoursOfInternship}
+                  onChangeText={setHoursOfInternship}
+                  placeholder="e.g., 136 hours "
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
           </ScrollView>
 
@@ -336,6 +383,57 @@ export default function ResumeUploadModal({
           </View>
         </View>
       </View>
+
+      {/* Error Modal */}
+      <Modal
+        visible={showErrorModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeErrorModal}
+      >
+        <View style={styles.errorModalOverlay}>
+          <View style={styles.errorModalContent}>
+            <View style={styles.errorIconContainer}>
+              <MaterialIcons name="error" size={60} color="#ea4335" />
+            </View>
+            <Text style={styles.errorTitle}>{errorTitle}</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.errorButton}
+              onPress={closeErrorModal}
+            >
+              <Text style={styles.errorButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeSuccessModal}
+      >
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <View style={styles.successIconContainer}>
+              <MaterialIcons name="check-circle" size={80} color="#34a853" />
+            </View>
+            <Text style={styles.successTitle}>Application Submitted!</Text>
+            <Text style={styles.successMessage}>{successMessage}</Text>
+            <Text style={styles.successSubtext}>
+              You will be notified about the status of your application.
+            </Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={closeSuccessModal}
+            >
+              <Text style={styles.successButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -506,5 +604,114 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  // Error Modal Styles
+  errorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    maxWidth: 350,
+    width: '100%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  errorIconContainer: {
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ea4335',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 25,
+  },
+  errorButton: {
+    backgroundColor: '#ea4335',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
+    minWidth: 100,
+  },
+  errorButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  // Success Modal Styles
+  successModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    maxWidth: 350,
+    width: '100%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  successIconContainer: {
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  successSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 25,
+  },
+  successButton: {
+    backgroundColor: '#34a853',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
+    minWidth: 120,
+  },
+  successButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

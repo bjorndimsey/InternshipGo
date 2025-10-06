@@ -9,6 +9,7 @@ class User {
     this.googleId = data.googleId;
     this.profilePicture = data.profilePicture;
     this.firstName = data.firstName;
+    this.middleName = data.middleName;
     this.lastName = data.lastName;
     this.idNumber = data.idNumber;
     this.age = data.age;
@@ -20,6 +21,9 @@ class User {
     this.companyName = data.companyName;
     this.industry = data.industry;
     this.phoneNumber = data.phoneNumber;
+    
+    // Debug logging for middle name
+    console.log('User constructor - middleName:', this.middleName, 'type:', typeof this.middleName);
   }
 
   // Hash password before saving (skip for Google users)
@@ -69,6 +73,7 @@ class User {
             user_id: userId,
             id_number: this.idNumber || '',
             first_name: this.firstName || '',
+            middle_name: this.middleName || 'N/A',
             last_name: this.lastName || '',
             age: this.age || 0,
             year: this.year || '',
@@ -77,6 +82,7 @@ class User {
             major: this.major || '',
             address: this.address || ''
           };
+          console.log('Student profileData being inserted:', JSON.stringify(profileData, null, 2));
           await query('students', 'insert', profileData);
           break;
           
@@ -84,11 +90,13 @@ class User {
           profileData = {
             user_id: userId,
             first_name: this.firstName || '',
+            middle_name: this.middleName || 'N/A',
             last_name: this.lastName || '',
             program: this.program || '',
             phone_number: this.phoneNumber || '',
             address: this.address || ''
           };
+          console.log('Coordinator profileData being inserted:', JSON.stringify(profileData, null, 2));
           await query('coordinators', 'insert', profileData);
           break;
           
@@ -141,7 +149,22 @@ class User {
               date_of_birth: profile.date_of_birth,
               program: profile.program,
               major: profile.major,
-              address: profile.address
+              address: profile.address,
+              skills: profile.skills,
+              interests: profile.interests,
+              bio: profile.bio,
+              phone_number: profile.phone_number,
+              linkedin_url: profile.linkedin_url,
+              github_url: profile.github_url,
+              portfolio_url: profile.portfolio_url,
+              gpa: profile.gpa,
+              expected_graduation: profile.expected_graduation,
+              availability: profile.availability,
+              preferred_location: profile.preferred_location,
+              work_experience: profile.work_experience,
+              projects: profile.projects,
+              achievements: profile.achievements,
+              profile_picture: user.profile_picture
             };
           }
           break;
@@ -156,7 +179,20 @@ class User {
               last_name: profile.last_name,
               program: profile.program,
               phone_number: profile.phone_number,
-              address: profile.address
+              address: profile.address,
+              skills: profile.skills,
+              industry_focus: profile.industry_focus,
+              company_preferences: profile.company_preferences,
+              bio: profile.bio,
+              linkedin_url: profile.linkedin_url,
+              work_experience: profile.work_experience,
+              achievements: profile.achievements,
+              specializations: profile.specializations,
+              years_of_experience: profile.years_of_experience,
+              managed_companies: profile.managed_companies,
+              successful_placements: profile.successful_placements,
+              rating: profile.rating,
+              location: profile.location
             };
           }
           break;
@@ -169,7 +205,21 @@ class User {
               ...user,
               company_name: profile.company_name,
               industry: profile.industry,
-              address: profile.address
+              address: profile.address,
+              qualifications: profile.qualifications,
+              skills_required: profile.skills_required,
+              company_description: profile.company_description,
+              website: profile.website,
+              phone_number: profile.phone_number,
+              contact_person: profile.contact_person,
+              company_size: profile.company_size,
+              founded_year: profile.founded_year,
+              benefits: profile.benefits,
+              work_environment: profile.work_environment,
+              available_intern_slots: profile.available_intern_slots,
+              total_intern_capacity: profile.total_intern_capacity,
+              current_intern_count: profile.current_intern_count,
+              profile_picture: user.profile_picture
             };
           }
           break;
@@ -183,13 +233,17 @@ class User {
               first_name: profile.first_name,
               last_name: profile.last_name,
               phone_number: profile.phone_number,
-              address: profile.address
+              address: profile.address,
+              profile_picture: user.profile_picture
             };
           }
           break;
       }
       
-      return user;
+      return {
+        ...user,
+        profile_picture: user.profile_picture
+      };
     } catch (error) {
       console.error('Error finding user by email:', error);
       return null;
@@ -234,7 +288,22 @@ class User {
               date_of_birth: profile.date_of_birth,
               program: profile.program,
               major: profile.major,
-              address: profile.address
+              address: profile.address,
+              skills: profile.skills,
+              interests: profile.interests,
+              bio: profile.bio,
+              phone_number: profile.phone_number,
+              linkedin_url: profile.linkedin_url,
+              github_url: profile.github_url,
+              portfolio_url: profile.portfolio_url,
+              gpa: profile.gpa,
+              expected_graduation: profile.expected_graduation,
+              availability: profile.availability,
+              preferred_location: profile.preferred_location,
+              work_experience: profile.work_experience,
+              projects: profile.projects,
+              achievements: profile.achievements,
+              profile_picture: user.profile_picture
             };
           } else {
             console.log('🔍 No student profile found for user_id:', user.id);
@@ -289,7 +358,20 @@ class User {
               last_name: profile.last_name,
               program: profile.program,
               phone_number: profile.phone_number,
-              address: profile.address
+              address: profile.address,
+              skills: profile.skills,
+              industry_focus: profile.industry_focus,
+              company_preferences: profile.company_preferences,
+              bio: profile.bio,
+              linkedin_url: profile.linkedin_url,
+              work_experience: profile.work_experience,
+              achievements: profile.achievements,
+              specializations: profile.specializations,
+              years_of_experience: profile.years_of_experience,
+              managed_companies: profile.managed_companies,
+              successful_placements: profile.successful_placements,
+              rating: profile.rating,
+              location: profile.location
             };
           } else {
             console.log('🔍 No coordinator profile found for user_id:', user.id);
@@ -308,7 +390,21 @@ class User {
               ...user,
               company_name: profile.company_name,
               industry: profile.industry,
-              address: profile.address
+              address: profile.address,
+              qualifications: profile.qualifications,
+              skills_required: profile.skills_required,
+              company_description: profile.company_description,
+              website: profile.website,
+              phone_number: profile.phone_number,
+              contact_person: profile.contact_person,
+              company_size: profile.company_size,
+              founded_year: profile.founded_year,
+              benefits: profile.benefits,
+              work_environment: profile.work_environment,
+              available_intern_slots: profile.available_intern_slots,
+              total_intern_capacity: profile.total_intern_capacity,
+              current_intern_count: profile.current_intern_count,
+              profile_picture: user.profile_picture
             };
           } else {
             console.log('🔍 No company profile found for user_id:', user.id);
@@ -328,7 +424,8 @@ class User {
               first_name: profile.first_name,
               last_name: profile.last_name,
               phone_number: profile.phone_number,
-              address: profile.address
+              address: profile.address,
+              profile_picture: user.profile_picture
             };
           } else {
             console.log('🔍 No system admin profile found for user_id:', user.id);
@@ -336,7 +433,10 @@ class User {
           break;
       }
       
-      return user;
+      return {
+        ...user,
+        profile_picture: user.profile_picture
+      };
     } catch (error) {
       console.error('Error finding user by Google ID:', error);
       return null;
@@ -378,7 +478,22 @@ class User {
               date_of_birth: profile.date_of_birth,
               program: profile.program,
               major: profile.major,
-              address: profile.address
+              address: profile.address,
+              skills: profile.skills,
+              interests: profile.interests,
+              bio: profile.bio,
+              phone_number: profile.phone_number,
+              linkedin_url: profile.linkedin_url,
+              github_url: profile.github_url,
+              portfolio_url: profile.portfolio_url,
+              gpa: profile.gpa,
+              expected_graduation: profile.expected_graduation,
+              availability: profile.availability,
+              preferred_location: profile.preferred_location,
+              work_experience: profile.work_experience,
+              projects: profile.projects,
+              achievements: profile.achievements,
+              profile_picture: user.profile_picture
             };
           }
           break;
@@ -393,7 +508,20 @@ class User {
               last_name: profile.last_name,
               program: profile.program,
               phone_number: profile.phone_number,
-              address: profile.address
+              address: profile.address,
+              skills: profile.skills,
+              industry_focus: profile.industry_focus,
+              company_preferences: profile.company_preferences,
+              bio: profile.bio,
+              linkedin_url: profile.linkedin_url,
+              work_experience: profile.work_experience,
+              achievements: profile.achievements,
+              specializations: profile.specializations,
+              years_of_experience: profile.years_of_experience,
+              managed_companies: profile.managed_companies,
+              successful_placements: profile.successful_placements,
+              rating: profile.rating,
+              location: profile.location
             };
           }
           break;
@@ -410,7 +538,21 @@ class User {
               ...user,
               company_name: profile.company_name,
               industry: profile.industry,
-              address: profile.address
+              address: profile.address,
+              qualifications: profile.qualifications,
+              skills_required: profile.skills_required,
+              company_description: profile.company_description,
+              website: profile.website,
+              phone_number: profile.phone_number,
+              contact_person: profile.contact_person,
+              company_size: profile.company_size,
+              founded_year: profile.founded_year,
+              benefits: profile.benefits,
+              work_environment: profile.work_environment,
+              available_intern_slots: profile.available_intern_slots,
+              total_intern_capacity: profile.total_intern_capacity,
+              current_intern_count: profile.current_intern_count,
+              profile_picture: user.profile_picture
             };
           } else {
             console.log('🔍 No company profile found for user_id:', user.id);
@@ -430,7 +572,8 @@ class User {
               first_name: profile.first_name,
               last_name: profile.last_name,
               phone_number: profile.phone_number,
-              address: profile.address
+              address: profile.address,
+              profile_picture: user.profile_picture
             };
           } else {
             console.log('🔍 No system admin profile found for user_id:', user.id);
@@ -438,7 +581,10 @@ class User {
           break;
       }
       
-      return user;
+      return {
+        ...user,
+        profile_picture: user.profile_picture
+      };
     } catch (error) {
       console.error('Error finding user by ID:', error);
       return null;

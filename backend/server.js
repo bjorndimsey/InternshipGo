@@ -16,6 +16,13 @@ const eventRoutes = require('./routes/eventRoutes');
 const locationPictureRoutes = require('./routes/locationPictureRoutes');
 const requirementRoutes = require('./routes/requirementRoutes');
 const studentSubmissionRoutes = require('./routes/studentSubmissionRoutes');
+const favoriteRoutes = require('./routes/favoriteRoutes');
+const messagingRoutes = require('./routes/messagingRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const coordinatorNotificationRoutes = require('./routes/coordinatorNotificationRoutes');
+const companyNotificationRoutes = require('./routes/companyNotificationRoutes');
+const workingHoursRoutes = require('./routes/workingHoursRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,19 +30,57 @@ const PORT = process.env.PORT || 3001;
 // Security middleware
 app.use(helmet());
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use(limiter);
+// Rate limiting - Disabled for development
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 1000, // Increased limit for development
+//   message: 'Too many requests from this IP, please try again later.',
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   skip: (req) => {
+//     // Skip rate limiting for health checks
+//     return req.path === '/health';
+//   }
+// });
+// app.use(limiter);
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:8081', // Expo default port
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      process.env.FRONTEND_URL || 'http://localhost:8081',
+      'http://localhost:3000',
+      'http://localhost:19006',
+      'http://localhost:19000',
+      'http://localhost:8080',
+      'http://127.0.0.1:8081',
+      'http://127.0.0.1:3000'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS: Origin not allowed:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
+
+// Handle preflight OPTIONS requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 // Body parsing middleware
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -61,6 +106,13 @@ app.use('/api/events', eventRoutes);
 app.use('/api/users', locationPictureRoutes);
 app.use('/api/requirements', requirementRoutes);
 app.use('/api/submissions', studentSubmissionRoutes);
+app.use('/api/favorites', favoriteRoutes);
+app.use('/api/messaging', messagingRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/notifications', coordinatorNotificationRoutes);
+app.use('/api/notifications', companyNotificationRoutes);
+app.use('/api/working-hours', workingHoursRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
