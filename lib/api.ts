@@ -1081,13 +1081,16 @@ class ApiService {
     amTimeOut?: string;
     pmTimeIn?: string;
     pmTimeOut?: string;
+    amStatus?: 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked';
+    pmStatus?: 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked';
     totalHours?: number;
     notes?: string;
   }): Promise<ApiResponse> {
     console.log('📊 API SERVICE - saveAttendanceRecord called');
-    console.log('  - Company ID:', companyId);
-    console.log('  - User ID:', userId);
+    console.log('  - Company ID:', companyId, 'Type:', typeof companyId);
+    console.log('  - User ID:', userId, 'Type:', typeof userId);
     console.log('  - Attendance Data:', attendanceData);
+    console.log('  - URL will be:', `/attendance/${companyId}/records?userId=${userId}`);
     
     const result = await this.makeRequest(`/attendance/${companyId}/records?userId=${userId}`, {
       method: 'POST',

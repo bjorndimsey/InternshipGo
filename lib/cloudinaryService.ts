@@ -16,6 +16,11 @@ export class CloudinaryService {
   private static readonly REQUIREMENTS_API_KEY = '911342496479915';
   private static readonly REQUIREMENTS_API_SECRET = 'QuiHU1_cooU0ZTrN9nHxxOWDPCQ';
   
+  // Cloudinary credentials for evidence images (journal pictures)
+  private static readonly EVIDENCE_CLOUD_NAME = 'dbdhg43de';
+  private static readonly EVIDENCE_API_KEY = '638252629651465';
+  private static readonly EVIDENCE_API_SECRET = 'Yn2N0LUuWi59FV4PXlnC1YpWyQ8';
+  
 
   /**
    * Upload image to Cloudinary using unsigned uploads with preset
@@ -640,6 +645,144 @@ export class CloudinaryService {
         error: error instanceof Error ? error.message : 'Upload failed',
       };
     }
+  }
+
+  /**
+   * Upload evidence image (journal picture) to Cloudinary
+   */
+  static async uploadEvidenceImage(
+    file: File | Blob,
+    userId: string,
+    taskId?: string,
+    options: any = {}
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('☁️ Uploading evidence image to Cloudinary...');
+      
+      // Convert file to base64
+      const base64 = await this.fileToBase64(file);
+      
+      // Create form data for unsigned upload
+      const formData = new FormData();
+      formData.append('file', `data:${file.type};base64,${base64}`);
+      formData.append('cloud_name', this.EVIDENCE_CLOUD_NAME);
+      formData.append('api_key', this.EVIDENCE_API_KEY);
+      formData.append('upload_preset', 'ml_default');
+      formData.append('folder', 'Journal_pictures');
+      
+      // Set public_id with user and task information
+      const timestamp = Date.now();
+      const publicId = taskId 
+        ? `Journal_pictures/${userId}_${taskId}_${timestamp}`
+        : `Journal_pictures/${userId}_${timestamp}`;
+      formData.append('public_id', publicId);
+      
+      console.log('📤 Uploading evidence image with preset:', 'ml_default');
+      console.log('📁 Folder: Journal_pictures');
+      console.log('👤 User ID:', userId);
+      console.log('📝 Task ID:', taskId);
+      console.log('🆔 Public ID:', publicId);
+
+      // Upload to Cloudinary
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.EVIDENCE_CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('📊 Upload response:', result);
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Upload failed');
+      }
+
+      console.log('✅ Evidence image uploaded successfully:', result.secure_url);
+      
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+      };
+    } catch (error) {
+      console.error('❌ Cloudinary evidence image upload error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  /**
+   * Delete evidence image from Cloudinary
+   */
+  static async deleteEvidenceImage(publicId: string): Promise<CloudinaryUploadResult> {
+    try {
+      console.log('🗑️ Deleting evidence image from Cloudinary:', publicId);
+      
+      // Create signature for authenticated request
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const signature = await this.generateEvidenceSignature(publicId, timestamp);
+      
+      const formData = new FormData();
+      formData.append('public_id', publicId);
+      formData.append('timestamp', timestamp.toString());
+      formData.append('api_key', this.EVIDENCE_API_KEY);
+      formData.append('signature', signature);
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${this.EVIDENCE_CLOUD_NAME}/image/destroy`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      if (result.result === 'ok') {
+        console.log('✅ Evidence image deleted successfully');
+        return { success: true };
+      } else {
+        console.log('❌ Failed to delete evidence image:', result.result);
+        return { success: false, error: 'Delete failed' };
+      }
+    } catch (error) {
+      console.error('❌ Cloudinary evidence image delete error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Delete failed',
+      };
+    }
+  }
+
+  /**
+   * Generate Cloudinary URL for evidence images
+   */
+  static getEvidenceImageUrl(publicId: string, transformations: any = {}): string {
+    const baseUrl = `https://res.cloudinary.com/${this.EVIDENCE_CLOUD_NAME}/image/upload`;
+    // Default transformations for evidence image display
+    const transformString = 'w_800,h_600,c_fill,q_auto,f_auto';
+    return `${baseUrl}/${transformString}/${publicId}`;
+  }
+
+  /**
+   * Generate signature for evidence Cloudinary requests (delete)
+   */
+  private static async generateEvidenceSignature(publicId: string, timestamp: number): Promise<string> {
+    const message = `public_id=${publicId}&timestamp=${timestamp}${this.EVIDENCE_API_SECRET}`;
+    
+    // Use Web Crypto API for HMAC-SHA1
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(this.EVIDENCE_API_SECRET),
+      { name: 'HMAC', hash: 'SHA-1' },
+      false,
+      ['sign']
+    );
+    
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+    const hashArray = Array.from(new Uint8Array(signature));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
   }
 }
 

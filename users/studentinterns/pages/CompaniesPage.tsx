@@ -12,9 +12,13 @@ import {
   Alert,
   Modal,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService } from '../../../lib/api';
+import { CloudinaryService } from '../../../lib/cloudinaryService';
 
 const { width } = Dimensions.get('window');
 
@@ -59,6 +63,18 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(true);
   
+  // Daily Tasks Modal States
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskNotes, setTaskNotes] = useState('');
+  const [taskImage, setTaskImage] = useState<string | null>(null);
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+  
+  // Attendance States
+  const [attendanceStatus, setAttendanceStatus] = useState<{[companyId: string]: 'present' | 'late' | 'absent' | 'leave' | 'not_marked'}>({});
+  const [showAbsentModal, setShowAbsentModal] = useState(false);
+  const [modalAttendanceStatus, setModalAttendanceStatus] = useState<'present' | 'late' | 'absent' | 'leave' | 'not_marked'>('not_marked');
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -69,6 +85,7 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
   useEffect(() => {
     fetchCompanies();
+    fetchTodayAttendance();
     
     // Animate on mount
     Animated.parallel([
@@ -116,6 +133,166 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   useEffect(() => {
     filterCompanies();
   }, [searchQuery, companies]);
+
+  const fetchTodayAttendance = async () => {
+    if (!currentUser) {
+      console.log('❌ No current user found for attendance check');
+      return;
+    }
+
+    setAttendanceLoading(true);
+    try {
+      console.log('🚀 ===== ATTENDANCE FETCH STARTED =====');
+      console.log('📅 Current User ID:', currentUser.id, 'Type:', typeof currentUser.id);
+      
+      // Get all companies the student is assigned to
+      console.log('📅 Step 1: Fetching student companies...');
+      const response = await apiService.getStudentCompanies(currentUser.id);
+      console.log('📅 Student companies response:', response);
+      
+      if (response.success && response.companies && response.companies.length > 0) {
+        console.log('📅 Step 2: Found companies:', response.companies.map((c: any) => ({ id: c.id, name: c.company_name })));
+        
+        const newAttendanceStatus: {[companyId: string]: 'present' | 'late' | 'absent' | 'leave' | 'not_marked'} = {};
+        
+        // Check attendance for each company
+        for (let i = 0; i < response.companies.length; i++) {
+          const companyId = response.companies[i].id.toString();
+          const companyName = response.companies[i].company_name;
+          console.log(`📅 Step 3-${i}: Checking attendance for company ${companyId} (${companyName})...`);
+          
+          // Try getTodayAttendance first
+          const attendanceResponse = await apiService.getTodayAttendance(companyId, currentUser.id);
+          console.log(`📅 Company ${companyId} getTodayAttendance response:`, {
+            success: attendanceResponse.success,
+            dataLength: attendanceResponse.data ? attendanceResponse.data.length : 0
+          });
+          
+          let foundAttendance = false;
+          
+          // Check if we got any data
+          if (attendanceResponse.success && attendanceResponse.data && attendanceResponse.data.length > 0) {
+            const studentRecord = attendanceResponse.data.find((record: any) => {
+              const recordUserId = parseInt(record.user_id);
+              const currentUserId = parseInt(currentUser.id);
+              return recordUserId === currentUserId;
+            });
+            
+            if (studentRecord) {
+              console.log(`✅ SUCCESS: Found attendance record in company ${companyId}:`, studentRecord.status);
+              newAttendanceStatus[companyId] = studentRecord.status || 'not_marked';
+              foundAttendance = true;
+            }
+          }
+          
+          // If not found, try getAttendanceRecords as fallback
+          if (!foundAttendance) {
+            console.log(`📅 Step 4-${i}: Trying getAttendanceRecords for company ${companyId}...`);
+            const today = new Date();
+            const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            
+            const fallbackResponse = await apiService.getAttendanceRecords(companyId, currentUser.id, {
+              startDate: dateString,
+              endDate: dateString,
+              internId: currentUser.id
+            });
+            
+            if (fallbackResponse.success && fallbackResponse.data && fallbackResponse.data.length > 0) {
+              const studentRecord = fallbackResponse.data.find((record: any) => {
+                const recordUserId = parseInt(record.user_id);
+                const currentUserId = parseInt(currentUser.id);
+                return recordUserId === currentUserId;
+              });
+              
+              if (studentRecord) {
+                console.log(`✅ FALLBACK SUCCESS: Found attendance record in company ${companyId}:`, studentRecord.status);
+                newAttendanceStatus[companyId] = studentRecord.status || 'not_marked';
+                foundAttendance = true;
+              }
+            }
+          }
+          
+          // If still no attendance found, mark as not_marked
+          if (!foundAttendance) {
+            console.log(`📅 No attendance record found for company ${companyId}`);
+            newAttendanceStatus[companyId] = 'not_marked';
+          }
+        }
+        
+        console.log('📅 Final attendance status for all companies:', newAttendanceStatus);
+        setAttendanceStatus(newAttendanceStatus);
+        
+      } else {
+        console.log('❌ No companies found for this student');
+        console.log('📅 Companies response:', response);
+        setAttendanceStatus({});
+      }
+    } catch (error) {
+      console.error('❌ Error fetching attendance:', error);
+      console.error('❌ Error details:', error instanceof Error ? error.message : String(error));
+      setAttendanceStatus({});
+    } finally {
+      setAttendanceLoading(false);
+      console.log('🚀 ===== ATTENDANCE FETCH COMPLETED =====');
+    }
+  };
+
+  const refreshAttendance = async () => {
+    console.log('🔄 Manually refreshing attendance...');
+    await fetchTodayAttendance();
+  };
+
+  // Debug function to test direct database query
+  const testDirectAttendanceQuery = async () => {
+    if (!currentUser) return;
+    
+    try {
+      console.log('🔍 ===== DIRECT DATABASE TEST =====');
+      console.log('🔍 Testing direct attendance query...');
+      
+      // Get company first
+      const response = await apiService.getStudentCompanies(currentUser.id);
+      if (response.success && response.companies && response.companies.length > 0) {
+        const companyId = response.companies[0].id.toString();
+        console.log('🔍 Company ID for test:', companyId);
+        
+        // Test with a broader date range to see if there are any records
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const startDate = yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+        const endDate = tomorrow.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+        
+        console.log('🔍 Testing date range:', startDate, 'to', endDate);
+        
+        const testResponse = await apiService.getAttendanceRecords(companyId, currentUser.id, {
+          startDate: startDate,
+          endDate: endDate,
+          internId: currentUser.id
+        });
+        
+        console.log('🔍 Test response:', testResponse);
+        
+        if (testResponse.success && testResponse.data) {
+          console.log('🔍 Found records:', testResponse.data.length);
+          testResponse.data.forEach((record: any, index: number) => {
+            console.log(`🔍 Record ${index + 1}:`, {
+              user_id: record.user_id,
+              status: record.status,
+              attendance_date: record.attendance_date,
+              company_id: record.company_id
+            });
+          });
+        }
+      }
+      console.log('🔍 ===== DIRECT DATABASE TEST COMPLETED =====');
+    } catch (error) {
+      console.error('🔍 Test error:', error);
+    }
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -203,8 +380,225 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
 
   const handleDailyTasks = (company: Company) => {
-    setSelectedCompany(company);
-    setShowDailyTasks(true);
+    const companyId = company.id.toString();
+    const companyAttendanceStatus = attendanceStatus[companyId] || 'not_marked';
+    
+    console.log(`📅 Daily tasks clicked for company ${companyId}, attendance status: ${companyAttendanceStatus}`);
+    
+    // Check attendance status before allowing daily tasks
+    if (companyAttendanceStatus === 'absent' || companyAttendanceStatus === 'leave') {
+      setModalAttendanceStatus(companyAttendanceStatus);
+      setShowAbsentModal(true);
+      return;
+    }
+    
+    // Check if attendance is not marked yet
+    if (companyAttendanceStatus === 'not_marked') {
+      Alert.alert(
+        'Attendance Not Marked',
+        'Please have your attendance marked first before submitting daily tasks. Contact your supervisor to mark your attendance.',
+        [
+          { text: 'OK', style: 'default' }
+        ]
+      );
+      return;
+    }
+    
+    // Only allow daily tasks if present or late
+    if (companyAttendanceStatus === 'present' || companyAttendanceStatus === 'late') {
+      setSelectedCompany(company);
+      setShowDailyTasks(true);
+      // Reset form when opening modal
+      setTaskTitle('');
+      setTaskNotes('');
+      setTaskImage(null);
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      console.log('📷 Opening image library...');
+      
+      // On web, we don't need to request permissions
+      if (Platform.OS !== 'web') {
+        // Request permissions for mobile
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Please grant permission to access your photo library.');
+          return;
+        }
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: Platform.OS !== 'web', // Disable editing on web for better compatibility
+        aspect: Platform.OS === 'web' ? undefined : [4, 3], // Remove aspect ratio constraint on web
+        quality: 0.8,
+      });
+
+      console.log('📷 Image picker result:', result);
+
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        console.log('📷 Selected asset:', asset);
+        
+        // Convert URI to blob for Cloudinary upload
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        console.log('📷 Blob created:', blob);
+        
+        // Upload to Cloudinary evidence service
+        const uploadResult = await CloudinaryService.uploadEvidenceImage(
+          blob,
+          currentUser.id,
+          selectedCompany?.id
+        );
+        
+        console.log('📷 Upload result:', uploadResult);
+        
+        if (uploadResult.success && uploadResult.url) {
+          setTaskImage(uploadResult.url);
+          Alert.alert('Success', 'Image uploaded successfully!');
+        } else {
+          Alert.alert('Error', uploadResult.error || 'Failed to upload image');
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      console.log('📸 Opening camera...');
+      
+      // On web, camera might not be available, so fallback to image picker
+      if (Platform.OS === 'web') {
+        console.log('📸 Camera not available on web, using image picker instead');
+        pickImage();
+        return;
+      }
+      
+      // Request permissions for mobile
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to access your camera.');
+        return;
+      }
+      
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      console.log('📸 Camera result:', result);
+
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        console.log('📸 Captured asset:', asset);
+        
+        // Convert URI to blob for Cloudinary upload
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        console.log('📸 Blob created:', blob);
+        
+        // Upload to Cloudinary evidence service
+        const uploadResult = await CloudinaryService.uploadEvidenceImage(
+          blob,
+          currentUser.id,
+          selectedCompany?.id
+        );
+        
+        console.log('📸 Upload result:', uploadResult);
+        
+        if (uploadResult.success && uploadResult.url) {
+          setTaskImage(uploadResult.url);
+          Alert.alert('Success', 'Image uploaded successfully!');
+        } else {
+          Alert.alert('Error', uploadResult.error || 'Failed to upload image');
+        }
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  };
+
+  const showImagePicker = () => {
+    console.log('🖼️ Image picker triggered');
+    
+    // Check if running on web
+    if (Platform.OS === 'web') {
+      // On web, directly open file picker
+      pickImage();
+    } else {
+      // On mobile, show alert with options
+      Alert.alert(
+        'Select Image',
+        'Choose how you want to add an image',
+        [
+          { text: 'Camera', onPress: takePhoto },
+          { text: 'Gallery', onPress: pickImage },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
+  };
+
+
+  const handleSubmitTask = async () => {
+    if (!taskTitle.trim()) {
+      Alert.alert('Error', 'Please enter a task title.');
+      return;
+    }
+
+    if (!taskNotes.trim()) {
+      Alert.alert('Error', 'Please enter task notes.');
+      return;
+    }
+
+    setIsSubmittingTask(true);
+    
+    try {
+      // Prepare task data for submission
+      const taskData = {
+        title: taskTitle.trim(),
+        notes: taskNotes.trim(),
+        imageUrl: taskImage,
+        companyId: selectedCompany?.id,
+        userId: currentUser.id,
+        submittedAt: new Date().toISOString(),
+      };
+
+      console.log('📝 Submitting daily task:', taskData);
+      
+      // Here you would typically submit the task to your backend
+      // For now, we'll just show a success message
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      
+      Alert.alert(
+        'Success', 
+        'Daily task submitted successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setShowDailyTasks(false);
+              setTaskTitle('');
+              setTaskNotes('');
+              setTaskImage(null);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error submitting task:', error);
+      Alert.alert('Error', 'Failed to submit task. Please try again.');
+    } finally {
+      setIsSubmittingTask(false);
+    }
   };
 
 
@@ -243,6 +637,39 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
       case 'under-review': return 'Under Review';
       case 'pending': return 'Pending';
       default: return 'Unknown';
+    }
+  };
+
+  const getAttendanceStatusColor = (status: string) => {
+    switch (status) {
+      case 'present': return '#2D5A3D'; // Forest green
+      case 'late': return '#F4D03F'; // Bright yellow
+      case 'absent': return '#E8A598'; // Soft coral
+      case 'leave': return '#1E3A5F'; // Deep navy blue
+      case 'not_marked': return '#999'; // Gray
+      default: return '#999';
+    }
+  };
+
+  const getAttendanceStatusText = (status: string) => {
+    switch (status) {
+      case 'present': return 'Present';
+      case 'late': return 'Late';
+      case 'absent': return 'Absent';
+      case 'leave': return 'On Leave';
+      case 'not_marked': return 'Not Marked';
+      default: return 'Unknown';
+    }
+  };
+
+  const getAttendanceStatusIcon = (status: string) => {
+    switch (status) {
+      case 'present': return 'check-circle';
+      case 'late': return 'schedule';
+      case 'absent': return 'cancel';
+      case 'leave': return 'event-busy';
+      case 'not_marked': return 'help-outline';
+      default: return 'help-outline';
     }
   };
 
@@ -307,6 +734,8 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
 
   const CompanyCard = ({ company }: { company: Company }) => {
     const isExpanded = expandedCompany === company.id;
+    const companyId = company.id.toString();
+    const companyAttendanceStatus = attendanceStatus[companyId] || 'not_marked';
     
     return (
       <Animated.View 
@@ -332,25 +761,106 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
                 </View>
               )}
             </View>
-            <View style={styles.companyInfo}>
-              <Text style={styles.companyName}>{company.name}</Text>
-              <Text style={styles.companyIndustry}>{company.industry}</Text>
-              <View style={styles.ratingContainer}>
-                <MaterialIcons name="star" size={18} color="#F4D03F" />
-                <Text style={styles.ratingText}>{company.rating}</Text>
-              </View>
+          <View style={styles.companyInfo}>
+            <Text style={styles.companyName}>{company.name}</Text>
+            <Text style={styles.companyIndustry}>{company.industry}</Text>
+            <View style={styles.ratingContainer}>
+              <MaterialIcons name="star" size={18} color="#F4D03F" />
+              <Text style={styles.ratingText}>{company.rating}</Text>
             </View>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[
+                styles.headerActionButton, 
+                styles.tasksButton,
+                (companyAttendanceStatus === 'absent' || companyAttendanceStatus === 'leave' || companyAttendanceStatus === 'not_marked') && styles.disabledButton
+              ]} 
+              onPress={() => handleDailyTasks(company)}
+              disabled={companyAttendanceStatus === 'absent' || companyAttendanceStatus === 'leave' || companyAttendanceStatus === 'not_marked'}
+            >
+              <MaterialIcons 
+                name="assignment" 
+                size={18} 
+                color={(companyAttendanceStatus === 'absent' || companyAttendanceStatus === 'leave' || companyAttendanceStatus === 'not_marked') ? '#ccc' : '#fff'} 
+              />
+            </TouchableOpacity>
             <MaterialIcons 
               name={isExpanded ? "expand-less" : "expand-more"} 
               size={24} 
               color="#F4D03F" 
             />
           </View>
+          </View>
         </TouchableOpacity>
 
         {isExpanded && (
           <Animated.View style={styles.expandedContent}>
             <View style={styles.companyDetails}>
+              {/* Attendance Status */}
+              {companyAttendanceStatus && (
+                <View style={styles.attendanceStatusContainer}>
+                  <View style={styles.attendanceStatusRow}>
+                    <MaterialIcons 
+                      name={getAttendanceStatusIcon(companyAttendanceStatus)} 
+                      size={18} 
+                      color={getAttendanceStatusColor(companyAttendanceStatus)} 
+                    />
+                    <Text style={styles.attendanceStatusLabel}>Today's Status:</Text>
+                    <View style={[
+                      styles.attendanceStatusBadge, 
+                      { backgroundColor: getAttendanceStatusColor(companyAttendanceStatus) }
+                    ]}>
+                      <Text style={styles.attendanceStatusText}>
+                        {getAttendanceStatusText(companyAttendanceStatus)}
+                      </Text>
+                    </View>
+                  </View>
+                  {(companyAttendanceStatus === 'absent' || companyAttendanceStatus === 'leave') && (
+                    <Text style={styles.attendanceStatusMessage}>
+                      Daily tasks are not available when you are {companyAttendanceStatus === 'absent' ? 'absent' : 'on leave'}.
+                    </Text>
+                  )}
+                  {companyAttendanceStatus === 'not_marked' && (
+                    <View style={styles.attendanceStatusMessageContainer}>
+                      <Text style={styles.attendanceStatusMessage}>
+                        Please have your attendance marked first before submitting daily tasks.
+                      </Text>
+                      <View style={styles.debugButtonsContainer}>
+                        <TouchableOpacity 
+                          style={styles.refreshAttendanceButton}
+                          onPress={refreshAttendance}
+                          disabled={attendanceLoading}
+                        >
+                          <MaterialIcons 
+                            name="refresh" 
+                            size={16} 
+                            color="#F4D03F" 
+                          />
+                          <Text style={styles.refreshAttendanceText}>
+                            {attendanceLoading ? 'Refreshing...' : 'Refresh Status'}
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={styles.debugButton}
+                          onPress={testDirectAttendanceQuery}
+                        >
+                          <MaterialIcons 
+                            name="bug-report" 
+                            size={16} 
+                            color="#E8A598" 
+                          />
+                          <Text style={styles.debugButtonText}>
+                            Debug DB
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
               <View style={styles.locationContainer}>
                 <MaterialIcons name="location-on" size={18} color="#F4D03F" />
                 <Text style={styles.locationText}>{company.location}</Text>
@@ -408,14 +918,6 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
               >
                 <MaterialIcons name="visibility" size={18} color="#fff" />
                 <Text style={styles.actionButtonText}>View Details</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.tasksButton]} 
-                onPress={() => handleDailyTasks(company)}
-              >
-                <MaterialIcons name="assignment" size={18} color="#fff" />
-                <Text style={styles.actionButtonText}>Daily Tasks</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -520,10 +1022,13 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
         onRequestClose={() => setShowDailyTasks(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContent}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                Daily Tasks - {selectedCompany?.name}
+                Submit Daily Task - {selectedCompany?.name}
               </Text>
               <TouchableOpacity
                 style={styles.closeModalButton}
@@ -533,17 +1038,84 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.tasksList}>
-              {selectedCompany?.dailyTasks.map((task, index) => (
-                <View key={index} style={styles.taskItem}>
-                  <View style={styles.taskNumber}>
-                    <Text style={styles.taskNumberText}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.taskText}>{task}</Text>
-                </View>
-              ))}
+            <ScrollView style={styles.taskFormContainer} showsVerticalScrollIndicator={false}>
+              {/* Task Title Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Task Title *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter task title..."
+                  value={taskTitle}
+                  onChangeText={setTaskTitle}
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              {/* Task Notes Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Task Notes *</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textAreaInput]}
+                  placeholder="Describe what you did today..."
+                  value={taskNotes}
+                  onChangeText={setTaskNotes}
+                  placeholderTextColor="#999"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              {/* Image Upload Section */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Task Image (Optional)</Text>
+                <TouchableOpacity 
+                  style={styles.imageUploadContainer} 
+                  onPress={showImagePicker}
+                  activeOpacity={0.7}
+                >
+                  {taskImage ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: taskImage }} style={styles.imagePreview} />
+                      <TouchableOpacity 
+                        style={styles.removeImageButton}
+                        onPress={() => setTaskImage(null)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="close" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.imageUploadPlaceholder}>
+                      <MaterialIcons name="add-a-photo" size={32} color="#F4D03F" />
+                      <Text style={styles.imageUploadText}>
+                        {Platform.OS === 'web' ? 'Click to select image' : 'Tap to add image'}
+                      </Text>
+                      <Text style={styles.imageUploadSubtext}>
+                        {Platform.OS === 'web' ? 'Choose from files' : 'Camera or Gallery'}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.submitButton, isSubmittingTask && styles.submitButtonDisabled]}
+                onPress={handleSubmitTask}
+                disabled={isSubmittingTask}
+              >
+                {isSubmittingTask ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="send" size={20} color="#fff" />
+                    <Text style={styles.submitButtonText}>Submit Task</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </ScrollView>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -676,6 +1248,56 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
                 </>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Absent Modal */}
+      <Modal
+        visible={showAbsentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAbsentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.absentModalContent}>
+            <View style={styles.absentModalHeader}>
+              <MaterialIcons 
+                name={getAttendanceStatusIcon(modalAttendanceStatus)} 
+                size={48} 
+                color={getAttendanceStatusColor(modalAttendanceStatus)} 
+              />
+              <Text style={styles.absentModalTitle}>
+                {modalAttendanceStatus === 'absent' ? 'You are Absent Today' : 'You are On Leave Today'}
+              </Text>
+            </View>
+            
+            <View style={styles.absentModalContent}>
+              <Text style={styles.absentModalMessage}>
+                {modalAttendanceStatus === 'absent' 
+                  ? 'You are marked as absent for today. Daily tasks are not available when you are absent.'
+                  : 'You are on leave today. Daily tasks are not available when you are on leave.'
+                }
+              </Text>
+              
+              <View style={styles.absentModalStatusContainer}>
+                <View style={[
+                  styles.absentModalStatusBadge, 
+                  { backgroundColor: getAttendanceStatusColor(modalAttendanceStatus) }
+                ]}>
+                  <Text style={styles.absentModalStatusText}>
+                    {getAttendanceStatusText(modalAttendanceStatus)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.absentModalButton}
+              onPress={() => setShowAbsentModal(false)}
+            >
+              <Text style={styles.absentModalButtonText}>Understood</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -884,6 +1506,23 @@ const styles = StyleSheet.create({
   companyInfo: {
     flex: 1,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
   companyName: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -1008,7 +1647,7 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     gap: 12,
   },
   actionButton: {
@@ -1084,6 +1723,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
+    flex: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1324,5 +1964,245 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 12,
+  },
+  // Task Form Styles
+  taskFormContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a2e',
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1a1a2e',
+    backgroundColor: '#f8f9fa',
+  },
+  textAreaInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  imageUploadContainer: {
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    minHeight: 120,
+    justifyContent: 'center',
+  },
+  imageUploadPlaceholder: {
+    alignItems: 'center',
+  },
+  imageUploadText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a2e',
+    marginTop: 8,
+  },
+  imageUploadSubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+  },
+  imagePreview: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#E8A598',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2D5A3D',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  
+  // Attendance Status Styles
+  attendanceStatusContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  attendanceStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  attendanceStatusLabel: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 8,
+    marginRight: 12,
+  },
+  attendanceStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  attendanceStatusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  attendanceStatusMessage: {
+    fontSize: 12,
+    color: '#F4D03F',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  attendanceStatusMessageContainer: {
+    marginTop: 4,
+  },
+  refreshAttendanceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(244, 208, 63, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#F4D03F',
+    alignSelf: 'flex-start',
+  },
+  refreshAttendanceText: {
+    fontSize: 12,
+    color: '#F4D03F',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  debugButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  debugButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(232, 165, 152, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8A598',
+    alignSelf: 'flex-start',
+  },
+  debugButtonText: {
+    fontSize: 12,
+    color: '#E8A598',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  disabledButton: {
+    opacity: 0.5,
+    backgroundColor: '#666',
+  },
+  
+  // Absent Modal Styles
+  absentModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    margin: 20,
+    minWidth: 300,
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  absentModalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  absentModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  absentModalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  absentModalStatusContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  absentModalStatusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  absentModalStatusText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  absentModalButton: {
+    backgroundColor: '#2D5A3D',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  absentModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

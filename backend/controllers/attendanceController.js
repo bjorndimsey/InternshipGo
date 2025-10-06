@@ -188,6 +188,8 @@ const getAttendanceRecords = async (req, res) => {
         am_time_out: convertTo12Hour(record.am_time_out),
         pm_time_in: convertTo12Hour(record.pm_time_in),
         pm_time_out: convertTo12Hour(record.pm_time_out),
+        am_status: record.am_status || 'not_marked',
+        pm_status: record.pm_status || 'not_marked',
         // Include student data
         first_name: student.first_name || 'N/A',
         last_name: student.last_name || 'N/A',
@@ -217,7 +219,10 @@ const saveAttendanceRecord = async (req, res) => {
   console.log('💾 saveAttendanceRecord called with:', {
     companyId: req.params.companyId,
     userId: req.query.userId,
-    body: req.body
+    body: req.body,
+    headers: req.headers,
+    method: req.method,
+    url: req.url
   });
   
   try {
@@ -231,6 +236,8 @@ const saveAttendanceRecord = async (req, res) => {
       amTimeOut, 
       pmTimeIn, 
       pmTimeOut, 
+      amStatus,
+      pmStatus,
       totalHours,
       notes 
     } = req.body;
@@ -242,7 +249,31 @@ const saveAttendanceRecord = async (req, res) => {
       });
     }
 
+    console.log('🔍 Validating required fields:', {
+      internId: internId,
+      internIdType: typeof internId,
+      attendanceDate: attendanceDate,
+      attendanceDateType: typeof attendanceDate,
+      status: status,
+      statusType: typeof status,
+      amTimeIn: amTimeIn,
+      amTimeOut: amTimeOut,
+      pmTimeIn: pmTimeIn,
+      pmTimeOut: pmTimeOut,
+      amStatus: amStatus,
+      amStatusType: typeof amStatus,
+      pmStatus: pmStatus,
+      pmStatusType: typeof pmStatus,
+      totalHours: totalHours,
+      totalHoursType: typeof totalHours
+    });
+
     if (!internId || !attendanceDate || !status) {
+      console.error('❌ Missing required fields:', {
+        internId: !!internId,
+        attendanceDate: !!attendanceDate,
+        status: !!status
+      });
       return res.status(400).json({
         success: false,
         message: 'Intern ID, attendance date, and status are required'
@@ -339,6 +370,8 @@ const saveAttendanceRecord = async (req, res) => {
         am_time_out: convertTo24Hour(amTimeOut),
         pm_time_in: convertTo24Hour(pmTimeIn),
         pm_time_out: convertTo24Hour(pmTimeOut),
+        am_status: amStatus || 'not_marked',
+        pm_status: pmStatus || 'not_marked',
         total_hours: totalHours || 0,
         notes: notes || null,
         updated_at: new Date().toISOString()
@@ -379,6 +412,8 @@ const saveAttendanceRecord = async (req, res) => {
         am_time_out: convertTo24Hour(amTimeOut),
         pm_time_in: convertTo24Hour(pmTimeIn),
         pm_time_out: convertTo24Hour(pmTimeOut),
+        am_status: amStatus || 'not_marked',
+        pm_status: pmStatus || 'not_marked',
         total_hours: totalHours || 0,
         notes: notes || null
       };
@@ -661,6 +696,8 @@ const getTodayAttendance = async (req, res) => {
           am_time_out: record.am_time_out,
           pm_time_in: record.pm_time_in,
           pm_time_out: record.pm_time_out,
+          am_status: record.am_status,
+          pm_status: record.pm_status,
           total_hours: record.total_hours
         }
       });
@@ -671,6 +708,8 @@ const getTodayAttendance = async (req, res) => {
         am_time_out: convertTo12Hour(record.am_time_out),
         pm_time_in: convertTo12Hour(record.pm_time_in),
         pm_time_out: convertTo12Hour(record.pm_time_out),
+        am_status: record.am_status || 'not_marked',
+        pm_status: record.pm_status || 'not_marked',
         // Include student data
         first_name: student.first_name || 'N/A',
         last_name: student.last_name || 'N/A',

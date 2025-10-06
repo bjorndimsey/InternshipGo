@@ -72,6 +72,9 @@ interface Intern {
   amTimeOut?: string;
   pmTimeIn?: string;
   pmTimeOut?: string;
+  // AM/PM session status tracking (separate from time tracking)
+  amStatus?: 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked';
+  pmStatus?: 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked';
   totalDailyHours?: number;
   remainingHours?: number;
   remainingDays?: number;
@@ -83,6 +86,8 @@ interface Intern {
       amTimeOut?: string;
       pmTimeIn?: string;
       pmTimeOut?: string;
+      amStatus?: 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked';
+      pmStatus?: 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked';
       totalHours: number;
     };
   };
@@ -153,14 +158,12 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       successMessage
     });
   }, [showSuccessModal, successMessage]);
-  const [workCompletedInterns, setWorkCompletedInterns] = useState<Set<string>>(new Set());
   const [companyId, setCompanyId] = useState<string>('');
   const [detailPanelSlideAnim] = useState(new Animated.Value(width));
   const [detailDateRange, setDetailDateRange] = useState({
     start: new Date(),
     end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
   });
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [workingHours, setWorkingHours] = useState({
     startTime: '07:00', // Default 7:00 AM
     startPeriod: 'AM',
@@ -376,14 +379,25 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 }
               });
               
+              // Calculate remaining hours as: Total Internship Hours - Total Daily Hours
+              const totalInternshipHours = intern.totalHours || 0;
+              const totalDailyHours = attendanceRecord.total_hours || 0;
+              const remainingHours = Math.max(0, totalInternshipHours - totalDailyHours);
+              const remainingDays = Math.ceil(remainingHours / 8);
+
               const updatedIntern = {
                 ...intern,
                 amTimeIn: attendanceRecord.am_time_in || '',
                 amTimeOut: attendanceRecord.am_time_out || '',
                 pmTimeIn: attendanceRecord.pm_time_in || '',
                 pmTimeOut: attendanceRecord.pm_time_out || '',
-                totalDailyHours: attendanceRecord.total_hours || 0,
-                currentAttendanceStatus: attendanceRecord.status || 'not_marked'
+                totalDailyHours: totalDailyHours,
+                remainingHours: remainingHours,
+                remainingDays: remainingDays,
+                currentAttendanceStatus: attendanceRecord.status || 'not_marked',
+                // Use the session-specific statuses from the database
+                amStatus: attendanceRecord.am_status || 'not_marked',
+                pmStatus: attendanceRecord.pm_status || 'not_marked'
               };
               
               console.log('📊 Updated intern data:', {
@@ -413,59 +427,6 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             amTimeIn: i.amTimeIn
           })));
           
-          // Check for completed work and update workCompletedInterns state
-          const completedInternIds = new Set<string>();
-          const requiredDailyHours = calculateRequiredDailyHours();
-          
-          updatedInterns.forEach(intern => {
-            // Check if intern has worked the required daily hours
-            const hasWorkedRequiredHours = intern.totalDailyHours && intern.totalDailyHours > 0 && intern.totalDailyHours >= requiredDailyHours;
-            
-            // Check for valid PM Time Out (not empty, '--:--', or '0h 0m')
-            const hasValidPMTimeOut = intern.pmTimeOut && 
-                                    intern.pmTimeOut !== '' && 
-                                    intern.pmTimeOut !== '--:--' && 
-                                    intern.pmTimeOut !== '0h 0m';
-            
-            // Check for valid AM Time Out (not empty or '--:--')
-            const hasValidAMTimeOut = intern.amTimeOut && 
-                                    intern.amTimeOut !== '' && 
-                                    intern.amTimeOut !== '--:--';
-            
-            // Work is completed if they have worked required hours OR have completed any valid session
-            const hasAnyValidSession = (intern.amTimeIn && hasValidAMTimeOut) || (intern.pmTimeIn && hasValidPMTimeOut);
-            
-            const isWorkCompleted = hasWorkedRequiredHours || hasAnyValidSession;
-            
-            console.log('🔍 Work completion check for intern:', intern.first_name, intern.last_name, {
-              totalDailyHours: intern.totalDailyHours,
-              requiredDailyHours: requiredDailyHours,
-              hasWorkedRequiredHours,
-              amTimeIn: intern.amTimeIn,
-              amTimeOut: intern.amTimeOut,
-              pmTimeIn: intern.pmTimeIn,
-              pmTimeOut: intern.pmTimeOut,
-              hasValidAMTimeOut,
-              hasValidPMTimeOut,
-              hasAnyValidSession,
-              isWorkCompleted
-            });
-            
-            if (isWorkCompleted) {
-              completedInternIds.add(intern.id);
-              console.log('🎉 Work completed for intern:', intern.first_name, intern.last_name, {
-                totalDailyHours: intern.totalDailyHours,
-                requiredDailyHours: requiredDailyHours,
-                hasWorkedRequiredHours,
-                hasAnyValidSession
-              });
-            }
-          });
-          
-          if (completedInternIds.size > 0) {
-            setWorkCompletedInterns(completedInternIds);
-            console.log('🎉 Updated workCompletedInterns:', Array.from(completedInternIds));
-          }
           
           return updatedInterns;
         });
@@ -564,7 +525,10 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 pmTimeIn: attendanceRecord.pm_time_in || '',
                 pmTimeOut: attendanceRecord.pm_time_out || '',
                 totalDailyHours: attendanceRecord.total_hours || 0,
-                currentAttendanceStatus: attendanceRecord.status || 'not_marked'
+                currentAttendanceStatus: attendanceRecord.status || 'not_marked',
+                // Use the session-specific statuses from the database
+                amStatus: attendanceRecord.am_status || 'not_marked',
+                pmStatus: attendanceRecord.pm_status || 'not_marked'
               };
               
               return updatedIntern;
@@ -581,6 +545,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 amTimeOut: '',
                 pmTimeIn: '',
                 pmTimeOut: '',
+                amStatus: 'not_marked',
+                pmStatus: 'not_marked',
                 totalDailyHours: 0,
                 currentAttendanceStatus: 'not_marked'
               };
@@ -651,14 +617,6 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     }
   };
 
-  // Update clock every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     filterInterns();
@@ -870,15 +828,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       minute: '2-digit' 
     });
     const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    const currentHour = new Date().getHours();
     
     console.log('📊 Attendance action:', { internId, status, currentTime, currentDate });
     
     setInterns(prevInterns => 
       prevInterns.map(intern => {
         if (intern.id === internId) {
-          // Determine if this is AM or PM session
-          const isAMSession = currentHour < 12;
+          // Determine if this is AM or PM session based on working hours
+          const isAMSession = isWithinAMWorkingHours();
+          const isPMSession = isWithinPMWorkingHours();
           
           // Calculate hours based on status
           let hoursToDeduct = 0;
@@ -886,24 +844,29 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             // For present/late, we'll calculate hours when they check out
             hoursToDeduct = 0;
           } else if (status === 'leave' || status === 'sick') {
-            // For leave/sick, deduct 8 hours (full day)
-            hoursToDeduct = 8;
+            // For leave/sick, deduct 4 hours (half day for the session)
+            hoursToDeduct = 4;
           } else if (status === 'absent') {
-            // For absent, deduct 8 hours (full day)
-            hoursToDeduct = 8;
+            // For absent, deduct 4 hours (half day for the session)
+            hoursToDeduct = 4;
           }
 
           const newIntern = { 
             ...intern, 
             currentAttendanceStatus: status,
-            // Set AM or PM time in based on current time
+            // Set AM or PM time in based on current session
             amTimeIn: (status === 'present' || status === 'late') && isAMSession ? currentTime : intern.amTimeIn,
-            pmTimeIn: (status === 'present' || status === 'late') && !isAMSession ? currentTime : intern.pmTimeIn,
+            pmTimeIn: (status === 'present' || status === 'late') && isPMSession ? currentTime : intern.pmTimeIn,
             // Reset time out for new session
             amTimeOut: (status === 'present' || status === 'late') && isAMSession ? '' : intern.amTimeOut,
-            pmTimeOut: (status === 'present' || status === 'late') && !isAMSession ? '' : intern.pmTimeOut,
-            remainingHours: Math.max(0, (intern.remainingHours || intern.totalHours || 0) - hoursToDeduct),
-            remainingDays: Math.ceil(Math.max(0, (intern.remainingHours || intern.totalHours || 0) - hoursToDeduct) / 8),
+            pmTimeOut: (status === 'present' || status === 'late') && isPMSession ? '' : intern.pmTimeOut,
+            // Set session-specific status
+            amStatus: isAMSession ? status : intern.amStatus,
+            pmStatus: isPMSession ? status : intern.pmStatus,
+            // Calculate remaining hours as: Total Internship Hours - Total Daily Hours
+            totalDailyHours: (intern.totalDailyHours || 0) + hoursToDeduct,
+            remainingHours: Math.max(0, (intern.totalHours || 0) - ((intern.totalDailyHours || 0) + hoursToDeduct)),
+            remainingDays: Math.ceil(Math.max(0, (intern.totalHours || 0) - ((intern.totalDailyHours || 0) + hoursToDeduct)) / 8),
             attendance: {
               ...intern.attendance!,
               [status]: (intern.attendance?.[status] || 0) + 1,
@@ -915,8 +878,10 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 status,
                 amTimeIn: (status === 'present' || status === 'late') && isAMSession ? currentTime : intern.amTimeIn,
                 amTimeOut: intern.amTimeOut,
-                pmTimeIn: (status === 'present' || status === 'late') && !isAMSession ? currentTime : intern.pmTimeIn,
+                pmTimeIn: (status === 'present' || status === 'late') && isPMSession ? currentTime : intern.pmTimeIn,
                 pmTimeOut: intern.pmTimeOut,
+                amStatus: isAMSession ? status : intern.amStatus,
+                pmStatus: isPMSession ? status : intern.pmStatus,
                 totalHours: hoursToDeduct
               }
             }
@@ -934,12 +899,13 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         // Get the current intern data before the update
         const currentIntern = interns.find(i => i.id === internId);
         if (currentIntern) {
-          // Determine if this is AM or PM session
-          const isAMSession = currentHour < 12;
+          // Determine if this is AM or PM session based on working hours
+          const isAMSession = isWithinAMWorkingHours();
+          const isPMSession = isWithinPMWorkingHours();
           
           // Calculate the correct time in values based on the action
           const amTimeIn = (status === 'present' || status === 'late') && isAMSession ? currentTime : currentIntern.amTimeIn;
-          const pmTimeIn = (status === 'present' || status === 'late') && !isAMSession ? currentTime : currentIntern.pmTimeIn;
+          const pmTimeIn = (status === 'present' || status === 'late') && isPMSession ? currentTime : currentIntern.pmTimeIn;
           
           const attendanceData = {
             internId: currentIntern.student_id, // Use student_id for backend
@@ -949,11 +915,26 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             amTimeOut: currentIntern.amTimeOut || undefined,
             pmTimeIn: pmTimeIn || undefined,
             pmTimeOut: currentIntern.pmTimeOut || undefined,
+            amStatus: isAMSession ? status : (currentIntern.amStatus || 'not_marked'),
+            pmStatus: isPMSession ? status : (currentIntern.pmStatus || 'not_marked'),
             totalHours: currentIntern.totalDailyHours || 0,
             notes: undefined
           };
 
           console.log('📊 Saving attendance record:', attendanceData);
+          console.log('📊 Current intern data:', {
+            id: currentIntern.id,
+            student_id: currentIntern.student_id,
+            student_id_type: typeof currentIntern.student_id,
+            first_name: currentIntern.first_name,
+            last_name: currentIntern.last_name
+          });
+          console.log('📊 API call parameters:', {
+            companyId: companyId,
+            companyIdType: typeof companyId,
+            currentUserId: currentUser.id,
+            currentUserIdType: typeof currentUser.id
+          });
           
           const response = await apiService.saveAttendanceRecord(companyId, currentUser.id, attendanceData);
           
@@ -968,14 +949,23 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               }
             }, 100);
           } else {
-            console.error('📊 Failed to save attendance record:', response.message);
+            console.error('📊 Failed to save attendance record:', {
+              response: response,
+              message: response.message,
+              error: response.error,
+              success: response.success
+            });
           }
         }
       } else {
         console.log('📊 Company ID not available, skipping backend save');
       }
     } catch (error) {
-      console.error('📊 Error saving attendance record:', error);
+      console.error('📊 Error saving attendance record:', {
+        error: error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
     }
 
     // Show success feedback
@@ -992,6 +982,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
   };
 
   const handleTimeOut = async (internId: string) => {
+    console.log('🕐 ===== TIMEOUT FUNCTION STARTED =====');
     console.log('🕐 Time Out button clicked for intern:', internId);
     
     const currentTime = new Date().toLocaleTimeString('en-US', { 
@@ -1002,27 +993,59 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     });
     
     console.log('🕐 Current time:', currentTime);
+    console.log('🕐 Current interns state before update:', interns.map(i => ({
+      id: i.id,
+      name: i.first_name + ' ' + i.last_name,
+      amTimeIn: i.amTimeIn,
+      amTimeOut: i.amTimeOut,
+      pmTimeIn: i.pmTimeIn,
+      pmTimeOut: i.pmTimeOut,
+      amStatus: i.amStatus,
+      pmStatus: i.pmStatus
+    })));
     console.log('🕐 Interns before update:', interns.find(i => i.id === internId));
     
-    setInterns(prevInterns => 
-      prevInterns.map(intern => {
+    // Store updated values for backend save
+    let updatedTimeValues: {
+      amTimeOut: string;
+      pmTimeOut: string;
+      totalDailyHours: number;
+      remainingHours: number;
+      remainingDays: number;
+      currentAttendanceStatus: string;
+    } | null = null;
+
+    setInterns(prevInterns => {
+      const updatedInterns = prevInterns.map(intern => {
         if (intern.id === internId) {
           console.log('🕐 Processing time out for intern:', intern.first_name, intern.last_name);
           // Determine which session to update - allow time out anytime if there's a time in
-          const hasAMTimeIn = intern.amTimeIn && (!intern.amTimeOut || intern.amTimeOut === '');
-          const hasPMTimeIn = intern.pmTimeIn && (!intern.pmTimeOut || intern.pmTimeOut === '');
+          const hasAMTimeIn = intern.amTimeIn && intern.amTimeIn !== '--:--' && (!intern.amTimeOut || intern.amTimeOut === '' || intern.amTimeOut === '--:--');
+          const hasPMTimeIn = intern.pmTimeIn && intern.pmTimeIn !== '--:--' && (!intern.pmTimeOut || intern.pmTimeOut === '' || intern.pmTimeOut === '--:--');
+          
+          // Check if PM is absent - if so, don't allow timeout
+          const isPMAbsent = intern.pmStatus && (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick');
+          const isAMAbsent = intern.amStatus && (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick');
           
           // If there's any time in, allow time out (regardless of working hours)
-          const canTimeOut = intern.amTimeIn || intern.pmTimeIn;
+          const canTimeOut = (hasAMTimeIn && !isAMAbsent) || (hasPMTimeIn && !isPMAbsent);
           
+          console.log('🕐 ===== SESSION DETERMINATION =====');
           console.log('🕐 AM Time In:', intern.amTimeIn, 'AM Time Out:', intern.amTimeOut, 'Has AM Time In:', hasAMTimeIn);
           console.log('🕐 PM Time In:', intern.pmTimeIn, 'PM Time Out:', intern.pmTimeOut, 'Has PM Time In:', hasPMTimeIn);
+          console.log('🕐 AM Status:', intern.amStatus, 'PM Status:', intern.pmStatus);
+          console.log('🕐 Is AM Absent:', isAMAbsent, 'Is PM Absent:', isPMAbsent);
           console.log('🕐 Can Time Out:', canTimeOut);
           
           if (canTimeOut) {
             console.log('🕐 Processing time out for session');
           // Parse 12-hour format times
           const parseTime = (timeStr: string) => {
+            // Handle empty or placeholder times
+            if (!timeStr || timeStr === '--:--' || timeStr === '' || timeStr === '00:00') {
+              throw new Error(`Invalid time format: ${timeStr}`);
+            }
+            
             const [time, period] = timeStr.split(' ');
             const [hours, minutes] = time.split(':').map(Number);
             let hour24 = hours;
@@ -1035,34 +1058,32 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             let updateAM = false;
             let updatePM = false;
             
-            // Determine which session to update
-            if (hasAMTimeIn) {
+            // Determine which session to update - prioritize the session that needs time out
+            // Only update one session at a time to prevent double timeouts
+            if (hasAMTimeIn && !isAMAbsent) {
               updateAM = true;
               const timeInDate = parseTime(intern.amTimeIn!);
               const timeOutDate = parseTime(currentTime);
               sessionHours = Math.max(0, (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60 * 60));
-            } else if (hasPMTimeIn) {
+              console.log('🕐 ===== UPDATING AM SESSION =====');
+              console.log('🕐 AM Time In:', intern.amTimeIn, 'AM Time Out:', currentTime, 'Hours:', sessionHours);
+            } else if (hasPMTimeIn && !isPMAbsent) {
               updatePM = true;
               const timeInDate = parseTime(intern.pmTimeIn!);
               const timeOutDate = parseTime(currentTime);
               sessionHours = Math.max(0, (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60 * 60));
-            } else if (intern.pmTimeIn) {
-              // If PM time in exists but PM time out also exists, update PM time out anyway
-              updatePM = true;
-              const timeInDate = parseTime(intern.pmTimeIn!);
-              const timeOutDate = parseTime(currentTime);
-              sessionHours = Math.max(0, (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60 * 60));
-            } else if (intern.amTimeIn) {
-              // If AM time in exists but AM time out also exists, update AM time out anyway
-              updateAM = true;
-              const timeInDate = parseTime(intern.amTimeIn!);
-              const timeOutDate = parseTime(currentTime);
-              sessionHours = Math.max(0, (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60 * 60));
+              console.log('🕐 ===== UPDATING PM SESSION =====');
+              console.log('🕐 PM Time In:', intern.pmTimeIn, 'PM Time Out:', currentTime, 'Hours:', sessionHours);
+            } else {
+              console.log('🕐 ===== NO SESSION TO UPDATE =====');
+              console.log('🕐 Reason: hasAMTimeIn:', hasAMTimeIn, 'isAMAbsent:', isAMAbsent, 'hasPMTimeIn:', hasPMTimeIn, 'isPMAbsent:', isPMAbsent);
             }
             
             // Calculate new total daily hours
             const newTotalDailyHours = (intern.totalDailyHours || 0) + sessionHours;
-            const newRemainingHours = Math.max(0, (intern.remainingHours || intern.totalHours || 0) - sessionHours);
+            // Calculate remaining hours as: Total Internship Hours - Total Daily Hours
+            const totalInternshipHours = intern.totalHours || 0;
+            const newRemainingHours = Math.max(0, totalInternshipHours - newTotalDailyHours);
             const newRemainingDays = Math.ceil(newRemainingHours / 8);
             
             // Check if both sessions are completed
@@ -1095,181 +1116,221 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               remainingHours: newIntern.remainingHours
             });
             
+            // Store updated values for backend save
+            updatedTimeValues = {
+              amTimeOut: newIntern.amTimeOut || '--:--',
+              pmTimeOut: newIntern.pmTimeOut || '--:--',
+              totalDailyHours: newIntern.totalDailyHours || 0,
+              remainingHours: newIntern.remainingHours || 0,
+              remainingDays: newIntern.remainingDays || 0,
+              currentAttendanceStatus: newIntern.currentAttendanceStatus || 'present'
+            };
+            
           return newIntern;
         }
         }
         return intern;
-      })
-    );
-
-    // Save to backend - use the calculated values from the state update
-    try {
-      console.log('🔄 Starting backend save process...');
-      console.log('  - Company ID available:', !!companyId);
-      console.log('  - Current User ID:', currentUser.id);
+      });
       
-      if (companyId) {
-        // Find the current intern to get basic info
-        const currentIntern = interns.find(i => i.id === internId);
-        if (currentIntern) {
-          // Use the same logic as in the state update to determine what to save
-          const hasAMTimeIn = currentIntern.amTimeIn && (!currentIntern.amTimeOut || currentIntern.amTimeOut === '');
-          const hasPMTimeIn = currentIntern.pmTimeIn && (!currentIntern.pmTimeOut || currentIntern.pmTimeOut === '');
-          
-          let updateAM = false;
-          let updatePM = false;
-          
-          if (hasAMTimeIn) {
-            updateAM = true;
-          } else if (hasPMTimeIn) {
-            updatePM = true;
-          } else if (currentIntern.pmTimeIn) {
-            updatePM = true;
-          } else if (currentIntern.amTimeIn) {
-            updateAM = true;
-          }
-          
-          // Calculate the updated values that should be saved
-          const updatedAmTimeOut = updateAM ? currentTime : currentIntern.amTimeOut;
-          const updatedPmTimeOut = updatePM ? currentTime : currentIntern.pmTimeOut;
-          
-          // Calculate total hours for backend save
-          const parseTime = (timeStr: string) => {
-            console.log('🕐 Parsing time:', timeStr);
-            const [time, period] = timeStr.split(' ');
-            const [hours, minutes] = time.split(':').map(Number);
-            let hour24 = hours;
-            if (period === 'PM' && hours !== 12) hour24 += 12;
-            if (period === 'AM' && hours === 12) hour24 = 0;
-            
-            const dateString = `2000-01-01T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
-            console.log('🕐 Created date string:', dateString);
-            
-            const date = new Date(dateString);
-            console.log('🕐 Created date object:', date, 'Valid:', !isNaN(date.getTime()));
-            
-            if (isNaN(date.getTime())) {
-              console.error('❌ Invalid date created from:', timeStr, '->', dateString);
-              throw new Error(`Invalid time format: ${timeStr}`);
-            }
-            
-            return date;
-          };
-          
-          let totalHours = 0;
-          
-          // Calculate AM session hours
-          if (currentIntern.amTimeIn && updatedAmTimeOut) {
-            const amTimeInDate = parseTime(currentIntern.amTimeIn);
-            const amTimeOutDate = parseTime(updatedAmTimeOut);
-            const amHours = Math.max(0, (amTimeOutDate.getTime() - amTimeInDate.getTime()) / (1000 * 60 * 60));
-            totalHours += amHours;
-            
-            console.log('🕐 AM session calculation:', {
-              amTimeIn: currentIntern.amTimeIn,
-              amTimeOut: updatedAmTimeOut,
-              amTimeInDate: isNaN(amTimeInDate.getTime()) ? 'Invalid Date' : amTimeInDate.toISOString(),
-              amTimeOutDate: isNaN(amTimeOutDate.getTime()) ? 'Invalid Date' : amTimeOutDate.toISOString(),
-              timeDiffMs: amTimeOutDate.getTime() - amTimeInDate.getTime(),
-              amHours: amHours,
-              totalHours: totalHours
-            });
-          }
-          
-          // Calculate PM session hours
-          if (currentIntern.pmTimeIn && updatedPmTimeOut) {
-            const pmTimeInDate = parseTime(currentIntern.pmTimeIn);
-            const pmTimeOutDate = parseTime(updatedPmTimeOut);
-            const pmHours = Math.max(0, (pmTimeOutDate.getTime() - pmTimeInDate.getTime()) / (1000 * 60 * 60));
-            totalHours += pmHours;
-            
-            console.log('🕐 PM session calculation:', {
-              pmTimeIn: currentIntern.pmTimeIn,
-              pmTimeOut: updatedPmTimeOut,
-              pmTimeInDate: isNaN(pmTimeInDate.getTime()) ? 'Invalid Date' : pmTimeInDate.toISOString(),
-              pmTimeOutDate: isNaN(pmTimeOutDate.getTime()) ? 'Invalid Date' : pmTimeOutDate.toISOString(),
-              timeDiffMs: pmTimeOutDate.getTime() - pmTimeInDate.getTime(),
-              pmHours: pmHours,
-              totalHours: totalHours
-            });
-          }
-          
-          console.log('🕐 Time out calculation for backend save:', {
-            updateAM,
-            updatePM,
-            currentTime,
-            currentInternAmTimeOut: currentIntern.amTimeOut,
-            currentInternPmTimeOut: currentIntern.pmTimeOut,
-            updatedAmTimeOut,
-            updatedPmTimeOut,
-            totalHours,
-            totalHoursType: typeof totalHours,
-            totalHoursIsNaN: isNaN(totalHours)
-          });
-          
-          const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-          console.log('📅 Date calculation for attendance:', {
-            currentDate: currentDate,
-            currentTime: new Date().toISOString(),
-            manilaTime: new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
-          });
-          
-          const attendanceData = {
-            internId: currentIntern.student_id, // Use student_id for backend
-            attendanceDate: currentDate,
-            status: (currentIntern.currentAttendanceStatus === 'not_marked' ? 'present' : currentIntern.currentAttendanceStatus) as 'present' | 'absent' | 'late' | 'leave' | 'sick',
-            amTimeIn: currentIntern.amTimeIn || undefined,
-            amTimeOut: updatedAmTimeOut || undefined,
-            pmTimeIn: currentIntern.pmTimeIn || undefined,
-            pmTimeOut: updatedPmTimeOut || undefined,
-            totalHours: totalHours,
-            notes: undefined
-          };
+      return updatedInterns;
+    });
 
-          console.log('📊 Saving time out record:', attendanceData);
-          
-          try {
-            console.log('📊 Making API call to save attendance record...');
-            const response = await apiService.saveAttendanceRecord(companyId, currentUser.id, attendanceData);
-            console.log('📊 API Response received:', response);
-            console.log('📊 Response type:', typeof response);
-            console.log('📊 Response keys:', response ? Object.keys(response) : 'No response object');
+    // Backend save logic - use setTimeout to ensure state is updated
+    setTimeout(async () => {
+      try {
+        console.log('🔄 ===== BACKEND SAVE PROCESS STARTED =====');
+        console.log('🔄 Starting backend save process...');
+        console.log('🔄 Company ID available:', !!companyId, 'Value:', companyId);
+        console.log('🔄 Current User ID:', currentUser.id, 'Type:', typeof currentUser.id);
+        
+        if (companyId && updatedTimeValues) {
+          // Get the intern data for backend save
+          const intern = interns.find(i => i.id === internId);
+          if (intern) {
+            console.log('🔄 Backend save: Using updated time values:', {
+              name: intern.first_name + ' ' + intern.last_name,
+              amTimeIn: intern.amTimeIn,
+              amTimeOut: updatedTimeValues.amTimeOut,
+              pmTimeIn: intern.pmTimeIn,
+              pmTimeOut: updatedTimeValues.pmTimeOut,
+              totalDailyHours: updatedTimeValues.totalDailyHours
+            });
             
-            if (response && response.success) {
-              console.log('✅ Time out record saved successfully');
-              console.log('🔄 Setting success modal state...');
-              setSuccessMessage('Time out recorded successfully!');
-              setShowSuccessModal(true);
-              console.log('✅ Success modal state set - showSuccessModal should be true');
+            // Use the updated values from the stored values
+            const updatedAmTimeOut = updatedTimeValues.amTimeOut;
+            const updatedPmTimeOut = updatedTimeValues.pmTimeOut;
+            
+            console.log('🔄 DEBUG: Updated time values:', {
+              updatedAmTimeOut,
+              updatedPmTimeOut,
+              currentTime
+            });
+            
+            // Calculate total hours for backend save
+            const parseTime = (timeStr: string) => {
+              console.log('🕐 Parsing time:', timeStr);
               
-              // Refresh data to ensure UI shows latest backend data
-              setTimeout(async () => {
-                if (companyId) {
-                  console.log('🔄 Refreshing data after successful time out save');
-                  await loadTodayAttendance();
-                }
-              }, 100);
-            } else {
-              console.error('❌ Failed to save time out record:', {
-                response: response,
-                message: response?.message || 'Unknown error',
-                success: response?.success
+              // Handle empty or placeholder times
+              if (!timeStr || timeStr === '--:--' || timeStr === '' || timeStr === '00:00') {
+                console.error('❌ Invalid time format:', timeStr);
+                throw new Error(`Invalid time format: ${timeStr}`);
+              }
+              
+              const [time, period] = timeStr.split(' ');
+              const [hours, minutes] = time.split(':').map(Number);
+              let hour24 = hours;
+              if (period === 'PM' && hours !== 12) hour24 += 12;
+              if (period === 'AM' && hours === 12) hour24 = 0;
+              
+              const dateString = `2000-01-01T${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+              console.log('🕐 Created date string:', dateString);
+              
+              const date = new Date(dateString);
+              console.log('🕐 Created date object:', date, 'Valid:', !isNaN(date.getTime()));
+              
+              if (isNaN(date.getTime())) {
+                console.error('❌ Invalid date created from:', timeStr, '->', dateString);
+                throw new Error(`Invalid time format: ${timeStr}`);
+              }
+              
+              return date;
+            };
+            
+            let totalHours = 0;
+            
+            // Calculate AM session hours
+            if (intern.amTimeIn && intern.amTimeIn !== '--:--' && updatedAmTimeOut && updatedAmTimeOut !== '--:--') {
+              const amTimeInDate = parseTime(intern.amTimeIn);
+              const amTimeOutDate = parseTime(updatedAmTimeOut);
+              const amHours = Math.max(0.0167, (amTimeOutDate.getTime() - amTimeInDate.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
+              totalHours += amHours;
+              
+              console.log('🕐 AM session calculation:', {
+                amTimeIn: intern.amTimeIn,
+                amTimeOut: updatedAmTimeOut,
+                amTimeInDate: isNaN(amTimeInDate.getTime()) ? 'Invalid Date' : amTimeInDate.toISOString(),
+                amTimeOutDate: isNaN(amTimeOutDate.getTime()) ? 'Invalid Date' : amTimeOutDate.toISOString(),
+                timeDiffMs: amTimeOutDate.getTime() - amTimeInDate.getTime(),
+                amHours: amHours,
+                totalHours: totalHours
               });
-              setSuccessMessage('Failed to save time out record. Please try again.');
+            }
+            
+            // Calculate PM session hours
+            if (intern.pmTimeIn && intern.pmTimeIn !== '--:--' && updatedPmTimeOut && updatedPmTimeOut !== '--:--') {
+              const pmTimeInDate = parseTime(intern.pmTimeIn);
+              const pmTimeOutDate = parseTime(updatedPmTimeOut);
+              const pmHours = Math.max(0.0167, (pmTimeOutDate.getTime() - pmTimeInDate.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
+              totalHours += pmHours;
+              
+              console.log('🕐 PM session calculation:', {
+                pmTimeIn: intern.pmTimeIn,
+                pmTimeOut: updatedPmTimeOut,
+                pmTimeInDate: isNaN(pmTimeInDate.getTime()) ? 'Invalid Date' : pmTimeInDate.toISOString(),
+                pmTimeOutDate: isNaN(pmTimeOutDate.getTime()) ? 'Invalid Date' : pmTimeOutDate.toISOString(),
+                timeDiffMs: pmTimeOutDate.getTime() - pmTimeInDate.getTime(),
+                pmHours: pmHours,
+                totalHours: totalHours
+              });
+            }
+            
+            console.log('🕐 Time out calculation for backend save:', {
+              currentTime,
+              updatedAmTimeOut,
+              updatedPmTimeOut,
+              totalHours,
+              totalHoursType: typeof totalHours,
+              totalHoursIsNaN: isNaN(totalHours)
+            });
+            
+            // Prepare attendance data for backend
+            const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            console.log('📅 Date calculation for attendance:', {
+              currentDate: currentDate,
+              currentTime: new Date().toISOString(),
+              manilaTime: new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })
+            });
+            
+            const attendanceData = {
+              internId: intern.student_id,
+              attendanceDate: currentDate,
+              status: (updatedTimeValues.currentAttendanceStatus === 'not_marked' ? 'present' : updatedTimeValues.currentAttendanceStatus) as 'present' | 'absent' | 'late' | 'leave' | 'sick',
+              amTimeIn: intern.amTimeIn || '--:--',
+              amTimeOut: updatedAmTimeOut || '--:--',
+              pmTimeIn: intern.pmTimeIn || '--:--',
+              pmTimeOut: updatedPmTimeOut || '--:--',
+              amStatus: intern.amStatus || 'not_marked',
+              pmStatus: intern.pmStatus || 'not_marked',
+              totalHours: totalHours,
+              totalDailyHours: updatedTimeValues.totalDailyHours,
+              remainingHours: updatedTimeValues.remainingHours,
+              remainingDays: updatedTimeValues.remainingDays
+            };
+            
+            console.log('📊 Saving time out record:', {
+              internId: attendanceData.internId,
+              attendanceDate: attendanceData.attendanceDate,
+              amTimeIn: attendanceData.amTimeIn,
+              amTimeOut: attendanceData.amTimeOut,
+              pmTimeIn: attendanceData.pmTimeIn,
+              pmTimeOut: attendanceData.pmTimeOut,
+              amStatus: attendanceData.amStatus,
+              pmStatus: attendanceData.pmStatus,
+              totalHours: attendanceData.totalHours
+            });
+            
+            try {
+              console.log('📊 ===== MAKING API CALL =====');
+              console.log('📊 Making API call to save attendance record...');
+              console.log('📊 API Call Details:', {
+                companyId: companyId,
+                userId: currentUser.id,
+                attendanceData: attendanceData
+              });
+              
+              const response = await apiService.saveAttendanceRecord(companyId, currentUser.id, attendanceData);
+              console.log('📊 ===== API RESPONSE RECEIVED =====');
+              console.log('📊 API Response received:', response);
+              console.log('📊 Response type:', typeof response);
+              console.log('📊 Response keys:', response ? Object.keys(response) : 'No response object');
+              
+              if (response && response.success) {
+                console.log('✅ ===== BACKEND SAVE SUCCESSFUL =====');
+                console.log('✅ Time out record saved successfully');
+                console.log('✅ Response details:', response);
+                
+                setSuccessMessage(`Time out recorded at ${currentTime}`);
+                setShowSuccessModal(true);
+                
+                // Refresh attendance data to ensure UI shows latest backend data
+                await refreshAttendanceData();
+              } else {
+                console.log('❌ ===== BACKEND SAVE FAILED =====');
+                console.log('❌ Response indicates failure:', response);
+                setSuccessMessage('Failed to save time out record. Please try again.');
+                setShowSuccessModal(true);
+              }
+            } catch (apiError) {
+              console.error('❌ ===== API CALL ERROR =====');
+              console.error('❌ API call failed:', apiError);
+              console.error('❌ Error type:', typeof apiError);
+              console.error('❌ Error message:', apiError instanceof Error ? apiError.message : 'Unknown error');
+              console.error('❌ Error stack:', apiError instanceof Error ? apiError.stack : 'No stack trace');
+              setSuccessMessage('Network error. Please check your connection and try again.');
               setShowSuccessModal(true);
             }
-          } catch (apiError) {
-            console.error('❌ API call failed:', apiError);
-            setSuccessMessage('Network error. Please check your connection and try again.');
-            setShowSuccessModal(true);
           }
+        } else {
+          console.log('📊 Company ID not available, skipping backend save');
         }
-      } else {
-        console.log('📊 Company ID not available, skipping backend save');
+      } catch (error) {
+        console.error('❌ ===== MAIN TIMEOUT ERROR =====');
+        console.error('📊 Error saving time out record:', error);
+        console.error('❌ Error type:', typeof error);
+        console.error('❌ Error message:', error instanceof Error ? error.message : 'Unknown error');
+        console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       }
-    } catch (error) {
-      console.error('📊 Error saving time out record:', error);
-    }
+    }, 100); // Small delay to ensure state is updated
     
     // Check if work is completed for the day and show action buttons again
     setTimeout(() => {
@@ -1312,9 +1373,6 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         });
         
         if (isWorkCompleted) {
-          // Mark work as completed for this intern
-          setWorkCompletedInterns(prev => new Set([...prev, internId]));
-          
           // Show completion alert
           setSuccessMessage(`Today's work is done for ${updatedIntern.first_name} ${updatedIntern.last_name}! 🎉`);
           setShowSuccessModal(true);
@@ -1326,12 +1384,6 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             hasAnyValidSession
           });
         } else {
-          // Work not completed yet, show action buttons again
-          setWorkCompletedInterns(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(internId);
-            return newSet;
-          });
           console.log('⏰ Work not completed yet, action buttons should be visible');
         }
       }
@@ -1422,78 +1474,175 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     return isWorkingTime && !isBreakTime;
   };
 
+  // Check if current time is within AM working hours (before break)
+  const isWithinAMWorkingHours = () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    const startMinutes = convertTo24Hour(workingHours.startTime, workingHours.startPeriod);
+    const breakStartMinutes = convertTo24Hour(workingHours.breakStart, workingHours.breakStartPeriod);
+    
+    const currentMinutes = currentHour * 60 + currentMinute;
+    
+    return currentMinutes >= startMinutes && currentMinutes < breakStartMinutes;
+  };
+
+  // Check if current time is within PM working hours (after break)
+  const isWithinPMWorkingHours = () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    const breakEndMinutes = convertTo24Hour(workingHours.breakEnd, workingHours.breakEndPeriod);
+    const endMinutes = convertTo24Hour(workingHours.endTime, workingHours.endPeriod);
+    
+    const currentMinutes = currentHour * 60 + currentMinute;
+    
+    return currentMinutes >= breakEndMinutes && currentMinutes <= endMinutes;
+  };
+
+  // Check if AM session is completed (has both time in and time out)
+  const isAMSessionCompleted = (intern: Intern) => {
+    // AM session is completed if:
+    // 1. Present/Late: has both time in and time out
+    // 2. Absent/Leave: has status but no time tracking needed
+    const hasTimeTracking = intern.amTimeIn && intern.amTimeOut && 
+                           intern.amTimeOut !== '' && intern.amTimeOut !== '--:--';
+    const hasStatusOnly = intern.amStatus && 
+                         (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick');
+    
+    return hasTimeTracking || hasStatusOnly;
+  };
+
+  // Check if PM session is completed (has both time in and time out)
+  const isPMSessionCompleted = (intern: Intern) => {
+    // PM session is completed if:
+    // 1. Present/Late: has both time in and time out
+    // 2. Absent/Leave: has status but no time tracking needed
+    const hasTimeTracking = intern.pmTimeIn && intern.pmTimeOut && 
+                           intern.pmTimeOut !== '' && intern.pmTimeOut !== '--:--';
+    const hasStatusOnly = intern.pmStatus && 
+                         (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick');
+    
+    return hasTimeTracking || hasStatusOnly;
+  };
+
+  // Check if the selected date is today
+  const isSelectedDateToday = () => {
+    const today = new Date();
+    const selected = new Date(selectedDate);
+    
+    return today.getFullYear() === selected.getFullYear() &&
+           today.getMonth() === selected.getMonth() &&
+           today.getDate() === selected.getDate();
+  };
+
+  // Check if AM session is in progress (has time in but no time out)
+  const isAMSessionInProgress = (intern: Intern) => {
+    return intern.amTimeIn && (!intern.amTimeOut || intern.amTimeOut === '' || intern.amTimeOut === '--:--');
+  };
+
+  // Check if PM session is in progress (has time in but no time out)
+  const isPMSessionInProgress = (intern: Intern) => {
+    return intern.pmTimeIn && (!intern.pmTimeOut || intern.pmTimeOut === '' || intern.pmTimeOut === '--:--');
+  };
+
   const isButtonDisabled = (intern: Intern, buttonType: 'present' | 'absent' | 'late' | 'leave') => {
-    const currentStatus = intern.currentAttendanceStatus;
-    
-    // Check if outside working hours
-    if (!isWithinWorkingHours()) {
-      return true; // Disable all buttons outside working hours
+    // Check if work is fully completed (both AM and PM sessions done)
+    if (isAMSessionCompleted(intern) && isPMSessionCompleted(intern)) {
+      return true; // Disable all buttons when work is done
     }
     
-    // If intern is present or late and has time in but no time out, disable attendance buttons
-    if ((currentStatus === 'present' || currentStatus === 'late')) {
-      const hasAMTimeIn = intern.amTimeIn && !intern.amTimeOut;
-      const hasPMTimeIn = intern.pmTimeIn && !intern.pmTimeOut;
-      
-      if (hasAMTimeIn || hasPMTimeIn) {
-      return true; // All attendance buttons disabled until time out
-      }
-    }
+    // Determine which session we're in based on current time
+    const isAMTime = isWithinAMWorkingHours();
+    const isPMTime = isWithinPMWorkingHours();
     
-    // If intern is absent, leave, or sick, disable all buttons (no time out needed)
-    if (currentStatus === 'absent' || currentStatus === 'leave' || currentStatus === 'sick') {
+    // If neither AM nor PM working hours, disable all buttons
+    if (!isAMTime && !isPMTime) {
       return true;
     }
     
-    // If no status is set, enable all buttons
+    // AM Session Logic
+    if (isAMTime) {
+      // If AM session is already completed, disable AM buttons
+      if (isAMSessionCompleted(intern)) {
+        return true;
+      }
+      
+      // If AM session is in progress (time in but no time out), disable AM buttons
+      if (isAMSessionInProgress(intern)) {
+        return true;
+      }
+      
+      // If intern has AM status (absent/leave/sick), disable AM buttons
+      if (intern.amStatus && 
+          (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick')) {
+        return true;
+      }
+    }
+    
+    // PM Session Logic - PM buttons work independently of AM status
+    if (isPMTime) {
+      // If PM session is already completed, disable PM buttons
+      if (isPMSessionCompleted(intern)) {
+        return true;
+      }
+      
+      // If PM session is in progress (time in but no time out), disable PM buttons
+      if (isPMSessionInProgress(intern)) {
+        return true;
+      }
+      
+      // If intern has PM status (absent/leave/sick), disable PM buttons
+      if (intern.pmStatus && 
+          (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick')) {
+        return true;
+      }
+    }
+    
+    // Enable buttons if we're in the appropriate working hours and session is not completed/in progress
     return false;
   };
 
   const handleDisabledButtonPress = (intern: Intern, buttonType: 'present' | 'absent' | 'late' | 'leave') => {
-    const currentStatus = intern.currentAttendanceStatus;
     let reason = '';
     
-    // Check if outside working hours
-    if (!isWithinWorkingHours()) {
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentTimeString = now.toLocaleTimeString('en-US', {
-        timeZone: 'Asia/Manila',
-        hour12: true,
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+    // Check if work is fully completed
+    if (isAMSessionCompleted(intern) && isPMSessionCompleted(intern)) {
+      reason = `${intern.first_name} ${intern.last_name} has completed work for today. Both AM and PM sessions are finished.`;
+    } else {
+      // Check if outside working hours
+      const isAMTime = isWithinAMWorkingHours();
+      const isPMTime = isWithinPMWorkingHours();
       
-      // Check if it's break time
-      const startMinutes = convertTo24Hour(workingHours.startTime, workingHours.startPeriod);
-      const endMinutes = convertTo24Hour(workingHours.endTime, workingHours.endPeriod);
-      const breakStartMinutes = convertTo24Hour(workingHours.breakStart, workingHours.breakStartPeriod);
-      const breakEndMinutes = convertTo24Hour(workingHours.breakEnd, workingHours.breakEndPeriod);
-      const currentMinutes = currentHour * 60 + currentMinute;
-      
-      const isBreakTime = currentMinutes >= breakStartMinutes && currentMinutes <= breakEndMinutes;
-      const isBeforeWork = currentMinutes < startMinutes;
-      const isAfterWork = currentMinutes > endMinutes;
-      
-      if (isBreakTime) {
-        reason = `Attendance is disabled during break time (${workingHours.breakStart} ${workingHours.breakStartPeriod} - ${workingHours.breakEnd} ${workingHours.breakEndPeriod}).\n\nCurrent time: ${currentTimeString}`;
-      } else if (isBeforeWork) {
-        reason = `Attendance is disabled before working hours.\n\nWorking hours: ${workingHours.startTime} ${workingHours.startPeriod} - ${workingHours.endTime} ${workingHours.endPeriod}\nCurrent time: ${currentTimeString}`;
-      } else if (isAfterWork) {
-        reason = `Attendance is disabled after working hours.\n\nWorking hours: ${workingHours.startTime} ${workingHours.startPeriod} - ${workingHours.endTime} ${workingHours.endPeriod}\nCurrent time: ${currentTimeString}`;
-      } else {
-        reason = `Attendance is disabled outside working hours.\n\nWorking hours: ${workingHours.startTime} ${workingHours.startPeriod} - ${workingHours.endTime} ${workingHours.endPeriod}\nCurrent time: ${currentTimeString}`;
+      if (!isAMTime && !isPMTime) {
+        const now = new Date();
+        const currentTimeString = now.toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Manila',
+          hour12: true,
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        reason = `Attendance is disabled outside working hours.\n\nAM Session: ${workingHours.startTime} ${workingHours.startPeriod} - ${workingHours.breakStart} ${workingHours.breakStartPeriod}\nPM Session: ${workingHours.breakEnd} ${workingHours.breakEndPeriod} - ${workingHours.endTime} ${workingHours.endPeriod}\nCurrent time: ${currentTimeString}`;
+      } else if (isAMTime) {
+        if (isAMSessionCompleted(intern)) {
+          reason = `${intern.first_name} ${intern.last_name} has already completed the AM session. PM session will be available at ${workingHours.breakEnd} ${workingHours.breakEndPeriod}.`;
+        } else if (isAMSessionInProgress(intern)) {
+          reason = `${intern.first_name} ${intern.last_name} is already clocked in for AM session. Please clock out first before changing attendance status.`;
+        } else if (intern.amStatus && (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick')) {
+          reason = `${intern.first_name} ${intern.last_name} is marked as ${intern.amStatus} for AM session. PM session will be available at ${workingHours.breakEnd} ${workingHours.breakEndPeriod}.`;
+        }
+      } else if (isPMTime) {
+        if (isPMSessionCompleted(intern)) {
+          reason = `${intern.first_name} ${intern.last_name} has already completed the PM session. Work is done for today!`;
+        } else if (isPMSessionInProgress(intern)) {
+          reason = `${intern.first_name} ${intern.last_name} is already clocked in for PM session. Please clock out first before changing attendance status.`;
+        } else if (intern.pmStatus && (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick')) {
+          reason = `${intern.first_name} ${intern.last_name} is marked as ${intern.pmStatus} for PM session.`;
+        }
       }
-    } else if ((currentStatus === 'present' || currentStatus === 'late')) {
-      const hasAMTimeIn = intern.amTimeIn && !intern.amTimeOut;
-      const hasPMTimeIn = intern.pmTimeIn && !intern.pmTimeOut;
-      
-      if (hasAMTimeIn || hasPMTimeIn) {
-        reason = `${intern.first_name} ${intern.last_name} is already clocked in. Please clock out first before changing attendance status.`;
-      }
-    } else if (currentStatus === 'absent' || currentStatus === 'leave' || currentStatus === 'sick') {
-      reason = `${intern.first_name} ${intern.last_name} is marked as ${currentStatus}. Cannot change attendance status.`;
     }
     
     setDisabledReason(reason);
@@ -1619,26 +1768,36 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
 
 
   const renderMobileCard = (intern: Intern, index: number) => {
-    const hasAMTimeIn = intern.amTimeIn && (!intern.amTimeOut || intern.amTimeOut === '');
-    const hasPMTimeIn = intern.pmTimeIn && (!intern.pmTimeOut || intern.pmTimeOut === '');
+    const hasAMTimeIn = intern.amTimeIn && intern.amTimeIn !== '--:--' && (!intern.amTimeOut || intern.amTimeOut === '' || intern.amTimeOut === '--:--');
+    const hasPMTimeIn = intern.pmTimeIn && intern.pmTimeIn !== '--:--' && (!intern.pmTimeOut || intern.pmTimeOut === '' || intern.pmTimeOut === '--:--');
     const hasAnyTimeIn = intern.amTimeIn || intern.pmTimeIn;
-    const isFullyCompleted = intern.amTimeIn && intern.amTimeOut && intern.pmTimeIn && intern.pmTimeOut && 
-      intern.amTimeOut !== '' && intern.pmTimeOut !== '';
+    const isFullyCompleted = isAMSessionCompleted(intern) && isPMSessionCompleted(intern);
+    const isPMAbsent = intern.pmStatus && (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick');
+    const isAMAbsent = intern.amStatus && (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick');
     
     console.log('🔍 Button visibility check for intern:', {
       name: intern.first_name + ' ' + intern.last_name,
       hasAnyTimeIn,
       isFullyCompleted,
-      workCompleted: workCompletedInterns.has(intern.id),
       amTimeIn: intern.amTimeIn,
       amTimeOut: intern.amTimeOut,
       pmTimeIn: intern.pmTimeIn,
       pmTimeOut: intern.pmTimeOut,
-      shouldShowButtons: !hasAnyTimeIn && !isFullyCompleted && !workCompletedInterns.has(intern.id)
+      shouldShowButtons: !hasAnyTimeIn && !isFullyCompleted
     });
     
     // Calculate total hours for the day
     const calculateTotalHours = () => {
+      // Check if any session (AM or PM) is completed
+      const amCompleted = intern.amTimeIn && intern.amTimeOut && intern.amTimeIn !== '--:--' && intern.amTimeOut !== '--:--';
+      const pmCompleted = intern.pmTimeIn && intern.pmTimeOut && intern.pmTimeIn !== '--:--' && intern.pmTimeOut !== '--:--';
+      
+      // Only show work done if at least one session is completed
+      if (!amCompleted && !pmCompleted) {
+        console.log('🔢 No sessions completed, returning 0');
+        return 0;
+      }
+      
       console.log('🔢 calculateTotalHours for intern:', {
         name: intern.first_name + ' ' + intern.last_name,
         totalDailyHours: intern.totalDailyHours,
@@ -1656,7 +1815,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       
       // Fallback calculation if totalDailyHours is not available
       let total = 0;
-      if (intern.amTimeIn && intern.amTimeOut && intern.amTimeIn !== '--:--' && intern.amTimeOut !== '--:--') {
+      if (amCompleted) {
         const parseTime = (timeStr: string) => {
           const [time, period] = timeStr.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
@@ -1667,15 +1826,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         };
         
         try {
-        const amIn = parseTime(intern.amTimeIn);
-        const amOut = parseTime(intern.amTimeOut);
-        total += Math.max(0, (amOut.getTime() - amIn.getTime()) / (1000 * 60 * 60));
+        const amIn = parseTime(intern.amTimeIn!);
+        const amOut = parseTime(intern.amTimeOut!);
+        total += Math.max(0.0167, (amOut.getTime() - amIn.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
         } catch (error) {
           console.warn('Error parsing AM times:', error);
       }
       }
       
-      if (intern.pmTimeIn && intern.pmTimeOut && intern.pmTimeIn !== '--:--' && intern.pmTimeOut !== '--:--') {
+      if (pmCompleted) {
         const parseTime = (timeStr: string) => {
           const [time, period] = timeStr.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
@@ -1686,14 +1845,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         };
         
         try {
-        const pmIn = parseTime(intern.pmTimeIn);
-        const pmOut = parseTime(intern.pmTimeOut);
-        total += Math.max(0, (pmOut.getTime() - pmIn.getTime()) / (1000 * 60 * 60));
+        const pmIn = parseTime(intern.pmTimeIn!);
+        const pmOut = parseTime(intern.pmTimeOut!);
+        total += Math.max(0.0167, (pmOut.getTime() - pmIn.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
         } catch (error) {
           console.warn('Error parsing PM times:', error);
       }
       }
       
+      console.log('🔢 Final calculated total hours:', total);
       return total;
     };
 
@@ -1784,7 +1944,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       
       
         {/* Action Buttons - Modern Mobile Layout */}
-        {!hasAnyTimeIn && !isFullyCompleted && !workCompletedInterns.has(intern.id) && (
+        {!isFullyCompleted && isSelectedDateToday() && (
           <View style={styles.mobileActionsSection}>
             <View style={styles.mobileButtonsGrid}>
               <TouchableOpacity
@@ -1859,6 +2019,17 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
           </View>
         )}
 
+        {/* Show View Only message when selected date is not today */}
+        {!isSelectedDateToday() && (
+          <View style={styles.mobileActionsSection}>
+            <View style={styles.dateRestrictionContainer}>
+              <View style={styles.dateRestrictionBadge}>
+                <Text style={styles.dateRestrictionText}>View Only</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Detail Arrow Button */}
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity
@@ -1870,7 +2041,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         </View>
 
         {/* Time Out Button - Show if there's a time in but no time out and work not completed */}
-        {hasAnyTimeIn && !workCompletedInterns.has(intern.id) && (
+        {hasAnyTimeIn && !isFullyCompleted && !isPMAbsent && !isAMAbsent && (
           <View style={styles.mobileActionsSection}>
             <TouchableOpacity
               style={[styles.mobileActionButton, styles.timeOutActionButton]}
@@ -1883,7 +2054,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         )}
 
         {/* Work Completed Message - Show if work is completed */}
-        {workCompletedInterns.has(intern.id) && (
+        {isFullyCompleted && (
           <View style={styles.mobileActionsSection}>
             <View style={styles.workCompletedCard}>
               <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
@@ -1896,26 +2067,36 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
   };
 
   const renderTabletCard = (intern: Intern, index: number) => {
-    const hasAMTimeIn = intern.amTimeIn && (!intern.amTimeOut || intern.amTimeOut === '');
-    const hasPMTimeIn = intern.pmTimeIn && (!intern.pmTimeOut || intern.pmTimeOut === '');
+    const hasAMTimeIn = intern.amTimeIn && intern.amTimeIn !== '--:--' && (!intern.amTimeOut || intern.amTimeOut === '' || intern.amTimeOut === '--:--');
+    const hasPMTimeIn = intern.pmTimeIn && intern.pmTimeIn !== '--:--' && (!intern.pmTimeOut || intern.pmTimeOut === '' || intern.pmTimeOut === '--:--');
     const hasAnyTimeIn = intern.amTimeIn || intern.pmTimeIn;
-    const isFullyCompleted = intern.amTimeIn && intern.amTimeOut && intern.pmTimeIn && intern.pmTimeOut && 
-      intern.amTimeOut !== '' && intern.pmTimeOut !== '';
+    const isFullyCompleted = isAMSessionCompleted(intern) && isPMSessionCompleted(intern);
+    const isPMAbsent = intern.pmStatus && (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick');
+    const isAMAbsent = intern.amStatus && (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick');
     
     console.log('🔍 Button visibility check for intern:', {
       name: intern.first_name + ' ' + intern.last_name,
       hasAnyTimeIn,
       isFullyCompleted,
-      workCompleted: workCompletedInterns.has(intern.id),
       amTimeIn: intern.amTimeIn,
       amTimeOut: intern.amTimeOut,
       pmTimeIn: intern.pmTimeIn,
       pmTimeOut: intern.pmTimeOut,
-      shouldShowButtons: !hasAnyTimeIn && !isFullyCompleted && !workCompletedInterns.has(intern.id)
+      shouldShowButtons: !hasAnyTimeIn && !isFullyCompleted
     });
     
     // Calculate total hours for the day
     const calculateTotalHours = () => {
+      // Check if any session (AM or PM) is completed
+      const amCompleted = intern.amTimeIn && intern.amTimeOut && intern.amTimeIn !== '--:--' && intern.amTimeOut !== '--:--';
+      const pmCompleted = intern.pmTimeIn && intern.pmTimeOut && intern.pmTimeIn !== '--:--' && intern.pmTimeOut !== '--:--';
+      
+      // Only show work done if at least one session is completed
+      if (!amCompleted && !pmCompleted) {
+        console.log('🔢 No sessions completed, returning 0');
+        return 0;
+      }
+      
       console.log('🔢 calculateTotalHours for intern:', {
         name: intern.first_name + ' ' + intern.last_name,
         totalDailyHours: intern.totalDailyHours,
@@ -1933,7 +2114,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       
       // Fallback calculation if totalDailyHours is not available
       let total = 0;
-      if (intern.amTimeIn && intern.amTimeOut && intern.amTimeIn !== '--:--' && intern.amTimeOut !== '--:--') {
+      if (amCompleted) {
         const parseTime = (timeStr: string) => {
           const [time, period] = timeStr.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
@@ -1944,15 +2125,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         };
         
         try {
-        const amIn = parseTime(intern.amTimeIn);
-        const amOut = parseTime(intern.amTimeOut);
-        total += Math.max(0, (amOut.getTime() - amIn.getTime()) / (1000 * 60 * 60));
+        const amIn = parseTime(intern.amTimeIn!);
+        const amOut = parseTime(intern.amTimeOut!);
+        total += Math.max(0.0167, (amOut.getTime() - amIn.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
         } catch (error) {
           console.warn('Error parsing AM times:', error);
       }
       }
       
-      if (intern.pmTimeIn && intern.pmTimeOut && intern.pmTimeIn !== '--:--' && intern.pmTimeOut !== '--:--') {
+      if (pmCompleted) {
         const parseTime = (timeStr: string) => {
           const [time, period] = timeStr.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
@@ -1963,14 +2144,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         };
         
         try {
-        const pmIn = parseTime(intern.pmTimeIn);
-        const pmOut = parseTime(intern.pmTimeOut);
-        total += Math.max(0, (pmOut.getTime() - pmIn.getTime()) / (1000 * 60 * 60));
+        const pmIn = parseTime(intern.pmTimeIn!);
+        const pmOut = parseTime(intern.pmTimeOut!);
+        total += Math.max(0.0167, (pmOut.getTime() - pmIn.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
         } catch (error) {
           console.warn('Error parsing PM times:', error);
       }
       }
       
+      console.log('🔢 Final calculated total hours:', total);
       return total;
     };
 
@@ -2064,7 +2246,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
 
         {/* Action Buttons - Modern Layout */}
         <View style={styles.tabletActionsSection}>
-          {!hasAnyTimeIn && !isFullyCompleted && !workCompletedInterns.has(intern.id) ? (
+          {!isFullyCompleted && isSelectedDateToday() ? (
             <View style={styles.tabletButtonsGrid}>
               <View style={styles.tabletButtonRow}>
                 <TouchableOpacity
@@ -2139,7 +2321,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 </TouchableOpacity>
               </View>
             </View>
-          ) : hasAnyTimeIn && !workCompletedInterns.has(intern.id) ? (
+          ) : hasAnyTimeIn && !isFullyCompleted && !isPMAbsent && !isAMAbsent ? (
             <TouchableOpacity
               style={[styles.tabletActionButton, styles.timeOutActionButton]}
               onPress={() => handleTimeOut(intern.id)}
@@ -2147,7 +2329,13 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               <MaterialIcons name="logout" size={16} color="#fff" />
               <Text style={styles.timeOutButtonText}>Time Out</Text>
             </TouchableOpacity>
-          ) : workCompletedInterns.has(intern.id) ? (
+          ) : !isSelectedDateToday() ? (
+            <View style={styles.dateRestrictionContainer}>
+              <View style={styles.dateRestrictionBadge}>
+                <Text style={styles.dateRestrictionText}>View Only</Text>
+              </View>
+            </View>
+          ) : isFullyCompleted ? (
             <View style={styles.workCompletedCard}>
               <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
               <Text style={styles.workCompletedTextSmall}>Work Done! 🎉</Text>
@@ -2189,26 +2377,36 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
   };
 
   const renderTableRow = ({ item: intern, index }: { item: Intern, index: number }) => {
-    const hasAMTimeIn = intern.amTimeIn && (!intern.amTimeOut || intern.amTimeOut === '');
-    const hasPMTimeIn = intern.pmTimeIn && (!intern.pmTimeOut || intern.pmTimeOut === '');
+    const hasAMTimeIn = intern.amTimeIn && intern.amTimeIn !== '--:--' && (!intern.amTimeOut || intern.amTimeOut === '' || intern.amTimeOut === '--:--');
+    const hasPMTimeIn = intern.pmTimeIn && intern.pmTimeIn !== '--:--' && (!intern.pmTimeOut || intern.pmTimeOut === '' || intern.pmTimeOut === '--:--');
     const hasAnyTimeIn = intern.amTimeIn || intern.pmTimeIn;
-    const isFullyCompleted = intern.amTimeIn && intern.amTimeOut && intern.pmTimeIn && intern.pmTimeOut && 
-      intern.amTimeOut !== '' && intern.pmTimeOut !== '';
+    const isFullyCompleted = isAMSessionCompleted(intern) && isPMSessionCompleted(intern);
+    const isPMAbsent = intern.pmStatus && (intern.pmStatus === 'absent' || intern.pmStatus === 'leave' || intern.pmStatus === 'sick');
+    const isAMAbsent = intern.amStatus && (intern.amStatus === 'absent' || intern.amStatus === 'leave' || intern.amStatus === 'sick');
     
     console.log('🔍 Button visibility check for intern:', {
       name: intern.first_name + ' ' + intern.last_name,
       hasAnyTimeIn,
       isFullyCompleted,
-      workCompleted: workCompletedInterns.has(intern.id),
       amTimeIn: intern.amTimeIn,
       amTimeOut: intern.amTimeOut,
       pmTimeIn: intern.pmTimeIn,
       pmTimeOut: intern.pmTimeOut,
-      shouldShowButtons: !hasAnyTimeIn && !isFullyCompleted && !workCompletedInterns.has(intern.id)
+      shouldShowButtons: !hasAnyTimeIn && !isFullyCompleted
     });
     
     // Calculate total hours for the day
     const calculateTotalHours = () => {
+      // Check if any session (AM or PM) is completed
+      const amCompleted = intern.amTimeIn && intern.amTimeOut && intern.amTimeIn !== '--:--' && intern.amTimeOut !== '--:--';
+      const pmCompleted = intern.pmTimeIn && intern.pmTimeOut && intern.pmTimeIn !== '--:--' && intern.pmTimeOut !== '--:--';
+      
+      // Only show work done if at least one session is completed
+      if (!amCompleted && !pmCompleted) {
+        console.log('🔢 No sessions completed, returning 0');
+        return 0;
+      }
+      
       console.log('🔢 calculateTotalHours for intern:', {
         name: intern.first_name + ' ' + intern.last_name,
         totalDailyHours: intern.totalDailyHours,
@@ -2226,7 +2424,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       
       // Fallback calculation if totalDailyHours is not available
       let total = 0;
-      if (intern.amTimeIn && intern.amTimeOut && intern.amTimeIn !== '--:--' && intern.amTimeOut !== '--:--') {
+      if (amCompleted) {
         const parseTime = (timeStr: string) => {
           const [time, period] = timeStr.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
@@ -2237,15 +2435,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         };
         
         try {
-        const amIn = parseTime(intern.amTimeIn);
-        const amOut = parseTime(intern.amTimeOut);
-        total += Math.max(0, (amOut.getTime() - amIn.getTime()) / (1000 * 60 * 60));
+        const amIn = parseTime(intern.amTimeIn!);
+        const amOut = parseTime(intern.amTimeOut!);
+        total += Math.max(0.0167, (amOut.getTime() - amIn.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
         } catch (error) {
           console.warn('Error parsing AM times:', error);
       }
       }
       
-      if (intern.pmTimeIn && intern.pmTimeOut && intern.pmTimeIn !== '--:--' && intern.pmTimeOut !== '--:--') {
+      if (pmCompleted) {
         const parseTime = (timeStr: string) => {
           const [time, period] = timeStr.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
@@ -2256,14 +2454,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         };
         
         try {
-        const pmIn = parseTime(intern.pmTimeIn);
-        const pmOut = parseTime(intern.pmTimeOut);
-        total += Math.max(0, (pmOut.getTime() - pmIn.getTime()) / (1000 * 60 * 60));
+        const pmIn = parseTime(intern.pmTimeIn!);
+        const pmOut = parseTime(intern.pmTimeOut!);
+        total += Math.max(0.0167, (pmOut.getTime() - pmIn.getTime()) / (1000 * 60 * 60)); // Minimum 1 minute
         } catch (error) {
           console.warn('Error parsing PM times:', error);
       }
       }
       
+      console.log('🔢 Final calculated total hours:', total);
       return total;
     };
 
@@ -2358,8 +2557,26 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         <View style={[styles.cell, { flex: 1.2 }]}>
           <View style={styles.actionButtonsContainer}>
             
-            {/* Show status buttons only if no time in or fully completed */}
-            {!hasAnyTimeIn && !isFullyCompleted && !workCompletedInterns.has(intern.id) && (
+            {/* Show Work Done status if both sessions are completed */}
+            {isFullyCompleted && (
+              <View style={styles.workDoneContainer}>
+                <View style={styles.workDoneBadge}>
+                  <Text style={styles.workDoneText}>Work Done</Text>
+                </View>
+              </View>
+            )}
+            
+            {/* Show message when selected date is not today */}
+            {!isSelectedDateToday() && (
+              <View style={styles.dateRestrictionContainer}>
+                <View style={styles.dateRestrictionBadge}>
+                  <Text style={styles.dateRestrictionText}>View Only</Text>
+                </View>
+              </View>
+            )}
+            
+            {/* Show status buttons only if not fully completed and selected date is today */}
+            {!isFullyCompleted && isSelectedDateToday() && (
               <View style={styles.buttonsGrid}>
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
@@ -2433,17 +2650,27 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             )}
             
             {/* Show Time Out button if there's a time in but no time out and work not completed */}
-            {hasAnyTimeIn && !workCompletedInterns.has(intern.id) && (
-              <TouchableOpacity
-                style={[styles.attendanceActionButton, styles.timeOutActionButton]}
-                onPress={() => handleTimeOut(intern.id)}
-              >
-                <Text style={styles.timeOutButtonText}>Time Out</Text>
-              </TouchableOpacity>
+            {hasAnyTimeIn && !isFullyCompleted && !isPMAbsent && !isAMAbsent && (
+              <View style={styles.timeOutContainer}>
+                <TouchableOpacity
+                  style={[styles.attendanceActionButton, styles.timeOutActionButton]}
+                  onPress={() => handleTimeOut(intern.id)}
+                >
+                  <Text style={styles.timeOutButtonText}>Time Out</Text>
+                </TouchableOpacity>
+                
+                {/* Detail View Arrow - positioned below Time Out button */}
+                <TouchableOpacity
+                  style={styles.detailArrowButton}
+                  onPress={() => openDetailPanel(intern)}
+                >
+                  <MaterialIcons name="arrow-back" size={16} color="#1E3A5F" />
+                </TouchableOpacity>
+              </View>
             )}
             
             {/* Show work completed message if work is done */}
-            {workCompletedInterns.has(intern.id) && (
+            {isFullyCompleted && (
               <View style={styles.workCompletedCard}>
                 <MaterialIcons name="check-circle" size={14} color="#4CAF50" />
                 <Text style={styles.workCompletedTextSmall}>Work Done! 🎉</Text>
@@ -2451,7 +2678,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             )}
             
             {/* Show final status if fully completed but work not marked as completed */}
-            {isFullyCompleted && !workCompletedInterns.has(intern.id) && (
+            {isFullyCompleted && (
               <View style={[
                 styles.finalStatusBadge, 
                 { 
@@ -2473,13 +2700,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               </View>
             )}
             
-            {/* Detail View Arrow */}
-          <TouchableOpacity
-              style={styles.detailArrowButton}
-              onPress={() => openDetailPanel(intern)}
-          >
-              <MaterialIcons name="arrow-back" size={16} color="#1E3A5F" />
-          </TouchableOpacity>
+            {/* Detail View Arrow - for cases without Time Out button */}
+            {!hasAnyTimeIn && (
+              <TouchableOpacity
+                style={styles.detailArrowButton}
+                onPress={() => openDetailPanel(intern)}
+              >
+                <MaterialIcons name="arrow-back" size={16} color="#1E3A5F" />
+              </TouchableOpacity>
+            )}
         </View>
                   </View>
       </View>
@@ -2718,113 +2947,6 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 </View>
               </View>
             </Modal>
-          </View>
-          <View style={[
-            styles.headerRight,
-            isSmallMobile && styles.smallMobileHeaderRight,
-            isTablet && styles.tabletHeaderRight,
-            isDesktop && styles.desktopHeaderRight
-          ]}>
-            <View style={[
-              styles.clockContainer,
-              isSmallMobile && styles.smallMobileClockContainer,
-              isTablet && styles.tabletClockContainer,
-              isDesktop && styles.desktopClockContainer
-            ]}>
-              <View style={[
-                styles.analogClock,
-                isSmallMobile && styles.smallMobileAnalogClock,
-                isTablet && styles.tabletAnalogClock,
-                isDesktop && styles.desktopAnalogClock
-              ]}>
-                {/* Clock Face */}
-                <View style={[
-                  styles.clockFace,
-                  isSmallMobile && styles.smallMobileClockFace,
-                  isTablet && styles.tabletClockFace,
-                  isDesktop && styles.desktopClockFace
-                ]}>
-                  
-                  {/* Hour Hand */}
-                  <View
-                    style={[
-                      styles.hourHand,
-                      isSmallMobile && styles.smallMobileHourHand,
-                      isTablet && styles.tabletHourHand,
-                      {
-                        transform: [
-                          { rotate: `${(currentTime.getHours() % 12) * 30 + (currentTime.getMinutes() * 0.5)}deg` }
-                        ],
-                      },
-                    ]}
-                  />
-                  
-                  {/* Minute Hand */}
-                  <View
-                    style={[
-                      styles.minuteHand,
-                      isSmallMobile && styles.smallMobileMinuteHand,
-                      isTablet && styles.tabletMinuteHand,
-                      {
-                        transform: [
-                          { rotate: `${currentTime.getMinutes() * 6 + (currentTime.getSeconds() * 0.1)}deg` }
-                        ],
-                      },
-                    ]}
-                  />
-                  
-                  {/* Second Hand */}
-                  <View
-                    style={[
-                      styles.secondHand,
-                      isSmallMobile && styles.smallMobileSecondHand,
-                      isTablet && styles.tabletSecondHand,
-                      {
-                        transform: [
-                          { rotate: `${currentTime.getSeconds() * 6}deg` }
-                        ],
-                      },
-                    ]}
-                  />
-                  
-                  {/* Center Dot */}
-                  <View style={[
-                    styles.centerDot,
-                    isSmallMobile && styles.smallMobileCenterDot,
-                    isTablet && styles.tabletCenterDot
-                  ]} />
-                </View>
-              </View>
-              <View style={styles.clockContent}>
-                <Text style={[
-                  styles.clockTime,
-                  isSmallMobile && styles.smallMobileClockTime,
-                  isTablet && styles.tabletClockTime,
-                  isDesktop && styles.desktopClockTime
-                ]}>
-                  {currentTime.toLocaleTimeString('en-US', { 
-                    timeZone: 'Asia/Manila',
-                    hour12: true, 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    second: '2-digit'
-                  })}
-                </Text>
-                <Text style={[
-                  styles.clockDate,
-                  isSmallMobile && styles.smallMobileClockDate,
-                  isTablet && styles.tabletClockDate,
-                  isDesktop && styles.desktopClockDate
-                ]}>
-                  {currentTime.toLocaleDateString('en-US', { 
-                    timeZone: 'Asia/Manila',
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </Text>
-              </View>
-            </View>
           </View>
         </View>
       </View>
@@ -3630,120 +3752,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clockContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    gap: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    minWidth: 200,
-  },
-  analogClock: {
-    width: 70,
-    height: 70,
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clockFace: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#fff',
-    borderWidth: 3,
-    borderColor: '#1E3A5F',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  hourHand: {
-    position: 'absolute',
-    width: 4,
-    height: 20,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 2,
-    top: 15,
-    left: 33,
-    transformOrigin: '50% 100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-  },
-  minuteHand: {
-    position: 'absolute',
-    width: 3,
-    height: 26,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 1.5,
-    top: 9,
-    left: 33.5,
-    transformOrigin: '50% 100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-  },
-  secondHand: {
-    position: 'absolute',
-    width: 1.5,
-    height: 30,
-    backgroundColor: '#ea4335',
-    borderRadius: 0.75,
-    top: 5,
-    left: 34.25,
-    transformOrigin: '50% 100%',
-    shadowColor: '#ea4335',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 1,
-  },
-  centerDot: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1E3A5F',
-    top: 31,
-    left: 31,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-  },
-  clockContent: {
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  clockTime: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E3A5F',
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  clockDate: {
-    fontSize: 13,
-    color: '#6c757d',
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
   viewToggleButton: {
     padding: 10,
     borderRadius: 8,
@@ -4179,71 +4187,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
   },
-  smallMobileClockContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    minWidth: 160,
-  },
-  smallMobileAnalogClock: {
-    width: 50,
-    height: 50,
-  },
-  smallMobileClockFace: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-  },
-  smallMobileHourHand: {
-    position: 'absolute',
-    width: 3,
-    height: 16,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 1.5,
-    top: 12,
-    left: 23.5,
-    transformOrigin: '50% 100%',
-  },
-  smallMobileMinuteHand: {
-    position: 'absolute',
-    width: 2,
-    height: 20,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 1,
-    top: 8,
-    left: 24,
-    transformOrigin: '50% 100%',
-  },
-  smallMobileSecondHand: {
-    position: 'absolute',
-    width: 1,
-    height: 22,
-    backgroundColor: '#ea4335',
-    borderRadius: 0.5,
-    top: 4,
-    left: 24.5,
-    transformOrigin: '50% 100%',
-  },
-  smallMobileCenterDot: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#1E3A5F',
-    top: 22,
-    left: 22,
-  },
-  smallMobileClockTime: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  smallMobileClockDate: {
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.2,
-  },
 
   // Tablet Styles (768px - 1199px)
   tabletHeaderSection: {
@@ -4327,71 +4270,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabletClockContainer: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    gap: 14,
-    minWidth: 180,
-  },
-  tabletAnalogClock: {
-    width: 60,
-    height: 60,
-  },
-  tabletClockFace: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2.5,
-  },
-  tabletHourHand: {
-    position: 'absolute',
-    width: 3.5,
-    height: 18,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 1.75,
-    top: 13,
-    left: 28.25,
-    transformOrigin: '50% 100%',
-  },
-  tabletMinuteHand: {
-    position: 'absolute',
-    width: 2.5,
-    height: 23,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 1.25,
-    top: 8.5,
-    left: 28.75,
-    transformOrigin: '50% 100%',
-  },
-  tabletSecondHand: {
-    position: 'absolute',
-    width: 1.25,
-    height: 26,
-    backgroundColor: '#ea4335',
-    borderRadius: 0.625,
-    top: 4.5,
-    left: 29.375,
-    transformOrigin: '50% 100%',
-  },
-  tabletCenterDot: {
-    position: 'absolute',
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#1E3A5F',
-    top: 26.5,
-    left: 26.5,
-  },
-  tabletClockTime: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  tabletClockDate: {
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
 
   // Desktop Styles (1200px+)
   desktopHeaderSection: {
@@ -4474,32 +4352,6 @@ const styles = StyleSheet.create({
   desktopHeaderRight: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  desktopClockContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 16,
-    minWidth: 200,
-  },
-  desktopAnalogClock: {
-    width: 70,
-    height: 70,
-  },
-  desktopClockFace: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    borderWidth: 3,
-  },
-  desktopClockTime: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  desktopClockDate: {
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0.3,
   },
 
   // Large Desktop Styles (1440px+)
@@ -5007,6 +4859,50 @@ const styles = StyleSheet.create({
     minHeight: 40,
     zIndex: 5,
   },
+  workDoneContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  workDoneBadge: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  workDoneText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  dateRestrictionContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateRestrictionBadge: {
+    backgroundColor: '#6c757d',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dateRestrictionText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   buttonsGrid: {
     flexDirection: 'column',
     gap: 4,
@@ -5014,6 +4910,11 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     gap: 4,
+  },
+  timeOutContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
   },
   detailArrowButton: {
     width: 28,
@@ -5814,3 +5715,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
