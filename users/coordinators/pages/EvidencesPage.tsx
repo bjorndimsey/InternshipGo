@@ -19,6 +19,11 @@ import { apiService } from '../../../lib/api';
 
 const { width } = Dimensions.get('window');
 
+// Responsive breakpoints
+const isTablet = width >= 768;
+const isDesktop = width >= 1024;
+const cardsPerRow = isDesktop ? 3 : isTablet ? 2 : 1;
+
 interface Evidence {
   id: string;
   user_id: string;
@@ -714,10 +719,10 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
               data={filteredEvidences}
               renderItem={renderEvidenceCard}
               keyExtractor={(item) => item.id}
-              numColumns={3}
+              numColumns={cardsPerRow}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.evidencesGrid}
-              columnWrapperStyle={styles.evidencesRow}
+              columnWrapperStyle={cardsPerRow > 1 ? styles.evidencesRow : undefined}
             />
           )
         ) : (
@@ -890,24 +895,24 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: isDesktop ? 'row' : 'column',
+    alignItems: isDesktop ? 'center' : 'flex-start',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: isDesktop ? 16 : 12,
   },
   headerTextContainer: {
     flex: 1,
     minWidth: 200,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: isDesktop ? 28 : 24,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 8,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: isDesktop ? 16 : 14,
     color: '#F4D03F',
     fontWeight: '500',
   },
@@ -915,7 +920,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    minWidth: 300,
+    minWidth: isDesktop ? 300 : 250,
   },
   headerFilterLabel: {
     fontSize: 14,
@@ -1109,11 +1114,11 @@ const styles = StyleSheet.create({
   evidenceCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 12,
+    padding: isDesktop ? 16 : 12,
     marginBottom: 0,
-    marginHorizontal: 2,
+    marginHorizontal: isDesktop ? 4 : 2,
     flex: 1,
-    maxWidth: (width - 60) / 3, // 3 columns with padding
+    maxWidth: isDesktop ? (width - 80) / 3 : isTablet ? (width - 60) / 2 : width - 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1129,9 +1134,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   internAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: isDesktop ? 40 : 32,
+    height: isDesktop ? 40 : 32,
+    borderRadius: isDesktop ? 20 : 16,
     backgroundColor: '#1E3A5F',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1139,29 +1144,29 @@ const styles = StyleSheet.create({
   },
   internAvatarText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: isDesktop ? 16 : 14,
     fontWeight: 'bold',
   },
   internAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: isDesktop ? 40 : 32,
+    height: isDesktop ? 40 : 32,
+    borderRadius: isDesktop ? 20 : 16,
   },
   internDetails: {
     flex: 1,
   },
   internName: {
-    fontSize: 12,
+    fontSize: isDesktop ? 14 : 12,
     fontWeight: 'bold',
     color: '#1a1a2e',
     marginBottom: 2,
   },
   internEmail: {
-    fontSize: 10,
+    fontSize: isDesktop ? 12 : 10,
     color: '#666',
   },
   internId: {
-    fontSize: 9,
+    fontSize: isDesktop ? 11 : 9,
     color: '#999',
     fontWeight: '500',
   },
@@ -1176,13 +1181,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   evidenceTitle: {
-    fontSize: 14,
+    fontSize: isDesktop ? 16 : 14,
     fontWeight: 'bold',
     color: '#1a1a2e',
     marginBottom: 4,
   },
   evidenceCompany: {
-    fontSize: 12,
+    fontSize: isDesktop ? 14 : 12,
     color: '#666',
     fontWeight: '500',
   },
@@ -1200,9 +1205,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   evidenceNotes: {
-    fontSize: 12,
+    fontSize: isDesktop ? 14 : 12,
     color: '#666',
-    lineHeight: 16,
+    lineHeight: isDesktop ? 20 : 16,
     marginBottom: 8,
   },
   evidenceImageContainer: {
@@ -1211,7 +1216,7 @@ const styles = StyleSheet.create({
   },
   evidenceImage: {
     width: '100%',
-    height: 120,
+    height: isDesktop ? 160 : isTablet ? 140 : 120,
     borderRadius: 8,
   },
   imageOverlay: {
