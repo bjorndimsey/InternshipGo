@@ -69,6 +69,10 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [taskImage, setTaskImage] = useState<string | null>(null);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
   
+  // Success Modal States
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  
   // Attendance States
   const [attendanceStatus, setAttendanceStatus] = useState<{[companyId: string]: 'present' | 'late' | 'absent' | 'leave' | 'not_marked'}>({});
   const [showAbsentModal, setShowAbsentModal] = useState(false);
@@ -559,43 +563,50 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
       return;
     }
 
+    if (!selectedCompany?.id) {
+      Alert.alert('Error', 'No company selected.');
+      return;
+    }
+
     setIsSubmittingTask(true);
     
     try {
-      // Prepare task data for submission
-      const taskData = {
+      console.log('📝 Submitting daily task evidence...');
+      
+      // Prepare evidence data for submission
+      const evidenceData = {
         title: taskTitle.trim(),
-        notes: taskNotes.trim(),
-        imageUrl: taskImage,
-        companyId: selectedCompany?.id,
+        description: taskNotes.trim(),
+        imageUrl: taskImage || undefined,
+        companyId: selectedCompany.id,
         userId: currentUser.id,
         submittedAt: new Date().toISOString(),
       };
 
-      console.log('📝 Submitting daily task:', taskData);
+      console.log('📝 Evidence data:', evidenceData);
       
-      // Here you would typically submit the task to your backend
-      // For now, we'll just show a success message
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      // Submit evidence to backend
+      const response = await apiService.submitEvidence(evidenceData);
       
-      Alert.alert(
-        'Success', 
-        'Daily task submitted successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setShowDailyTasks(false);
-              setTaskTitle('');
-              setTaskNotes('');
-              setTaskImage(null);
-            }
-          }
-        ]
-      );
+      if (response.success) {
+        console.log('✅ Evidence submitted successfully:', response);
+        
+        // Set success message and show modal
+        setSuccessMessage(`Daily task evidence submitted successfully for ${selectedCompany.name}!`);
+        setShowSuccessModal(true);
+        
+        // Close daily tasks modal and reset form
+        setShowDailyTasks(false);
+        setTaskTitle('');
+        setTaskNotes('');
+        setTaskImage(null);
+      } else {
+        console.error('❌ Failed to submit evidence:', response.message);
+        Alert.alert('Error', response.message || 'Failed to submit evidence. Please try again.');
+      }
     } catch (error) {
-      console.error('Error submitting task:', error);
-      Alert.alert('Error', 'Failed to submit task. Please try again.');
+      console.error('❌ Error submitting evidence:', error);
+      Alert.alert('Error', 'Failed to submit evidence. Please try again.');
     } finally {
       setIsSubmittingTask(false);
     }
@@ -1299,6 +1310,36 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
               <Text style={styles.absentModalButtonText}>Understood</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.successModalOverlay}>
+          <Animated.View style={styles.successModalContent}>
+            <View style={styles.successModalHeader}>
+              <View style={styles.successIconContainer}>
+                <MaterialIcons name="check-circle" size={48} color="#2D5A3D" />
+              </View>
+              <Text style={styles.successModalTitle}>Success!</Text>
+              <Text style={styles.successModalMessage}>{successMessage}</Text>
+            </View>
+            
+            <View style={styles.successModalActions}>
+              <TouchableOpacity
+                style={styles.successModalButton}
+                onPress={() => setShowSuccessModal(false)}
+              >
+                <MaterialIcons name="done" size={20} color="#fff" />
+                <Text style={styles.successModalButtonText}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         </View>
       </Modal>
     </Animated.View>
@@ -2204,5 +2245,71 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  
+  // Success Modal Styles
+  successModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    margin: 20,
+    minWidth: 300,
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    alignItems: 'center',
+  },
+  successModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  successIconContainer: {
+    marginBottom: 16,
+  },
+  successModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D5A3D',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successModalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  successModalActions: {
+    width: '100%',
+  },
+  successModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2D5A3D',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#2D5A3D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  successModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });

@@ -1138,6 +1138,114 @@ class ApiService {
     console.log('📊 API SERVICE - getAttendanceStats result:', result);
     return result;
   }
+
+  // Evidence submission methods
+  async submitEvidence(evidenceData: {
+    title: string;
+    description: string;
+    imageUrl?: string;
+    companyId: string;
+    userId: string;
+    submittedAt: string;
+  }): Promise<ApiResponse> {
+    console.log('📝 API SERVICE - submitEvidence called');
+    console.log('  - Evidence data:', evidenceData);
+    
+    const url = `/evidences?userId=${evidenceData.userId}`;
+    
+    const result = await this.makeRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(evidenceData),
+    });
+    
+    console.log('📝 API SERVICE - submitEvidence result:', result);
+    return result;
+  }
+
+  async uploadEvidenceImage(file: File | FormData, userId: string): Promise<ApiResponse> {
+    console.log('📷 API SERVICE - uploadEvidenceImage called');
+    console.log('  - User ID:', userId);
+    
+    const url = `/cloudinary/evidence-image?userId=${userId}`;
+    
+    let formData: FormData;
+    
+    if (file instanceof FormData) {
+      // For mobile (React Native)
+      formData = file;
+    } else {
+      // For web
+      formData = new FormData();
+      formData.append('image', file);
+    }
+    
+    const result = await this.makeRequest(url, {
+      method: 'POST',
+      body: formData,
+    }, true);
+    
+    console.log('📷 API SERVICE - uploadEvidenceImage result:', result);
+    return result;
+  }
+
+  async getEvidences(userId: string, filters?: {
+    companyId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - getEvidences called');
+    console.log('  - User ID:', userId);
+    console.log('  - Filters:', filters);
+    
+    let url = `/evidences?userId=${userId}`;
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.companyId) params.append('companyId', filters.companyId);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.limit) params.append('limit', filters.limit.toString());
+      if (filters.offset) params.append('offset', filters.offset.toString());
+      if (params.toString()) {
+        url += `&${params.toString()}`;
+      }
+    }
+    
+    const result = await this.makeRequest(url);
+    
+    console.log('📋 API SERVICE - getEvidences result:', result);
+    return result;
+  }
+
+  async getInternEvidences(internId: string, userId: string, filters?: {
+    limit?: number;
+    offset?: number;
+    month?: number;
+    year?: number;
+  }): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - getInternEvidences called');
+    console.log('  - Intern ID:', internId);
+    console.log('  - User ID:', userId);
+    console.log('  - Filters:', filters);
+    
+    let url = `/evidences/intern/${internId}?userId=${userId}`;
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.limit) params.append('limit', filters.limit.toString());
+      if (filters.offset) params.append('offset', filters.offset.toString());
+      if (filters.month) params.append('month', filters.month.toString());
+      if (filters.year) params.append('year', filters.year.toString());
+      if (params.toString()) {
+        url += `&${params.toString()}`;
+      }
+    }
+    
+    const result = await this.makeRequest(url);
+    
+    console.log('📋 API SERVICE - getInternEvidences result:', result);
+    return result;
+  }
 }
 
 // Create and export API service instance
