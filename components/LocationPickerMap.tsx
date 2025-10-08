@@ -51,7 +51,7 @@ export default function LocationPickerMap({ onLocationSelect, onClose, currentUs
       if (response.success && (response as any).data) {
         setOtherUsers((response as any).data);
       } else {
-        throw new Error(response.message || 'Failed to fetch user locations');
+        throw new Error(typeof response.message === 'string' ? response.message : 'Failed to fetch user locations');
       }
     } catch (error) {
       console.error('Error fetching user locations:', error);
