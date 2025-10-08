@@ -75,7 +75,6 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   const [selectedIntern, setSelectedIntern] = useState<Intern | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showImageModal, setShowImageModal] = useState(false);
@@ -86,7 +85,26 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   const [reviewStatus, setReviewStatus] = useState<'approved' | 'rejected'>('approved');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
+  const [screenData, setScreenData] = useState(Dimensions.get('window'));
   const [currentCardsPerRow, setCurrentCardsPerRow] = useState(cardsPerRow);
+
+  // Calculate responsive values based on current screen data
+  const getResponsiveValues = () => {
+    const { width } = screenData;
+    const isTablet = width >= 768;
+    const isDesktop = width >= 1024;
+    const cardsPerRow = isDesktop ? 3 : isTablet ? 2 : 1;
+    
+    return {
+      width,
+      isTablet,
+      isDesktop,
+      cardsPerRow
+    };
+  };
+
+  const responsiveValues = getResponsiveValues();
+  const styles = createStyles(responsiveValues);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -112,8 +130,17 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
 
   // Update cards per row when screen size changes
   useEffect(() => {
-    setCurrentCardsPerRow(cardsPerRow);
-  }, [cardsPerRow]);
+    setCurrentCardsPerRow(responsiveValues.cardsPerRow);
+  }, [responsiveValues.cardsPerRow]);
+
+  // Listen for dimension changes
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenData(window);
+    });
+
+    return () => subscription?.remove();
+  }, []);
 
   useEffect(() => {
     if (selectedIntern) {
@@ -123,7 +150,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
 
   useEffect(() => {
     filterEvidences();
-  }, [searchQuery, statusFilter, evidences]);
+  }, [searchQuery, evidences]);
 
   const fetchInterns = async () => {
     try {
@@ -197,11 +224,6 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         evidence.task_notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
         evidence.companies?.company_name.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    }
-
-    // Filter by status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(evidence => evidence.status === statusFilter);
     }
 
     setFilteredEvidences(filtered);
@@ -445,27 +467,29 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
       });
     }
 
+    // Don't add extra days - let the last week be incomplete if needed
+
     return (
       <View style={styles.calendarContainer}>
-        <View style={styles.calendarHeader}>
-          <TouchableOpacity 
-            style={styles.calendarNavButton}
-            onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1))}
-          >
-            <MaterialIcons name="chevron-left" size={24} color="#1E3A5F" />
-          </TouchableOpacity>
-          
-          <Text style={styles.calendarTitle}>
-            {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </Text>
-          
-          <TouchableOpacity 
-            style={styles.calendarNavButton}
-            onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1))}
-          >
-            <MaterialIcons name="chevron-right" size={24} color="#1E3A5F" />
-          </TouchableOpacity>
-        </View>
+         <View style={styles.calendarHeader}>
+           <TouchableOpacity 
+             style={styles.calendarNavButton}
+             onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1))}
+           >
+             <MaterialIcons name="chevron-left" size={responsiveValues.isDesktop ? 24 : 20} color="#1E3A5F" />
+           </TouchableOpacity>
+           
+           <Text style={styles.calendarTitle}>
+             {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+           </Text>
+           
+           <TouchableOpacity 
+             style={styles.calendarNavButton}
+             onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1))}
+           >
+             <MaterialIcons name="chevron-right" size={responsiveValues.isDesktop ? 24 : 20} color="#1E3A5F" />
+           </TouchableOpacity>
+         </View>
 
         <View style={styles.calendarGrid}>
           {/* Day headers */}
@@ -482,46 +506,48 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
             <View key={weekIndex} style={styles.calendarRow}>
               {calendarDays.slice(weekIndex * 7, (weekIndex + 1) * 7).map((dayData, dayIndex) => (
                 <View key={dayIndex} style={styles.calendarDay}>
-                  {dayData ? (
-                    <TouchableOpacity 
-                      style={[
-                        styles.calendarDayButton,
-                        dayData.evidences.length > 0 && styles.calendarDayWithEvidence
-                      ]}
-                      onPress={() => {
-                        if (dayData.evidences.length > 0) {
-                          // Filter evidences for this specific day
-                          const dayEvidences = evidencesByDate[dayData.date.toDateString()] || [];
-                          setFilteredEvidences(dayEvidences);
-                          setViewMode('list');
-                        }
-                      }}
-                    >
-                  <Text style={[
-                    styles.calendarDayText,
-                    dayData.evidences.length > 0 && styles.calendarDayTextWithEvidence
-                  ]}>
-                    {dayData.day}
-                  </Text>
-                  {dayData.evidences.length > 0 && (
-                    <View style={styles.calendarEvidenceIndicator}>
-                      <Text style={styles.calendarEvidenceCount}>{dayData.evidences.length}</Text>
-                    </View>
-                  )}
-                  {dayData.evidences.length > 0 && (
-                    <View style={styles.calendarInternIndicator}>
-                      <Text style={styles.calendarInternText}>
-                        {(() => {
-                          const intern = interns.find(i => i.user_id === dayData.evidences[0]?.user_id);
-                          return intern && intern.student_name ? intern.student_name.charAt(0) : '?';
-                        })()}
-                      </Text>
-                    </View>
-                  )}
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.calendarEmptyDay} />
-                  )}
+                   {dayData ? (
+                     <TouchableOpacity 
+                       style={[
+                         styles.calendarDayButton,
+                         dayData.evidences.length > 0 && styles.calendarDayWithEvidence
+                       ]}
+                       onPress={() => {
+                         if (dayData.evidences.length > 0) {
+                           // Filter evidences for this specific day
+                           const dayEvidences = evidencesByDate[dayData.date.toDateString()] || [];
+                           setFilteredEvidences(dayEvidences);
+                           setViewMode('list');
+                         }
+                       }}
+                       activeOpacity={dayData.evidences.length > 0 ? 0.7 : 1}
+                     >
+                       <Text style={[
+                         styles.calendarDayText,
+                         dayData.evidences.length > 0 && styles.calendarDayTextWithEvidence
+                       ]}>
+                         {dayData.day || '?'}
+                       </Text>
+                       
+                       {dayData.evidences.length > 0 && (
+                         <>
+                           <View style={styles.calendarEvidenceIndicator}>
+                             <Text style={styles.calendarEvidenceCount}>{dayData.evidences.length}</Text>
+                           </View>
+                           <View style={styles.calendarInternIndicator}>
+                             <Text style={styles.calendarInternText}>
+                               {(() => {
+                                 const intern = interns.find(i => i.user_id === dayData.evidences[0]?.user_id);
+                                 return intern && intern.student_name ? intern.student_name.charAt(0) : '?';
+                               })()}
+                             </Text>
+                           </View>
+                         </>
+                       )}
+                     </TouchableOpacity>
+                   ) : (
+                     <View style={styles.calendarEmptyDay} />
+                   )}
                 </View>
               ))}
             </View>
@@ -560,75 +586,57 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   }
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Header */}
-      <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Evidence Submissions</Text>
-            <Text style={styles.headerSubtitle}>
-              Manage daily task submissions from your interns
-            </Text>
-          </View>
-          
-          {/* Status Filters */}
-          <View style={styles.headerFilters}>
-            <Text style={styles.headerFilterLabel}>Status:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.headerFilterScroll}>
-              {['all', 'submitted', 'reviewed', 'approved', 'rejected'].map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.headerFilterChip,
-                    statusFilter === status && styles.headerFilterChipSelected
-                  ]}
-                  onPress={() => setStatusFilter(status)}
-                >
-                  <Text style={[
-                    styles.headerFilterChipText,
-                    statusFilter === status && styles.headerFilterChipTextSelected
-                  ]}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+    <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        {/* Header */}
+          <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
+           {/* Main Header Row with Title, Controls, and Search */}
+           <View style={styles.headerMainRow}>
+             {/* Left Side - Title */}
+             <View style={styles.headerTitleSection}>
+               <Text style={styles.headerTitle}>Evidence Submissions</Text>
+               <Text style={styles.headerSubtitle}>
+                 Manage daily task submissions from your interns
+               </Text>
+             </View>
 
-          {/* View Mode Toggle */}
-          <View style={styles.headerViewMode}>
-            <TouchableOpacity
-              style={[styles.headerViewModeButton, viewMode === 'list' && styles.headerViewModeButtonActive]}
-              onPress={() => setViewMode('list')}
-            >
-              <MaterialIcons name="list" size={20} color={viewMode === 'list' ? '#fff' : '#1E3A5F'} />
-              <Text style={[styles.headerViewModeText, viewMode === 'list' && styles.headerViewModeTextActive]}>
-                List
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerViewModeButton, viewMode === 'calendar' && styles.headerViewModeButtonActive]}
-              onPress={() => setViewMode('calendar')}
-            >
-              <MaterialIcons name="calendar-today" size={20} color={viewMode === 'calendar' ? '#fff' : '#1E3A5F'} />
-              <Text style={[styles.headerViewModeText, viewMode === 'calendar' && styles.headerViewModeTextActive]}>
-                Calendar
-              </Text>
-            </TouchableOpacity>
-          </View>
+             {/* Right Side - Controls and Search */}
+             <View style={styles.headerControlsSection}>
+               {/* View Mode Toggle */}
+               <View style={styles.headerViewModeInline}>
+                 <TouchableOpacity
+                   style={[styles.headerViewModeButton, viewMode === 'list' && styles.headerViewModeButtonActive]}
+                   onPress={() => setViewMode('list')}
+                 >
+                   <MaterialIcons name="list" size={20} color={viewMode === 'list' ? '#1a1a2e' : '#fff'} />
+                   <Text style={[styles.headerViewModeText, viewMode === 'list' && styles.headerViewModeTextActive]}>
+                     List
+                   </Text>
+                 </TouchableOpacity>
+                 <TouchableOpacity
+                   style={[styles.headerViewModeButton, viewMode === 'calendar' && styles.headerViewModeButtonActive]}
+                   onPress={() => setViewMode('calendar')}
+                 >
+                   <MaterialIcons name="calendar-today" size={20} color={viewMode === 'calendar' ? '#1a1a2e' : '#fff'} />
+                   <Text style={[styles.headerViewModeText, viewMode === 'calendar' && styles.headerViewModeTextActive]}>
+                     Calendar
+                   </Text>
+                 </TouchableOpacity>
+               </View>
 
-          {/* Search Icon */}
-          <TouchableOpacity
-            style={styles.headerSearchIcon}
-            onPress={() => setShowSearchBar(!showSearchBar)}
-          >
-            <MaterialIcons 
-              name={showSearchBar ? "close" : "search"} 
-              size={24} 
-              color="#fff" 
-            />
-          </TouchableOpacity>
-        </View>
+               {/* Search Icon */}
+               <TouchableOpacity
+                 style={styles.headerSearchIcon}
+                 onPress={() => setShowSearchBar(!showSearchBar)}
+               >
+                 <MaterialIcons 
+                   name={showSearchBar ? "close" : "search"} 
+                   size={24} 
+                   color="#fff" 
+                 />
+               </TouchableOpacity>
+             </View>
+           </View>
 
         {/* Search Bar - Toggleable */}
         {showSearchBar && (
@@ -870,13 +878,18 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-    </Animated.View>
-  );
+         </View>
+       </Modal>
+     </Animated.View>
+   </ScrollView>
+ );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (responsiveValues: any) => StyleSheet.create({
+  scrollContainer: {
+    flex: 1,
+    backgroundColor: '#F5F1E8',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F1E8',
@@ -901,25 +914,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  headerTop: {
-    flexDirection: isDesktop ? 'row' : 'column',
-    alignItems: isDesktop ? 'center' : 'flex-start',
+  headerMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: isDesktop ? 16 : 12,
+    marginBottom: 12,
+  },
+  headerTitleSection: {
+    flex: 1,
+    marginRight: 16,
+  },
+  headerControlsSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerFiltersInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerViewModeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTextContainer: {
     flex: 1,
     minWidth: 200,
   },
   headerTitle: {
-    fontSize: isDesktop ? 28 : 24,
+    fontSize: responsiveValues.isDesktop ? 28 : 24,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 8,
   },
   headerSubtitle: {
-    fontSize: isDesktop ? 16 : 14,
+    fontSize: responsiveValues.isDesktop ? 16 : 14,
     color: '#F4D03F',
     fontWeight: '500',
   },
@@ -927,7 +956,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    minWidth: isDesktop ? 300 : 250,
+    minWidth: responsiveValues.isDesktop ? 300 : 200,
   },
   headerFilterLabel: {
     fontSize: 14,
@@ -937,19 +966,24 @@ const styles = StyleSheet.create({
   },
   headerFilterScroll: {
     flex: 1,
+    marginLeft: 8,
+  },
+  headerFilterScrollInline: {
+    maxWidth: 180,
+    marginLeft: 8,
   },
   headerFilterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: responsiveValues.isDesktop ? 12 : 5,
+    paddingVertical: responsiveValues.isDesktop ? 6 : 2,
     borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginRight: 8,
+    marginRight: responsiveValues.isDesktop ? 8 : 3,
   },
   headerFilterChipSelected: {
     backgroundColor: '#F4D03F',
   },
   headerFilterChipText: {
-    fontSize: 12,
+    fontSize: responsiveValues.isDesktop ? 12 : 8,
     color: '#fff',
     fontWeight: '500',
   },
@@ -959,35 +993,41 @@ const styles = StyleSheet.create({
   },
   headerViewMode: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
-    padding: 4,
+    padding: responsiveValues.isDesktop ? 4 : 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   headerViewModeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: responsiveValues.isDesktop ? 8 : 5,
+    paddingHorizontal: responsiveValues.isDesktop ? 12 : 8,
     borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    minWidth: responsiveValues.isDesktop ? 80 : 60,
   },
   headerViewModeButtonActive: {
     backgroundColor: '#F4D03F',
   },
   headerViewModeText: {
-    fontSize: 14,
-    color: '#1E3A5F',
+    fontSize: responsiveValues.isDesktop ? 14 : 11,
+    color: '#fff',
     fontWeight: '500',
-    marginLeft: 6,
+    marginLeft: responsiveValues.isDesktop ? 6 : 3,
   },
   headerViewModeTextActive: {
     color: '#1a1a2e',
     fontWeight: 'bold',
   },
   headerSearchIcon: {
-    padding: 8,
+    padding: responsiveValues.isDesktop ? 8 : 6,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginLeft: 12,
+    marginLeft: responsiveValues.isDesktop ? 12 : 8,
   },
   headerSearchContainer: {
     marginTop: 16,
@@ -1046,53 +1086,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
-    borderLeftWidth: 4,
+    padding: responsiveValues.isDesktop ? 8 : 6,
+    borderRadius: 6,
+    marginTop: responsiveValues.isDesktop ? 8 : 6,
+    borderLeftWidth: 3,
     borderLeftColor: '#1E3A5F',
   },
   selectedInternAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: responsiveValues.isDesktop ? 32 : 28,
+    height: responsiveValues.isDesktop ? 32 : 28,
+    borderRadius: responsiveValues.isDesktop ? 16 : 14,
     backgroundColor: '#1E3A5F',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: responsiveValues.isDesktop ? 8 : 6,
   },
   selectedInternAvatarText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     fontWeight: 'bold',
   },
   selectedInternAvatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: responsiveValues.isDesktop ? 32 : 28,
+    height: responsiveValues.isDesktop ? 32 : 28,
+    borderRadius: responsiveValues.isDesktop ? 16 : 14,
   },
   selectedInternDetails: {
     flex: 1,
   },
   selectedInternName: {
-    fontSize: 16,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     fontWeight: 'bold',
     color: '#1a1a2e',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   selectedInternEmail: {
-    fontSize: 12,
+    fontSize: responsiveValues.isDesktop ? 11 : 9,
     color: '#666',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   selectedInternId: {
-    fontSize: 11,
+    fontSize: responsiveValues.isDesktop ? 10 : 8,
     color: '#999',
-    marginBottom: 2,
+    marginBottom: 1,
     fontWeight: '500',
   },
   selectedInternStatus: {
-    fontSize: 12,
+    fontSize: responsiveValues.isDesktop ? 10 : 8,
     color: '#1E3A5F',
     fontWeight: '500',
   },
@@ -1100,13 +1140,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedInternStatsText: {
-    fontSize: 14,
+    fontSize: responsiveValues.isDesktop ? 12 : 10,
     fontWeight: 'bold',
     color: '#1E3A5F',
   },
   contentContainer: {
-    flex: 1,
     padding: 20,
+    minHeight: 400,
   },
   evidencesList: {
     paddingBottom: 20,
@@ -1121,11 +1161,11 @@ const styles = StyleSheet.create({
   evidenceCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: isDesktop ? 16 : 12,
+    padding: responsiveValues.isDesktop ? 16 : 12,
     marginBottom: 0,
-    marginHorizontal: isDesktop ? 4 : 2,
+    marginHorizontal: responsiveValues.isDesktop ? 4 : 2,
     flex: 1,
-    maxWidth: isDesktop ? (width - 80) / 3 : isTablet ? (width - 60) / 2 : width - 40,
+    maxWidth: responsiveValues.isDesktop ? (responsiveValues.width - 80) / 3 : responsiveValues.isTablet ? (responsiveValues.width - 60) / 2 : responsiveValues.width - 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1141,9 +1181,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   internAvatar: {
-    width: isDesktop ? 40 : 32,
-    height: isDesktop ? 40 : 32,
-    borderRadius: isDesktop ? 20 : 16,
+    width: responsiveValues.isDesktop ? 40 : 32,
+    height: responsiveValues.isDesktop ? 40 : 32,
+    borderRadius: responsiveValues.isDesktop ? 20 : 16,
     backgroundColor: '#1E3A5F',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1151,29 +1191,29 @@ const styles = StyleSheet.create({
   },
   internAvatarText: {
     color: '#fff',
-    fontSize: isDesktop ? 16 : 14,
+    fontSize: responsiveValues.isDesktop ? 16 : 14,
     fontWeight: 'bold',
   },
   internAvatarImage: {
-    width: isDesktop ? 40 : 32,
-    height: isDesktop ? 40 : 32,
-    borderRadius: isDesktop ? 20 : 16,
+    width: responsiveValues.isDesktop ? 40 : 32,
+    height: responsiveValues.isDesktop ? 40 : 32,
+    borderRadius: responsiveValues.isDesktop ? 20 : 16,
   },
   internDetails: {
     flex: 1,
   },
   internName: {
-    fontSize: isDesktop ? 14 : 12,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     fontWeight: 'bold',
     color: '#1a1a2e',
     marginBottom: 2,
   },
   internEmail: {
-    fontSize: isDesktop ? 12 : 10,
+    fontSize: responsiveValues.isDesktop ? 12 : 10,
     color: '#666',
   },
   internId: {
-    fontSize: isDesktop ? 11 : 9,
+    fontSize: responsiveValues.isDesktop ? 11 : 9,
     color: '#999',
     fontWeight: '500',
   },
@@ -1188,13 +1228,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   evidenceTitle: {
-    fontSize: isDesktop ? 16 : 14,
+    fontSize: responsiveValues.isDesktop ? 16 : 14,
     fontWeight: 'bold',
     color: '#1a1a2e',
     marginBottom: 4,
   },
   evidenceCompany: {
-    fontSize: isDesktop ? 14 : 12,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     color: '#666',
     fontWeight: '500',
   },
@@ -1212,9 +1252,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   evidenceNotes: {
-    fontSize: isDesktop ? 14 : 12,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     color: '#666',
-    lineHeight: isDesktop ? 20 : 16,
+    lineHeight: responsiveValues.isDesktop ? 20 : 16,
     marginBottom: 8,
   },
   evidenceImageContainer: {
@@ -1223,7 +1263,7 @@ const styles = StyleSheet.create({
   },
   evidenceImage: {
     width: '100%',
-    height: isDesktop ? 160 : isTablet ? 140 : 120,
+    height: responsiveValues.isDesktop ? 160 : responsiveValues.isTablet ? 140 : 120,
     borderRadius: 8,
   },
   imageOverlay: {
@@ -1303,67 +1343,120 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   calendarContainer: {
-    flex: 1,
-    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    margin: responsiveValues.isDesktop ? 20 : 16,
+    padding: responsiveValues.isDesktop ? 24 : 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    height: responsiveValues.isDesktop ? 700 : 550,
+
   },
   calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: responsiveValues.isDesktop ? 24 : 20,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#f0f0f0',
   },
   calendarNavButton: {
-    padding: 8,
+    padding: responsiveValues.isDesktop ? 12 : 10,
     borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarTitle: {
-    fontSize: 20,
+    fontSize: responsiveValues.isDesktop ? 24 : 20,
     fontWeight: 'bold',
     color: '#1a1a2e',
+    textAlign: 'center',
   },
   calendarGrid: {
-    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    overflow: 'hidden',
+    minHeight: 400,
+    flexDirection: 'column',
   },
   calendarRow: {
     flexDirection: 'row',
-    flex: 1,
+    height: responsiveValues.isDesktop ? 80 : 70,
+    justifyContent: 'flex-start',
   },
   calendarDayHeader: {
-    flex: 1,
-    paddingVertical: 12,
+    width: '14.28%', // 100% / 7 days = 14.28% per day
+    paddingVertical: responsiveValues.isDesktop ? 16 : 12,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f8f9fa',
-    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+    borderBottomWidth: 2,
     borderBottomColor: '#e0e0e0',
+    position: 'relative',
   },
   calendarDayHeaderText: {
-    fontSize: 14,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     fontWeight: 'bold',
     color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    backgroundColor: 'rgba(248, 249, 250, 0.9)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   calendarDay: {
-    flex: 1,
-    padding: 2,
-    minHeight: 60,
+    width: '14.28%', // 100% / 7 days = 14.28% per day
+    height: responsiveValues.isDesktop ? 80 : 70,
+    borderRightWidth: 1,
+    borderRightColor: '#f0f0f0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+    position: 'relative',
   },
   calendarDayButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    padding: 4,
     backgroundColor: '#fff',
+    position: 'relative',
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
   calendarDayWithEvidence: {
     backgroundColor: '#E3F2FD',
     borderColor: '#1E3A5F',
+    borderWidth: 2,
+    borderRadius: 6,
   },
   calendarDayText: {
-    fontSize: 16,
+    fontSize: responsiveValues.isDesktop ? 20 : 18,
     color: '#1a1a2e',
-    fontWeight: '500',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    zIndex: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   calendarDayTextWithEvidence: {
     color: '#1E3A5F',
@@ -1371,66 +1464,84 @@ const styles = StyleSheet.create({
   },
   calendarEvidenceIndicator: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 2,
+    right: 2,
     backgroundColor: '#1E3A5F',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#1E3A5F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+    zIndex: 3,
   },
   calendarEvidenceCount: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: responsiveValues.isDesktop ? 12 : 10,
     fontWeight: 'bold',
   },
   calendarInternIndicator: {
     position: 'absolute',
-    bottom: 4,
-    left: 4,
+    bottom: 2,
+    left: 2,
     backgroundColor: '#F4D03F',
     borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#F4D03F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+    zIndex: 3,
   },
   calendarInternText: {
     color: '#1a1a2e',
-    fontSize: 10,
+    fontSize: responsiveValues.isDesktop ? 10 : 9,
     fontWeight: 'bold',
   },
   calendarEmptyDay: {
     flex: 1,
+    backgroundColor: '#fafafa',
   },
   calendarLegend: {
-    marginTop: 20,
+    marginTop: responsiveValues.isDesktop ? 24 : 20,
     paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopWidth: 2,
+    borderTopColor: '#f0f0f0',
+    flexDirection: responsiveValues.isDesktop ? 'row' : 'column',
+    justifyContent: 'space-around',
+    alignItems: 'center',
   },
   calendarLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: responsiveValues.isDesktop ? 0 : 8,
   },
   calendarLegendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: responsiveValues.isDesktop ? 16 : 14,
+    height: responsiveValues.isDesktop ? 16 : 14,
+    borderRadius: responsiveValues.isDesktop ? 8 : 7,
     marginRight: 8,
   },
   calendarLegendDotWithEvidence: {
     backgroundColor: '#1E3A5F',
   },
   calendarLegendText: {
-    fontSize: 14,
+    fontSize: responsiveValues.isDesktop ? 14 : 12,
     color: '#666',
+    fontWeight: '500',
   },
   calendarLegendBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: responsiveValues.isDesktop ? 24 : 20,
+    height: responsiveValues.isDesktop ? 24 : 20,
+    borderRadius: responsiveValues.isDesktop ? 12 : 10,
     backgroundColor: '#1E3A5F',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1438,7 +1549,7 @@ const styles = StyleSheet.create({
   },
   calendarLegendBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: responsiveValues.isDesktop ? 12 : 10,
     fontWeight: 'bold',
   },
   calendarLegendInternBadge: {
@@ -1626,3 +1737,4 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
 });
+
