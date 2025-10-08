@@ -42,10 +42,16 @@ interface Evidence {
 interface Intern {
   id: string;
   user_id: string;
-  student_name: string;
-  student_email: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  profile_picture?: string;
+  id_number: string;
   school_year: string;
   status: string;
+  // Computed properties
+  student_name?: string;
+  student_email?: string;
 }
 
 interface EvidencesPageProps {
@@ -116,11 +122,20 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
       
       if (response.success && response.interns) {
         console.log('✅ Interns fetched successfully:', response.interns.length);
-        setInterns(response.interns);
+        
+        // Map the backend data to our expected format
+        const mappedInterns = response.interns.map((intern: any) => ({
+          ...intern,
+          student_name: `${intern.first_name} ${intern.last_name}`,
+          student_email: intern.email,
+        }));
+        
+        console.log('📋 Mapped interns:', mappedInterns);
+        setInterns(mappedInterns);
         
         // Select first intern by default
-        if (response.interns.length > 0) {
-          setSelectedIntern(response.interns[0]);
+        if (mappedInterns.length > 0) {
+          setSelectedIntern(mappedInterns[0]);
         }
       } else {
         console.log('❌ Failed to fetch interns:', response.message);
@@ -296,9 +311,17 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         {/* Intern Information */}
         <View style={styles.evidenceInternInfo}>
           <View style={styles.internAvatar}>
-            <Text style={styles.internAvatarText}>
-              {intern && intern.student_name ? intern.student_name.charAt(0).toUpperCase() : '?'}
-            </Text>
+            {intern && intern.profile_picture ? (
+              <Image 
+                source={{ uri: intern.profile_picture }} 
+                style={styles.internAvatarImage}
+                defaultSource={require('../../../assets/icon.png')}
+              />
+            ) : (
+              <Text style={styles.internAvatarText}>
+                {intern && intern.student_name ? intern.student_name.charAt(0).toUpperCase() : '?'}
+              </Text>
+            )}
           </View>
           <View style={styles.internDetails}>
             <Text style={styles.internName} numberOfLines={1}>
@@ -306,6 +329,9 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
             </Text>
             <Text style={styles.internEmail} numberOfLines={1}>
               {intern && intern.student_email ? intern.student_email : 'No email'}
+            </Text>
+            <Text style={styles.internId} numberOfLines={1}>
+              ID: {intern && intern.id_number ? intern.id_number : 'N/A'}
             </Text>
           </View>
         </View>
@@ -561,13 +587,22 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         {selectedIntern && selectedIntern.student_name && (
           <View style={styles.selectedInternInfo}>
             <View style={styles.selectedInternAvatar}>
-              <Text style={styles.selectedInternAvatarText}>
-                {selectedIntern.student_name.charAt(0).toUpperCase()}
-              </Text>
+              {selectedIntern.profile_picture ? (
+                <Image 
+                  source={{ uri: selectedIntern.profile_picture }} 
+                  style={styles.selectedInternAvatarImage}
+                  defaultSource={require('../../../assets/icon.png')}
+                />
+              ) : (
+                <Text style={styles.selectedInternAvatarText}>
+                  {selectedIntern.student_name.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
             <View style={styles.selectedInternDetails}>
               <Text style={styles.selectedInternName}>{selectedIntern.student_name || 'Unknown'}</Text>
               <Text style={styles.selectedInternEmail}>{selectedIntern.student_email || 'No email'}</Text>
+              <Text style={styles.selectedInternId}>ID: {selectedIntern.id_number || 'N/A'}</Text>
               <Text style={styles.selectedInternStatus}>Status: {selectedIntern.status || 'Unknown'}</Text>
             </View>
             <View style={styles.selectedInternStats}>
@@ -900,6 +935,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  selectedInternAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   selectedInternDetails: {
     flex: 1,
   },
@@ -913,6 +953,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 2,
+  },
+  selectedInternId: {
+    fontSize: 11,
+    color: '#999',
+    marginBottom: 2,
+    fontWeight: '500',
   },
   selectedInternStatus: {
     fontSize: 12,
@@ -1050,6 +1096,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  internAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   internDetails: {
     flex: 1,
   },
@@ -1062,6 +1113,11 @@ const styles = StyleSheet.create({
   internEmail: {
     fontSize: 10,
     color: '#666',
+  },
+  internId: {
+    fontSize: 9,
+    color: '#999',
+    fontWeight: '500',
   },
   evidenceHeader: {
     flexDirection: 'row',
