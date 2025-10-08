@@ -80,6 +80,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewStatus, setReviewStatus] = useState<'approved' | 'rejected'>('approved');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -604,7 +605,36 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Search Icon */}
+          <TouchableOpacity
+            style={styles.headerSearchIcon}
+            onPress={() => setShowSearchBar(!showSearchBar)}
+          >
+            <MaterialIcons 
+              name={showSearchBar ? "close" : "search"} 
+              size={24} 
+              color="#fff" 
+            />
+          </TouchableOpacity>
         </View>
+
+        {/* Search Bar - Toggleable */}
+        {showSearchBar && (
+          <Animated.View style={styles.headerSearchContainer}>
+            <View style={styles.headerSearchInputContainer}>
+              <MaterialIcons name="search" size={20} color="#666" />
+              <TextInput
+                style={styles.headerSearchInput}
+                placeholder="Search evidences..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="#999"
+                autoFocus={true}
+              />
+            </View>
+          </Animated.View>
+        )}
       </Animated.View>
 
       {/* Controls */}
@@ -663,19 +693,6 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
           </View>
         )}
 
-        {/* Search */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <MaterialIcons name="search" size={20} color="#666" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search evidences..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
-            />
-          </View>
-        </View>
       </View>
 
       {/* Content */}
@@ -954,6 +971,32 @@ const styles = StyleSheet.create({
     color: '#1a1a2e',
     fontWeight: 'bold',
   },
+  headerSearchIcon: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginLeft: 12,
+  },
+  headerSearchContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  headerSearchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+  },
+  headerSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1a1a2e',
+    marginLeft: 10,
+  },
   controlsContainer: {
     backgroundColor: '#fff',
     padding: 20,
@@ -1048,23 +1091,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#1E3A5F',
-  },
-  searchContainer: {
-    marginBottom: 16,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1a1a2e',
-    marginLeft: 10,
   },
   contentContainer: {
     flex: 1,
