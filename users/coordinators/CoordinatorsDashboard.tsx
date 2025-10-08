@@ -24,6 +24,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
 import SubmissionsPage from './pages/SubmissionsPage';
 import AttendanceTimeline from './pages/AttendanceTimeline';
+import EvidencesPage from './pages/EvidencesPage';
 import { apiService } from '../../lib/api';
 
 const { width, height } = Dimensions.get('window');
@@ -68,6 +69,7 @@ type SubMenuItem = {
 const subMenuItems: SubMenuItem[] = [
   { name: 'Interns List', screen: 'Interns', icon: 'people-outline', parent: 'Interns' },
   { name: 'Attendance Timeline', screen: 'AttendanceTimeline', icon: 'calendar-outline', parent: 'Interns' },
+  { name: 'Evidence Submissions', screen: 'Evidences', icon: 'document-text-outline', parent: 'Interns' },
 ];
 
 export default function CoordinatorsDashboard({ onLogout, currentUser }: CoordinatorsDashboardProps) {
@@ -427,6 +429,8 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
         return <InternsPage currentUser={currentUser} />;
       case 'AttendanceTimeline':
         return currentUser ? <AttendanceTimeline currentUser={currentUser} /> : <DashboardHome currentUser={currentUser} />;
+      case 'Evidences':
+        return currentUser ? <EvidencesPage currentUser={currentUser} /> : <DashboardHome currentUser={currentUser} />;
       case 'Companies':
         return <CompaniesPage />;
       case 'Events':

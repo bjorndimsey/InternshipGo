@@ -23,6 +23,8 @@ const coordinatorNotificationRoutes = require('./routes/coordinatorNotificationR
 const companyNotificationRoutes = require('./routes/companyNotificationRoutes');
 const workingHoursRoutes = require('./routes/workingHoursRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
+const evidenceRoutes = require('./routes/evidenceRoutes');
+const cloudinaryRoutes = require('./routes/cloudinaryRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -113,6 +115,8 @@ app.use('/api/notifications', coordinatorNotificationRoutes);
 app.use('/api/notifications', companyNotificationRoutes);
 app.use('/api/working-hours', workingHoursRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/evidences', evidenceRoutes);
+app.use('/api/cloudinary', cloudinaryRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

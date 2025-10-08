@@ -1246,6 +1246,27 @@ class ApiService {
     console.log('📋 API SERVICE - getInternEvidences result:', result);
     return result;
   }
+
+  async updateEvidenceStatus(evidenceId: string, reviewData: {
+    status: string;
+    reviewNotes?: string;
+    reviewedBy?: string;
+  }, userId: string): Promise<ApiResponse> {
+    console.log('📝 API SERVICE - updateEvidenceStatus called');
+    console.log('  - Evidence ID:', evidenceId);
+    console.log('  - Review data:', reviewData);
+    console.log('  - User ID:', userId);
+    
+    const url = `/evidences/${evidenceId}/review?userId=${userId}`;
+    
+    const result = await this.makeRequest(url, {
+      method: 'PUT',
+      body: JSON.stringify(reviewData),
+    });
+    
+    console.log('📝 API SERVICE - updateEvidenceStatus result:', result);
+    return result;
+  }
 }
 
 // Create and export API service instance
