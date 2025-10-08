@@ -297,15 +297,15 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         <View style={styles.evidenceInternInfo}>
           <View style={styles.internAvatar}>
             <Text style={styles.internAvatarText}>
-              {intern ? intern.student_name.charAt(0).toUpperCase() : '?'}
+              {intern && intern.student_name ? intern.student_name.charAt(0).toUpperCase() : '?'}
             </Text>
           </View>
           <View style={styles.internDetails}>
             <Text style={styles.internName} numberOfLines={1}>
-              {intern ? intern.student_name : 'Unknown Intern'}
+              {intern && intern.student_name ? intern.student_name : 'Unknown Intern'}
             </Text>
             <Text style={styles.internEmail} numberOfLines={1}>
-              {intern ? intern.student_email : 'No email'}
+              {intern && intern.student_email ? intern.student_email : 'No email'}
             </Text>
           </View>
         </View>
@@ -473,7 +473,10 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
                   {dayData.evidences.length > 0 && (
                     <View style={styles.calendarInternIndicator}>
                       <Text style={styles.calendarInternText}>
-                        {interns.find(i => i.user_id === dayData.evidences[0]?.user_id)?.student_name?.charAt(0) || '?'}
+                        {(() => {
+                          const intern = interns.find(i => i.user_id === dayData.evidences[0]?.user_id);
+                          return intern && intern.student_name ? intern.student_name.charAt(0) : '?';
+                        })()}
                       </Text>
                     </View>
                   )}
@@ -555,7 +558,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         </View>
 
         {/* Selected Intern Info */}
-        {selectedIntern && (
+        {selectedIntern && selectedIntern.student_name && (
           <View style={styles.selectedInternInfo}>
             <View style={styles.selectedInternAvatar}>
               <Text style={styles.selectedInternAvatarText}>
@@ -563,9 +566,9 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
               </Text>
             </View>
             <View style={styles.selectedInternDetails}>
-              <Text style={styles.selectedInternName}>{selectedIntern.student_name}</Text>
-              <Text style={styles.selectedInternEmail}>{selectedIntern.student_email}</Text>
-              <Text style={styles.selectedInternStatus}>Status: {selectedIntern.status}</Text>
+              <Text style={styles.selectedInternName}>{selectedIntern.student_name || 'Unknown'}</Text>
+              <Text style={styles.selectedInternEmail}>{selectedIntern.student_email || 'No email'}</Text>
+              <Text style={styles.selectedInternStatus}>Status: {selectedIntern.status || 'Unknown'}</Text>
             </View>
             <View style={styles.selectedInternStats}>
               <Text style={styles.selectedInternStatsText}>
@@ -643,7 +646,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
               <MaterialIcons name="assignment" size={64} color="#ccc" />
               <Text style={styles.emptyStateTitle}>No evidences found</Text>
               <Text style={styles.emptyStateText}>
-                {selectedIntern 
+                {selectedIntern && selectedIntern.student_name
                   ? `${selectedIntern.student_name} hasn't submitted any evidences yet.`
                   : 'Select an intern to view their evidence submissions.'
                 }
