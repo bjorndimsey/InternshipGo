@@ -551,10 +551,60 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       {/* Header */}
       <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
-        <Text style={styles.headerTitle}>Evidence Submissions</Text>
-        <Text style={styles.headerSubtitle}>
-          Manage daily task submissions from your interns
-        </Text>
+        <View style={styles.headerTop}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Evidence Submissions</Text>
+            <Text style={styles.headerSubtitle}>
+              Manage daily task submissions from your interns
+            </Text>
+          </View>
+          
+          {/* Status Filters */}
+          <View style={styles.headerFilters}>
+            <Text style={styles.headerFilterLabel}>Status:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.headerFilterScroll}>
+              {['all', 'submitted', 'reviewed', 'approved', 'rejected'].map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.headerFilterChip,
+                    statusFilter === status && styles.headerFilterChipSelected
+                  ]}
+                  onPress={() => setStatusFilter(status)}
+                >
+                  <Text style={[
+                    styles.headerFilterChipText,
+                    statusFilter === status && styles.headerFilterChipTextSelected
+                  ]}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* View Mode Toggle */}
+          <View style={styles.headerViewMode}>
+            <TouchableOpacity
+              style={[styles.headerViewModeButton, viewMode === 'list' && styles.headerViewModeButtonActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <MaterialIcons name="list" size={20} color={viewMode === 'list' ? '#fff' : '#1E3A5F'} />
+              <Text style={[styles.headerViewModeText, viewMode === 'list' && styles.headerViewModeTextActive]}>
+                List
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerViewModeButton, viewMode === 'calendar' && styles.headerViewModeButtonActive]}
+              onPress={() => setViewMode('calendar')}
+            >
+              <MaterialIcons name="calendar-today" size={20} color={viewMode === 'calendar' ? '#fff' : '#1E3A5F'} />
+              <Text style={[styles.headerViewModeText, viewMode === 'calendar' && styles.headerViewModeTextActive]}>
+                Calendar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Animated.View>
 
       {/* Controls */}
@@ -613,7 +663,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
           </View>
         )}
 
-        {/* Search and Filters */}
+        {/* Search */}
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
             <MaterialIcons name="search" size={20} color="#666" />
@@ -625,51 +675,6 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
               placeholderTextColor="#999"
             />
           </View>
-          
-          <View style={styles.filterContainer}>
-            <Text style={styles.filterLabel}>Status:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {['all', 'submitted', 'reviewed', 'approved', 'rejected'].map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.filterChip,
-                    statusFilter === status && styles.selectedFilterChip
-                  ]}
-                  onPress={() => setStatusFilter(status)}
-                >
-                  <Text style={[
-                    styles.filterChipText,
-                    statusFilter === status && styles.selectedFilterChipText
-                  ]}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-
-        {/* View Mode Toggle */}
-        <View style={styles.viewModeContainer}>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'list' && styles.activeViewModeButton]}
-            onPress={() => setViewMode('list')}
-          >
-            <MaterialIcons name="list" size={20} color={viewMode === 'list' ? '#fff' : '#666'} />
-            <Text style={[styles.viewModeText, viewMode === 'list' && styles.activeViewModeText]}>
-              List
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'calendar' && styles.activeViewModeButton]}
-            onPress={() => setViewMode('calendar')}
-          >
-            <MaterialIcons name="calendar-today" size={20} color={viewMode === 'calendar' ? '#fff' : '#666'} />
-            <Text style={[styles.viewModeText, viewMode === 'calendar' && styles.activeViewModeText]}>
-              Calendar
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -867,6 +872,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  headerTextContainer: {
+    flex: 1,
+    minWidth: 200,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -877,6 +893,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#F4D03F',
     fontWeight: '500',
+  },
+  headerFilters: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 300,
+  },
+  headerFilterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginRight: 12,
+  },
+  headerFilterScroll: {
+    flex: 1,
+  },
+  headerFilterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginRight: 8,
+  },
+  headerFilterChipSelected: {
+    backgroundColor: '#F4D03F',
+  },
+  headerFilterChipText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  headerFilterChipTextSelected: {
+    color: '#1a1a2e',
+    fontWeight: 'bold',
+  },
+  headerViewMode: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 4,
+  },
+  headerViewModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  headerViewModeButtonActive: {
+    backgroundColor: '#F4D03F',
+  },
+  headerViewModeText: {
+    fontSize: 14,
+    color: '#1E3A5F',
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  headerViewModeTextActive: {
+    color: '#1a1a2e',
+    fontWeight: 'bold',
   },
   controlsContainer: {
     backgroundColor: '#fff',
@@ -982,7 +1058,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
     paddingHorizontal: 15,
-    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
@@ -990,61 +1065,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1a1a2e',
     marginLeft: 10,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginRight: 12,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    marginRight: 8,
-  },
-  selectedFilterChip: {
-    backgroundColor: '#1E3A5F',
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  selectedFilterChipText: {
-    color: '#fff',
-  },
-  viewModeContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 4,
-  },
-  viewModeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  activeViewModeButton: {
-    backgroundColor: '#1E3A5F',
-  },
-  viewModeText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    marginLeft: 6,
-  },
-  activeViewModeText: {
-    color: '#fff',
   },
   contentContainer: {
     flex: 1,
