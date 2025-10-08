@@ -86,6 +86,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   const [reviewStatus, setReviewStatus] = useState<'approved' | 'rejected'>('approved');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
+  const [currentCardsPerRow, setCurrentCardsPerRow] = useState(cardsPerRow);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -108,6 +109,11 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
       }),
     ]).start();
   }, []);
+
+  // Update cards per row when screen size changes
+  useEffect(() => {
+    setCurrentCardsPerRow(cardsPerRow);
+  }, [cardsPerRow]);
 
   useEffect(() => {
     if (selectedIntern) {
@@ -716,13 +722,14 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
             </View>
           ) : (
             <FlatList
+              key={`evidences-${currentCardsPerRow}`}
               data={filteredEvidences}
               renderItem={renderEvidenceCard}
               keyExtractor={(item) => item.id}
-              numColumns={cardsPerRow}
+              numColumns={currentCardsPerRow}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.evidencesGrid}
-              columnWrapperStyle={cardsPerRow > 1 ? styles.evidencesRow : undefined}
+              columnWrapperStyle={currentCardsPerRow > 1 ? styles.evidencesRow : undefined}
             />
           )
         ) : (
