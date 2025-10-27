@@ -327,7 +327,7 @@ export default function GoogleUserSetup({ googleUser, googleToken, onComplete, o
             onChangeText={(text) => handleInputChange('major', text)}
             onBlur={() => validateField('major', formData.major)}
             placeholder="Enter your major or N/A"
-            placeholderTextColor="#999"
+            placeholderTextColor="#878787"
           />
           {fieldErrors.major && (
             <Text style={styles.errorText}>{fieldErrors.major.message}</Text>
@@ -647,7 +647,7 @@ export default function GoogleUserSetup({ googleUser, googleToken, onComplete, o
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+      <StatusBar barStyle="light-content" backgroundColor="#151419" />
       
       {/* Background Bubbles */}
       <View style={styles.bubbleContainer}>
@@ -662,7 +662,7 @@ export default function GoogleUserSetup({ googleUser, googleToken, onComplete, o
         <View style={styles.formContainer}>
           <View style={styles.headerContainer}>
             <View style={styles.logoContainer}>
-              <Ionicons name="school-outline" size={60} color="#1E3A5F" />
+              <Ionicons name="business" size={60} color="#FBFBFB" />
             </View>
             <Text style={styles.title}>Complete Your Profile</Text>
             <Text style={styles.subtitle}>
@@ -860,7 +860,7 @@ export default function GoogleUserSetup({ googleUser, googleToken, onComplete, o
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419', // Dark background
   },
   bubbleContainer: {
     position: 'absolute',
@@ -870,7 +870,7 @@ const styles = StyleSheet.create({
   bubble: {
     position: 'absolute',
     borderRadius: 50,
-    backgroundColor: 'rgba(245, 241, 232, 0.3)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble1: {
     width: 100,
@@ -883,28 +883,28 @@ const styles = StyleSheet.create({
     height: 80,
     top: height * 0.2,
     right: width * 0.15,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   bubble3: {
     width: 120,
     height: 120,
     bottom: height * 0.2,
     left: width * 0.05,
-    backgroundColor: 'rgba(245, 241, 232, 0.2)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.08)', // Medium orange with opacity
   },
   bubble4: {
     width: 60,
     height: 60,
     bottom: height * 0.1,
     right: width * 0.2,
-    backgroundColor: 'rgba(30, 58, 95, 0.15)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble5: {
     width: 90,
     height: 90,
     top: height * 0.5,
     right: width * 0.1,
-    backgroundColor: 'rgba(245, 241, 232, 0.25)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   scrollContainer: {
     flexGrow: 1,
@@ -924,11 +924,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -940,7 +940,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
@@ -949,7 +949,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 18,
-    color: '#F5F1E8', // Soft cream
+    color: '#F56E0F', // Primary orange
     textAlign: 'center',
     fontWeight: '400',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
@@ -957,13 +957,13 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   formContent: {
-    backgroundColor: 'rgba(245, 241, 232, 0.95)', // Soft cream with opacity
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 24,
     padding: 32,
     width: '100%',
     maxWidth: 577,
     alignSelf: 'center',
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 12,
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 20,
     borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.2)',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   userTypeContainer: {
     marginBottom: 20,
@@ -980,30 +980,30 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
   },
   userTypeButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark tertiary background
     borderRadius: 16,
     paddingVertical: 15,
     paddingHorizontal: 20,
     marginBottom: 10,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
   },
   selectedUserType: {
-    backgroundColor: '#1E3A5F',
-    borderColor: '#1E3A5F',
+    backgroundColor: '#F56E0F', // Primary orange
+    borderColor: '#F56E0F',
   },
   userTypeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
   },
   selectedUserTypeText: {
-    color: '#F5F1E8',
+    color: '#FBFBFB', // Light text
   },
   formFields: {
     marginTop: 20,
@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -1029,14 +1029,14 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 16,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#1E3A5F', // Deep navy blue
-    shadowColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E', // Dark input background
+    color: '#FBFBFB', // Light text
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1047,22 +1047,22 @@ const styles = StyleSheet.create({
   },
   inputText: {
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
   },
   inputWrapper: {
     position: 'relative',
   },
   dropdownButton: {
     borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark input background
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1073,12 +1073,12 @@ const styles = StyleSheet.create({
   },
   dropdownButtonText: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   dropdownArrow: {
     fontSize: 12,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#F56E0F', // Primary orange
     fontWeight: 'bold',
   },
   dropdownList: {
@@ -1086,12 +1086,12 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark background
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
     marginTop: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -1105,11 +1105,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F1E8', // Soft cream
+    borderBottomColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   dropdownItemText: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   errorBorder: {
@@ -1122,11 +1122,11 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   placeholderText: {
-    color: '#999',
+    color: '#878787', // Muted gray for better visibility
   },
   disabledInput: {
-    backgroundColor: '#f5f5f5',
-    color: '#666',
+    backgroundColor: '#2A2A2E', // Dark input background
+    color: '#878787', // Muted gray
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -1138,7 +1138,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderRadius: 16,
     marginHorizontal: 5,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 6,
@@ -1148,24 +1148,24 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   cancelButton: {
-    backgroundColor: '#6c757d',
+    backgroundColor: '#878787', // Muted gray
   },
   submitButton: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#F56E0F', // Primary orange
   },
   disabledButton: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#878787', // Muted gray
     shadowOpacity: 0,
     elevation: 0,
   },
   cancelButtonText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
   },
   submitButtonText: {
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',

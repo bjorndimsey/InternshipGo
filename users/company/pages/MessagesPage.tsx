@@ -98,7 +98,7 @@ const SearchInput = memo(({
 }) => {
   return (
     <View style={styles.searchInputContainer}>
-      <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+      <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
       <TextInput
         style={styles.searchInput}
         placeholder={placeholder}
@@ -111,10 +111,10 @@ const SearchInput = memo(({
         selectionColor="#4285f4"
       />
       {isLoading ? (
-        <ActivityIndicator size="small" color="#4285f4" style={styles.searchButton} />
+        <ActivityIndicator size="small" color="#F56E0F" style={styles.searchButton} />
       ) : value.length > 0 ? (
         <TouchableOpacity onPress={onClear} style={styles.searchButton}>
-          <MaterialIcons name="clear" size={20} color="#999" />
+          <MaterialIcons name="clear" size={20} color="#878787" />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -1330,7 +1330,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading messages...</Text>
       </View>
     );
@@ -1356,7 +1356,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 style={styles.newGroupButton}
                 onPress={() => setShowGroupModal(true)}
               >
-                <MaterialIcons name="group-add" size={24} color="#F4D03F" />
+                <MaterialIcons name="group-add" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -1393,9 +1393,9 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                           <Text style={styles.searchResultEmail}>{item.email}</Text>
                         </View>
                         {isStartingConversation ? (
-                          <ActivityIndicator size="small" color="#4285f4" />
+                          <ActivityIndicator size="small" color="#F56E0F" />
                         ) : (
-                          <MaterialIcons name="message" size={20} color="#4285f4" />
+                          <MaterialIcons name="message" size={20} color="#F56E0F" />
                         )}
               </TouchableOpacity>
                     )}
@@ -1440,7 +1440,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
               style={styles.backButton}
               onPress={() => setSelectedConversation(null)}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#fff" />
+              <MaterialIcons name="arrow-back" size={24} color="#FBFBFB" />
             </TouchableOpacity>
             <Text style={styles.messagesHeaderTitle}>
               {getParticipantName(selectedConversation)}
@@ -1452,7 +1452,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 handleGroupMenuPress();
               }}
             >
-              <MaterialIcons name="more-vert" size={24} color="#fff" />
+              <MaterialIcons name="more-vert" size={24} color="#FBFBFB" />
             </TouchableOpacity>
           </View>
 
@@ -1490,7 +1490,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
               onPress={sendMessage}
               disabled={!newMessage.trim()}
             >
-              <MaterialIcons name="send" size={24} color="#fff" />
+              <MaterialIcons name="send" size={24} color="#FBFBFB" />
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -1511,7 +1511,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 onPress={() => setShowGroupModal(false)}
                 style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
     </View>
 
@@ -1631,7 +1631,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 onPress={() => setShowGroupMembersModal(false)}
                 style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
             </View>
 
@@ -1676,7 +1676,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                       <Text style={styles.memberEmail}>{item.email}</Text>
                     </View>
                     {isSelected && (
-                      <MaterialIcons name="check-circle" size={24} color="#4285f4" />
+                      <MaterialIcons name="check-circle" size={24} color="#F56E0F" />
                     )}
                   </TouchableOpacity>
                 );
@@ -1713,7 +1713,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 <View style={styles.groupMenuHeader}>
                   <Text style={styles.groupMenuTitle}>Group Options</Text>
                   <TouchableOpacity onPress={() => setShowGroupMenu(false)}>
-                    <MaterialIcons name="close" size={24} color="#666" />
+                    <MaterialIcons name="close" size={24} color="#F56E0F" />
                   </TouchableOpacity>
                 </View>
                 
@@ -1722,7 +1722,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                   onPress={handleEditGroupAvatar}
                   disabled={isUploadingAvatar}
                 >
-                  <MaterialIcons name="edit" size={24} color="#4285f4" />
+                  <MaterialIcons name="edit" size={24} color="#F56E0F" />
                   <Text style={styles.groupMenuOptionText}>
                     {isUploadingAvatar ? 'Updating...' : 'Edit Profile Picture'}
                   </Text>
@@ -1735,7 +1735,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                   style={styles.groupMenuOption}
                   onPress={handleShowGroupMembers}
                 >
-                  <MaterialIcons name="group" size={24} color="#4285f4" />
+                  <MaterialIcons name="group" size={24} color="#F56E0F" />
                   <Text style={styles.groupMenuOptionText}>Show Group Members</Text>
                 </TouchableOpacity>
                 
@@ -1746,7 +1746,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                     setShowAddMemberModal(true);
                   }}
                 >
-                  <MaterialIcons name="person-add" size={24} color="#4285f4" />
+                  <MaterialIcons name="person-add" size={24} color="#F56E0F" />
                   <Text style={styles.groupMenuOptionText}>Add Group Member</Text>
                 </TouchableOpacity>
                 
@@ -1758,7 +1758,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                     setShowEditNameModal(true);
                   }}
                 >
-                  <MaterialIcons name="edit" size={24} color="#4285f4" />
+                  <MaterialIcons name="edit" size={24} color="#F56E0F" />
                   <Text style={styles.groupMenuOptionText}>Edit Group Name</Text>
                 </TouchableOpacity>
                 
@@ -1797,7 +1797,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 <View style={styles.groupMenuHeader}>
                   <Text style={styles.groupMenuTitle}>Conversation Options</Text>
                   <TouchableOpacity onPress={() => setShowDirectMessageMenu(false)}>
-                    <MaterialIcons name="close" size={24} color="#666" />
+                    <MaterialIcons name="close" size={24} color="#F56E0F" />
                   </TouchableOpacity>
                 </View>
                 
@@ -1834,7 +1834,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 onPress={() => setShowGroupInfoModal(false)}
                 style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
             </View>
 
@@ -1852,7 +1852,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                       {selectedConversation.name.charAt(0).toUpperCase()}
                     </Text>
                   ) : (
-                    <MaterialIcons name="group" size={40} color="#666" />
+                    <MaterialIcons name="group" size={40} color="#F56E0F" />
                   )}
                 </View>
                 <Text style={styles.groupInfoName}>
@@ -1940,7 +1940,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 onPress={() => setShowAddMemberModal(false)}
                 style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
             </View>
 
@@ -1978,7 +1978,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                   {isUpdatingGroup ? (
                     <ActivityIndicator size="small" color="#4285f4" />
                   ) : (
-                    <MaterialIcons name="person-add" size={24} color="#4285f4" />
+                    <MaterialIcons name="person-add" size={24} color="#F56E0F" />
                   )}
                 </TouchableOpacity>
               )}
@@ -2012,7 +2012,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 onPress={() => setShowEditNameModal(false)}
                 style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
             </View>
 
@@ -2085,27 +2085,27 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.83);', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   conversationsContainer: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E',
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2119,38 +2119,38 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FBFBFB',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     fontWeight: '500',
   },
   filterContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   filterTab: {
     paddingHorizontal: 20,
     paddingVertical: 10,
     marginHorizontal: 5,
     borderRadius: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E',
   },
   activeFilterTab: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
   },
   filterText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#666',
+    color: '#878787',
   },
   activeFilterText: {
-    color: '#fff',
+    color: '#FBFBFB',
   },
   conversationsList: {
     flex: 1,
@@ -2159,19 +2159,21 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   conversationItem: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E',
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 8,
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   selectedConversation: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F',
     elevation: 8,
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -2218,7 +2220,7 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#FBFBFB',
     flex: 1,
   },
   priorityDot: {
@@ -2226,11 +2228,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginLeft: 8,
-    backgroundColor: '#34a853',
+    backgroundColor: '#F56E0F',
   },
   lastMessage: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     fontWeight: '500',
   },
   conversationMeta: {
@@ -2238,12 +2240,12 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB',
     marginBottom: 4,
     opacity: 0.9,
   },
   unreadBadge: {
-    backgroundColor: '#E8A598', // Soft coral
+    backgroundColor: '#F56E0F',
     borderRadius: 12,
     minWidth: 20,
     height: 20,
@@ -2251,7 +2253,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
     elevation: 2,
-    shadowColor: '#E8A598',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -2259,18 +2261,18 @@ const styles = StyleSheet.create({
   unreadCount: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB',
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#151419',
   },
   messagesHeader: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E',
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2283,7 +2285,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB',
   },
   moreButton: {
     padding: 4,
@@ -2322,7 +2324,7 @@ const styles = StyleSheet.create({
   messageSender: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#878787',
   },
   messageMeta: {
     flexDirection: 'row',
@@ -2330,18 +2332,18 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
-    color: '#999',
+    color: '#878787',
     marginRight: 4,
   },
   messageText: {
     fontSize: 14,
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     lineHeight: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     padding: 12,
     borderRadius: 12,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -2350,33 +2352,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: 20,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
   },
   messageInput: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F',
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 14,
-    color: '#02050a',
-    backgroundColor: '#fff',
+    color: '#FBFBFB',
+    backgroundColor: '#151419',
     fontWeight: '500',
   },
   sendButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F',
     borderRadius: 24,
     width: 48,
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -2387,8 +2389,8 @@ const styles = StyleSheet.create({
   newGroupButton: {
     padding: 12,
     borderRadius: 20,
-    backgroundColor: '#2D5A3D', // Forest green
-    shadowColor: '#2D5A3D',
+    backgroundColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2400,15 +2402,15 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     borderRadius: 16,
     margin: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F',
     elevation: 4,
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -2419,7 +2421,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   searchButton: {
@@ -2427,12 +2429,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   searchResultsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F',
     elevation: 10,
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2448,7 +2450,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchResultAvatar: {
     width: 40,
@@ -2462,12 +2464,12 @@ const styles = StyleSheet.create({
   searchResultName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#02050a',
+    color: '#FBFBFB',
     fontFamily: 'System',
   },
   searchResultEmail: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787',
     marginTop: 4,
   },
   // Optimistic message styles
@@ -2488,11 +2490,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 12,
     padding: 20,
     width: '90%',
     maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2503,7 +2507,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
   },
   closeButton: {
     padding: 4,
@@ -2517,26 +2521,28 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#FBFBFB',
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#333',
+    color: '#FBFBFB',
+    backgroundColor: '#2A2A2E',
   },
   avatarButton: {
     width: 80,
     height: 80,
     borderRadius: 40,
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#2A2A2E',
   },
   avatarPreview: {
     width: 76,
@@ -2552,14 +2558,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderWidth: 1,
-    borderColor: '#4285f4',
+    borderColor: '#F56E0F',
     borderRadius: 8,
     marginBottom: 16,
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   addMembersText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#4285f4',
+    color: '#F56E0F',
     fontWeight: '500',
   },
   selectedMembersContainer: {
@@ -2568,13 +2575,13 @@ const styles = StyleSheet.create({
   selectedMembersTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#FBFBFB',
     marginBottom: 8,
   },
   selectedMemberItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     padding: 8,
     borderRadius: 20,
     marginRight: 8,
@@ -2587,7 +2594,7 @@ const styles = StyleSheet.create({
   },
   selectedMemberName: {
     fontSize: 12,
-    color: '#333',
+    color: '#FBFBFB',
     marginRight: 4,
   },
   removeMemberButton: {
@@ -2604,19 +2611,20 @@ const styles = StyleSheet.create({
     marginRight: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     alignItems: 'center',
+    backgroundColor: '#2A2A2E',
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787',
   },
   createButton: {
     flex: 1,
     padding: 12,
     marginLeft: 8,
     borderRadius: 8,
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
     alignItems: 'center',
   },
   createButtonDisabled: {
@@ -2624,7 +2632,7 @@ const styles = StyleSheet.create({
   },
   createButtonText: {
     fontSize: 16,
-    color: '#fff',
+    color: '#FBFBFB',
     fontWeight: '600',
   },
   membersSearchContainer: {
@@ -2632,11 +2640,12 @@ const styles = StyleSheet.create({
   },
   membersSearchInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#333',
+    color: '#FBFBFB',
+    backgroundColor: '#2A2A2E',
   },
   membersList: {
     maxHeight: 300,
@@ -2646,10 +2655,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   selectedMemberItemHighlighted: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
   },
   memberAvatar: {
     width: 40,
@@ -2663,24 +2672,26 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: '#FBFBFB',
   },
   memberEmail: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787',
     marginTop: 2,
   },
   // Group menu styles
   groupMenuContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 12,
     margin: 20,
     padding: 16,
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   groupMenuHeader: {
     flexDirection: 'row',
@@ -2691,7 +2702,7 @@ const styles = StyleSheet.create({
   groupMenuTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
   },
   groupMenuOption: {
     flexDirection: 'row',
@@ -2703,7 +2714,7 @@ const styles = StyleSheet.create({
   groupMenuOptionText: {
     marginLeft: 16,
     fontSize: 16,
-    color: '#333',
+    color: '#FBFBFB',
     flex: 1,
   },
   deleteOption: {
@@ -2745,7 +2756,7 @@ const styles = StyleSheet.create({
   groupInfoName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
   },
   groupInfoSection: {
     marginBottom: 24,
@@ -2753,14 +2764,14 @@ const styles = StyleSheet.create({
   groupInfoSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#FBFBFB',
     marginBottom: 12,
   },
   groupCreatorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderRadius: 8,
   },
   groupCreatorAvatar: {
@@ -2775,16 +2786,16 @@ const styles = StyleSheet.create({
   groupCreatorName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: '#FBFBFB',
   },
   groupCreatorEmail: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787',
     marginTop: 2,
   },
   groupInfoNoData: {
     fontSize: 14,
-    color: '#999',
+    color: '#878787',
     fontStyle: 'italic',
   },
   groupMembersList: {
@@ -2795,7 +2806,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   groupMemberAvatar: {
     width: 40,
@@ -2809,22 +2820,22 @@ const styles = StyleSheet.create({
   groupMemberName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: '#FBFBFB',
   },
   groupMemberEmail: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787',
     marginTop: 2,
   },
   creatorBadge: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   creatorBadgeText: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB',
     fontWeight: '600',
   },
   // Success modal styles
@@ -2834,16 +2845,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   successModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 16,
     padding: 32,
     alignItems: 'center',
     maxWidth: '80%',
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   successIconContainer: {
     marginBottom: 16,
@@ -2851,41 +2864,43 @@ const styles = StyleSheet.create({
   successModalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginBottom: 12,
   },
   successModalMessage: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 22,
   },
   successModalButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#F56E0F',
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,
     minWidth: 100,
   },
   successModalButtonText: {
-    color: '#fff',
+    color: '#FBFBFB',
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
   // Skeleton Loading Styles
   skeletonConversationItem: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 8,
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     opacity: 0.7,
   },
   skeletonConversationHeader: {
@@ -2899,7 +2914,7 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: 50,
     height: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 25,
   },
   skeletonConversationInfo: {
@@ -2908,14 +2923,14 @@ const styles = StyleSheet.create({
   skeletonParticipantName: {
     width: '60%',
     height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 9,
     marginBottom: 8,
   },
   skeletonLastMessage: {
     width: '80%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 7.5,
   },
   skeletonConversationMeta: {
@@ -2924,14 +2939,14 @@ const styles = StyleSheet.create({
   skeletonTimestamp: {
     width: 40,
     height: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6.5,
     marginBottom: 8,
   },
   skeletonUnreadBadge: {
     width: 24,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
 });

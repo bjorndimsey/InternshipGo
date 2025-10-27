@@ -320,7 +320,7 @@ export default function CompaniesPage() {
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
                 size={24} 
-                color="#F4D03F" 
+                color="#F56E0F" 
                 style={styles.expandIcon}
               />
             </View>
@@ -331,7 +331,7 @@ export default function CompaniesPage() {
               <Text style={styles.slotLabel}>Available Slots</Text>
               <ProgressBar 
                 progress={slotsProgress} 
-                color={company.availableSlots > 0 ? '#2D5A3D' : '#E8A598'} 
+                color={company.availableSlots > 0 ? '#F56E0F' : '#878787'} 
               />
             </View>
           </View>
@@ -340,17 +340,17 @@ export default function CompaniesPage() {
         {isExpanded && (
           <View style={styles.expandedContent}>
             <View style={styles.locationContainer}>
-              <MaterialIcons name="location-on" size={16} color="#F4D03F" />
+              <MaterialIcons name="location-on" size={16} color="#F56E0F" />
               <Text style={styles.locationText}>{company.location}</Text>
             </View>
             
             <View style={styles.contactContainer}>
               <View style={styles.contactItem}>
-                <MaterialIcons name="email" size={16} color="#F4D03F" />
+                <MaterialIcons name="email" size={16} color="#F56E0F" />
                 <Text style={styles.contactText}>{company.contactEmail}</Text>
               </View>
               <View style={styles.contactItem}>
-                <MaterialIcons name="phone" size={16} color="#F4D03F" />
+                <MaterialIcons name="phone" size={16} color="#F56E0F" />
                 <Text style={styles.contactText}>{company.contactPhone}</Text>
               </View>
             </View>
@@ -396,7 +396,7 @@ export default function CompaniesPage() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading companies...</Text>
       </View>
     );
@@ -407,13 +407,13 @@ export default function CompaniesPage() {
       {/* Search Section */}
       <Animated.View style={[styles.searchSection, { transform: [{ translateY: slideAnim }] }]}>
         <View style={styles.searchInputContainer}>
-          <MaterialIcons name="search" size={20} color="#F4D03F" style={styles.searchIcon} />
+          <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search approved companies..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
+            placeholderTextColor="#878787"
           />
         </View>
       </Animated.View>
@@ -425,19 +425,19 @@ export default function CompaniesPage() {
           <Text style={styles.statLabel}>Approved Companies</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#2D5A3D' }]}>
+          <Text style={[styles.statNumber, { color: '#F56E0F' }]}>
             {filteredCompanies.filter(c => c.moaStatus === 'active').length}
           </Text>
           <Text style={styles.statLabel}>Active MOA</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#E8A598' }]}>
+          <Text style={[styles.statNumber, { color: '#878787' }]}>
             {filteredCompanies.filter(c => c.moaStatus === 'expired').length}
           </Text>
           <Text style={styles.statLabel}>Expired MOA</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#F4D03F' }]}>
+          <Text style={[styles.statNumber, { color: '#F56E0F' }]}>
             {filteredCompanies.reduce((sum, company) => sum + company.availableSlots, 0)}
           </Text>
           <Text style={styles.statLabel}>Available Slots</Text>
@@ -457,7 +457,7 @@ export default function CompaniesPage() {
           </>
         ) : filteredCompanies.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="business-center" size={64} color="#02050a" />
+            <MaterialIcons name="business-center" size={64} color="#F56E0F" />
             <Text style={styles.emptyStateTitle}>No approved companies found</Text>
             <Text style={styles.emptyStateText}>
               {searchQuery 
@@ -479,40 +479,42 @@ export default function CompaniesPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#f5f5f5', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   searchSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 20,
     marginBottom: 20,
     borderRadius: 16,
     marginHorizontal: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input background
     borderRadius: 12,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   searchIcon: {
     marginRight: 10,
@@ -521,7 +523,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
   },
   statsContainer: {
     flexDirection: 'row',
@@ -531,25 +533,27 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -558,14 +562,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   companyCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
   },
   expandedCompanyCard: {
@@ -607,7 +613,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -622,18 +628,18 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
   },
   companyIndustry: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: 4,
     fontWeight: '500',
   },
   contactPerson: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.8,
   },
   statusContainer: {
@@ -660,7 +666,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginLeft: 4,
     opacity: 0.9,
   },
@@ -674,7 +680,7 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginLeft: 8,
     opacity: 0.9,
   },
@@ -686,7 +692,7 @@ const styles = StyleSheet.create({
   },
   slotLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.9,
     fontWeight: '500',
     marginBottom: 8,
@@ -709,7 +715,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     fontWeight: 'bold',
     marginLeft: 12,
   },
@@ -720,25 +726,25 @@ const styles = StyleSheet.create({
   },
   moaLabel: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginRight: 8,
     opacity: 0.9,
   },
   moaDate: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   description: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     lineHeight: 20,
     marginBottom: 8,
     opacity: 0.9,
   },
   partnershipDate: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     fontStyle: 'italic',
     fontWeight: '500',
   },
@@ -757,13 +763,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
   },
   removeButton: {
-    backgroundColor: '#E8A598', // Soft coral
+    backgroundColor: '#878787', // Muted gray
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
@@ -771,32 +777,34 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     lineHeight: 22,
     opacity: 0.7,
   },
   // Skeleton Loading Styles
   skeletonCompanyCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
     opacity: 0.7,
     padding: 20,
@@ -812,21 +820,21 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
   },
   skeletonCompanyInfo: {
     flex: 1,
   },
   skeletonTextLine: {
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonStatusBadge: {
     width: 60,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
   skeletonCompanyDetails: {

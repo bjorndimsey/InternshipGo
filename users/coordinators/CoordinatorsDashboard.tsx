@@ -460,7 +460,7 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
-            <Ionicons name="menu-outline" size={24} color="#333" />
+            <Ionicons name="menu-outline" size={24} color="#fff" />
           </TouchableOpacity>
           
           <View style={styles.headerContent}>
@@ -989,7 +989,7 @@ export default function CoordinatorsDashboard({ onLogout, currentUser }: Coordin
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#151419', // Dark background
   },
   mainContent: {
     flex: 1,
@@ -1000,8 +1000,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between' as const,
     paddingHorizontal: 24,
     paddingVertical: 20,
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    shadowColor: '#000',
+    backgroundColor: '#151419', // Dark background
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1010,8 +1010,10 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   headerContent: {
     flex: 1,
@@ -1027,15 +1029,15 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: width < 400 ? 20 : 24, // Smaller font on mobile
     fontWeight: 'bold' as const,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginRight: width < 400 ? 8 : 12, // Less margin on mobile
     fontFamily: 'System',
   },
   headerSubtitle: {
     fontSize: width < 400 ? 14 : 16, // Smaller font on mobile
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: 'bold' as const,
-    backgroundColor: 'rgba(244, 208, 63, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     paddingHorizontal: width < 400 ? 8 : 12, // Smaller padding on mobile
     paddingVertical: width < 400 ? 4 : 6, // Smaller padding on mobile
     borderRadius: 20,
@@ -1102,9 +1104,9 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: 300,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419', // Dark background
     zIndex: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -1115,7 +1117,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   sidebarLogo: {
     marginBottom: 12,
@@ -1123,13 +1125,13 @@ const styles = StyleSheet.create({
   sidebarTitle: {
     fontSize: 22,
     fontWeight: 'bold' as const,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
     fontFamily: 'System',
   },
   sidebarSubtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '600' as const,
   },
   navigation: {
@@ -1146,31 +1148,31 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
     position: 'relative' as const,
   },
   activeNavItem: {
-    backgroundColor: 'rgba(244, 208, 63, 0.15)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRightWidth: 4,
-    borderRightColor: '#F4D03F',
+    borderRightColor: '#F56E0F',
   },
   navText: {
     marginLeft: 16,
     fontSize: 17,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   activeNavText: {
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     fontWeight: 'bold' as const,
   },
   subMenuIcon: {
     marginLeft: 'auto',
   },
   subMenu: {
-    backgroundColor: 'rgba(244, 208, 63, 0.05)',
+    backgroundColor: 'rgba(245, 110, 15, 0.05)',
     borderLeftWidth: 2,
-    borderLeftColor: '#F4D03F',
+    borderLeftColor: '#F56E0F',
     marginLeft: 20,
   },
   subNavItem: {
@@ -1179,23 +1181,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.1)',
   },
   activeSubNavItem: {
-    backgroundColor: 'rgba(244, 208, 63, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   subNavText: {
     marginLeft: 12,
     fontSize: 15,
-    color: '#ccc',
+    color: '#878787', // Muted gray
     fontWeight: '400',
   },
   activeSubNavText: {
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     fontWeight: '600' as const,
   },
   messageBadge: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1204,12 +1206,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   messageBadgeText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: 12,
     fontWeight: 'bold' as const,
   },
   notificationSidebarBadge: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1218,13 +1220,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   notificationSidebarText: {
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontSize: 12,
     fontWeight: 'bold' as const,
   },
   sidebarFooter: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
     padding: 24,
   },
   userInfo: {
@@ -1236,7 +1238,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
@@ -1247,7 +1249,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   userAvatarText: {
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontSize: 20,
     fontWeight: 'bold' as const,
   },
@@ -1257,12 +1259,12 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600' as const,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 2,
   },
   userRole: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500' as const,
   },
   logoutButton: {
@@ -1273,13 +1275,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E8A598', // Soft coral
-    backgroundColor: 'rgba(232, 165, 152, 0.2)',
+    borderColor: '#878787', // Muted gray
+    backgroundColor: 'rgba(135, 135, 135, 0.2)',
   },
   logoutText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#E8A598', // Soft coral
+    color: '#878787', // Muted gray
     fontWeight: '600' as const,
   },
   // Notification Animation Styles
@@ -1298,14 +1300,16 @@ const styles = StyleSheet.create({
     left: 0, // Will be positioned by transform
     width: width < 400 ? Math.min(width - 40, 300) : 320, // Responsive width that fits screen
     maxWidth: width < 400 ? width - 40 : 320, // Ensure it doesn't exceed screen width
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   autoNotificationContent: {
     flexDirection: 'row',
@@ -1319,13 +1323,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F4D03F',
+    backgroundColor: '#F56E0F', // Primary orange
     alignItems: 'center',
     justifyContent: 'center',
   },
   autoNotificationText: {
     flex: 1,
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1338,13 +1342,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   notificationModalContent: {
-    backgroundColor: '#F5F1E8', // Soft cream
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
     elevation: 10,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -1355,12 +1359,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   notificationModalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
   },
   notificationList: {
     maxHeight: 400,
@@ -1371,7 +1375,7 @@ const styles = StyleSheet.create({
   },
   emptyNotificationsText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginTop: 12,
   },
   notificationItem: {
@@ -1379,7 +1383,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.1)',
   },
   notificationIconContainer: {
     marginRight: 12,
@@ -1397,9 +1401,10 @@ const styles = StyleSheet.create({
   },
   notificationMessage: {
     fontSize: 14,
-    color: '#333',
+    color: '#FBFBFB', // Light text for better contrast
     lineHeight: 20,
     marginBottom: 4,
+    fontWeight: '500',
   },
   notificationMeta: {
     flexDirection: 'row',
@@ -1407,8 +1412,9 @@ const styles = StyleSheet.create({
   },
   notificationTime: {
     fontSize: 12,
-    color: '#666',
+    color: '#F56E0F', // Orange for better visibility
     marginLeft: 4,
+    fontWeight: '600',
   },
   // Additional missing styles
   notificationModalOverlay: {
@@ -1431,25 +1437,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 12,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#fff',
+    borderBottomColor: '#1B1B1E', // Dark background to match modal
     zIndex: 1001,
   },
   notificationModal: {
     position: 'absolute',
     top: 70,
     right: width < 400 ? 20 : 30,
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark background
     borderRadius: 12,
     width: width < 400 ? width - 40 : 350,
     maxHeight: 500,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   clearAllText: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1458,18 +1466,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   clearNotificationText: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   viewAllButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   viewAllText: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1486,12 +1494,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logoutModal: {
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     width: '100%',
     maxWidth: 350,
     elevation: 10,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -1499,17 +1507,17 @@ const styles = StyleSheet.create({
   logoutModalHeader: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(30, 58, 95, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   logoutModalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
   },
   logoutModalMessage: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     marginTop: 8,
   },
@@ -1557,13 +1565,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutSuccessContainer: {
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 40,
     alignItems: 'center',
     maxWidth: 300,
     elevation: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -1574,13 +1582,13 @@ const styles = StyleSheet.create({
   logoutSuccessTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     marginBottom: 12,
     textAlign: 'center',
   },
   logoutSuccessMessage: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     lineHeight: 24,
   },

@@ -80,3 +80,11 @@ async function testAttendanceTable() {
 
 // Run the test
 testAttendanceTable();
+
+
+
+
+
+
+
+

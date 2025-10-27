@@ -16,7 +16,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Test connection
 async function testConnection() {
   try {
-    const { data, error } = await supabase.from('users').select('count').limit(1);
+    const { data, error, count } = await supabase.from('users').select('*', { count: 'exact', head: true });
     if (error) {
       console.error('❌ Supabase connection test failed:', error.message);
       return false;

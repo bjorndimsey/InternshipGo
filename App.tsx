@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import GoogleLogin from './screens/Loginscreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import LandingPage from './screens/LandingPage';
 
 // Import all dashboard components
 import SystemAdminDashboard from './users/systemadmin/SystemAdminDashboard';
@@ -14,13 +15,13 @@ import AdminCoordinatorsDashboard from './users/admincoordinators/AdminCoordinat
 import CompanyDashboard from './users/company/CompanyDashboard';
 import LoadingScreen from './components/LoadingScreen';
 import SplashScreen from './components/SplashScreen';
-import { UserInfo } from './AuthContext';
+import { UserInfo, AuthProvider } from './AuthContext';
 
-type Screen = 'loading' | 'splashscreen' |'login' | 'register' | 'forgot-password' | 'dashboard';
+type Screen = 'loading' | 'splashscreen' | 'landing' | 'login' | 'register' | 'forgot-password' | 'dashboard';
 type UserType = 'student' | 'coordinator' | 'admin_coordinator' | 'company' | 'system_admin';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('splashscreen');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('loading');
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
   const [userType, setUserType] = useState<UserType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,11 +47,11 @@ export default function App() {
         setCurrentScreen('dashboard');
       } else {
         console.log('❌ No stored authentication found');
-        setCurrentScreen('splashscreen');
+        setCurrentScreen('landing');
       }
     } catch (error) {
       console.error('❌ Error checking stored auth:', error);
-      setCurrentScreen('splashscreen');
+      setCurrentScreen('landing');
     } finally {
       setIsLoading(false);
     }
@@ -186,11 +187,19 @@ export default function App() {
   };
 
   const handleSplashFinish = () => {
-    setCurrentScreen('login');
+    setCurrentScreen('landing');
   };
 
   const handleLoadingFinish = () => {
+    setCurrentScreen('landing');
+  };
+
+  const handleLandingToLogin = () => {
     setCurrentScreen('login');
+  };
+
+  const handleLandingToRegister = () => {
+    setCurrentScreen('register');
   };
 
   const handleRegisterSuccess = async (userData: any, userType?: string) => {
@@ -274,6 +283,14 @@ export default function App() {
         return <SplashScreen onAnimationFinish={handleSplashFinish} />;
       case 'loading':
         return <LoadingScreen message="Loading InternshipGo..." />;
+      case 'landing':
+        return (
+          <LandingPage
+            onNavigateToLogin={handleLandingToLogin}
+            onNavigateToRegister={handleLandingToRegister}
+            onNavigateToDashboard={handleNavigateToDashboard}
+          />
+        );
       case 'login':
         return (
           <GoogleLogin
@@ -291,21 +308,22 @@ export default function App() {
         return renderDashboard();
       default:
         return (
-          <GoogleLogin
-            onLoginSuccess={handleLoginSuccess}
+          <LandingPage
+            onNavigateToLogin={handleLandingToLogin}
+            onNavigateToRegister={handleLandingToRegister}
             onNavigateToDashboard={handleNavigateToDashboard}
-            onNavigateToRegister={handleNavigateToRegister}
-            onNavigateToForgotPassword={handleNavigateToForgotPassword}
           />
         );
     }
   };
 
   return (
-    <View style={styles.container}>
-      {renderCurrentScreen()}
-      <Toast />
-    </View>
+    <AuthProvider>
+      <View style={styles.container}>
+        {renderCurrentScreen()}
+        <Toast />
+      </View>
+    </AuthProvider>
   );
 }
 

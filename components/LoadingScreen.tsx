@@ -55,7 +55,7 @@ export default function LoadingScreen({ message = "Loading..." }: LoadingScreenP
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f0" />
+      <StatusBar barStyle="light-content" backgroundColor="#151419" />
       
       {/* Background Bubbles */}
       <View style={styles.bubbleContainer}>
@@ -103,7 +103,7 @@ export default function LoadingScreen({ message = "Loading..." }: LoadingScreenP
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f0',
+    backgroundColor: '#151419',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   bubble: {
     position: 'absolute',
     borderRadius: 50,
-    backgroundColor: 'rgba(255, 132, 0, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   bubble1: {
     width: 60,
@@ -159,8 +159,8 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 4,
-    borderColor: 'rgba(255, 132, 0, 0.2)',
-    borderTopColor: '#FF8400',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+    borderTopColor: '#F56E0F',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -168,11 +168,11 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 132, 0, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   message: {
     fontSize: 18,
-    color: '#333',
+    color: '#FBFBFB',
     textAlign: 'center',
     fontWeight: '500',
     marginBottom: 30,
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FF8400',
+    backgroundColor: '#F56E0F',
     marginHorizontal: 4,
   },
   dot1: {

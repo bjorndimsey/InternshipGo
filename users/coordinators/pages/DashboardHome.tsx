@@ -1001,7 +1001,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
               placeholder="Search pending companies..."
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
+              placeholderTextColor="#878787"
             />
           </View>
         </View>
@@ -1442,38 +1442,38 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgb(255, 255, 255); ', // Gray background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#2A2A2E',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   welcomeSection: {
     padding: 24,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#2A2A2E',
     marginBottom: 24,
   },
   welcomeTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginBottom: 12,
     fontFamily: 'System',
   },
   welcomeSubtitle: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#F56E0F', // Primary orange
     lineHeight: 24,
-    opacity: 0.8,
+    opacity: 0.9,
     fontWeight: '400',
   },
   statsSection: {
@@ -1484,46 +1484,50 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginTop: 8,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     marginBottom: 2,
     fontWeight: '600',
   },
   statSubLabel: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#878787', // Muted gray
     textAlign: 'center',
   },
   searchSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 20,
     marginBottom: 20,
     borderRadius: 16,
     marginHorizontal: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchContainer: {
     marginBottom: 15,
@@ -1531,21 +1535,21 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input background
     borderRadius: 12,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   searchIcon: {
     marginRight: 10,
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
   },
   filterContainer: {
     flexDirection: 'row',
@@ -1554,22 +1558,22 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   yearSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input background
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   yearText: {
     fontSize: 14,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginRight: 4,
   },
   companiesSection: {
@@ -1581,23 +1585,25 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#1a1a2e', // Dark text
     marginBottom: 4,
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#666', // Dark gray
   },
   companyCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   companyHeader: {
     flexDirection: 'row',
@@ -1615,14 +1621,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 35,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
   },
   companyInfo: {
     flex: 1,
@@ -1630,17 +1636,17 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 6,
   },
   companyIndustry: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: 8,
   },
   schoolYear: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.8,
   },
   statusContainer: {
@@ -1666,7 +1672,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 15,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginLeft: 6,
     fontWeight: '500',
   },
@@ -1680,17 +1686,17 @@ const styles = StyleSheet.create({
   },
   slotLabel: {
     fontSize: 15,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginRight: 8,
   },
   slotValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
   },
   slotBar: {
     height: 6,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -1705,7 +1711,7 @@ const styles = StyleSheet.create({
   },
   moaLabel: {
     fontSize: 15,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginRight: 8,
   },
   moaBadge: {
@@ -1717,16 +1723,16 @@ const styles = StyleSheet.create({
   moaText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
   },
   moaDate: {
     fontSize: 13,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.8,
   },
   description: {
     fontSize: 15,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     lineHeight: 22,
     opacity: 0.9,
   },
@@ -1745,19 +1751,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
   },
   profileButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
   },
   partnerButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#878787', // Muted gray
   },
   removeButton: {
     backgroundColor: '#ea4335',
   },
   actionButtonText: {
-    color: '#fff', // White text for all buttons
+    color: '#FBFBFB', // Light text for all buttons
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
@@ -1765,18 +1771,18 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#2A2A2E',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -1937,7 +1943,7 @@ const styles = StyleSheet.create({
   },
   matchingInfoText: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#666',
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -2016,15 +2022,17 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   skeletonHeader: {
     flexDirection: 'row',
@@ -2034,7 +2042,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     marginRight: 15,
   },
   skeletonInfo: {
@@ -2042,21 +2050,21 @@ const styles = StyleSheet.create({
   },
   skeletonTitle: {
     height: 20,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
     width: '70%',
   },
   skeletonSubtitle: {
     height: 16,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 4,
     width: '50%',
   },
   skeletonText: {
     height: 14,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     width: '40%',
   },
@@ -2065,14 +2073,14 @@ const styles = StyleSheet.create({
   },
   skeletonLine: {
     height: 14,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
     width: '100%',
   },
   skeletonLineShort: {
     height: 14,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     width: '60%',
   },
@@ -2084,46 +2092,53 @@ const styles = StyleSheet.create({
   skeletonButton: {
     flex: 1,
     height: 36,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
   },
   skeletonStatCard: {
     flex: 1,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   skeletonStatIcon: {
     width: 32,
     height: 32,
-    backgroundColor: '#d0d0d0',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 16,
     marginBottom: 8,
   },
   skeletonStatNumber: {
     height: 24,
-    backgroundColor: '#d0d0d0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
     width: 40,
   },
   skeletonStatLabel: {
     height: 12,
-    backgroundColor: '#d0d0d0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 4,
     width: 60,
   },
   skeletonStatSubLabel: {
     height: 10,
-    backgroundColor: '#d0d0d0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     width: 40,
   },
   skeletonSearchBar: {
     height: 48,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginBottom: 15,
   },

@@ -30,6 +30,9 @@ interface Notification {
   action?: string;
   priority?: string;
   data?: any;
+  // Alternative timestamp field names that might be used by the API
+  created_at?: string;
+  createdAt?: string;
 }
 
 interface NotificationResponse {
@@ -183,6 +186,16 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 
       if (notificationsResponse.success && notificationsResponse.notifications) {
         console.log('✅ Setting notifications:', notificationsResponse.notifications);
+        // Log each notification's timestamp for debugging
+        notificationsResponse.notifications.forEach((notification, index) => {
+          console.log(`🔍 Notification ${index}:`, {
+            id: notification.id,
+            title: notification.title,
+            timestamp: notification.timestamp,
+            timestampType: typeof notification.timestamp,
+            allKeys: Object.keys(notification)
+          });
+        });
         setNotifications(notificationsResponse.notifications);
         console.log('✅ Fetched notifications:', notificationsResponse.notifications.length);
       } else {
@@ -338,14 +351,14 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'success': return '#2D5A3D'; // Forest green
-      case 'info': return '#1E3A5F'; // Deep navy blue
-      case 'warning': return '#F4D03F'; // Bright yellow
-      case 'error': return '#E8A598'; // Soft coral
-      case 'application': return '#1E3A5F'; // Deep navy blue
-      case 'moa': return '#F4D03F'; // Bright yellow
-      case 'intern': return '#2D5A3D'; // Forest green
-      default: return '#1E3A5F'; // Deep navy blue
+      case 'success': return '#F56E0F';
+      case 'info': return '#F56E0F';
+      case 'warning': return '#F56E0F';
+      case 'error': return '#F56E0F';
+      case 'application': return '#F56E0F';
+      case 'moa': return '#F56E0F';
+      case 'intern': return '#F56E0F';
+      default: return '#F56E0F';
     }
   };
 
@@ -360,9 +373,9 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
   };
 
   const getPriorityColor = (isImportant: boolean, actionRequired: boolean) => {
-    if (actionRequired) return '#E8A598'; // Soft coral
-    if (isImportant) return '#F4D03F'; // Bright yellow
-    return '#2D5A3D'; // Forest green
+    if (actionRequired) return '#F56E0F';
+    if (isImportant) return '#F56E0F';
+    return '#F56E0F';
   };
 
   // Skeleton Components
@@ -391,9 +404,76 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
   };
 
   const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
+    // Debug logging to identify problematic timestamps
+    console.log('🔍 formatTimestamp called with:', timestamp, 'type:', typeof timestamp);
+    
+    // Handle invalid or empty timestamps
+    if (!timestamp || timestamp.trim() === '') {
+      console.log('⚠️ Empty or null timestamp');
+      return 'Unknown time';
+    }
+
+    // Check if the timestamp is already a relative time string (like "2 weeks ago", "3 days ago", etc.)
+    const relativeTimePattern = /^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$/i;
+    const match = timestamp.match(relativeTimePattern);
+    
+    if (match) {
+      console.log('✅ Detected relative time string, returning as-is:', timestamp);
+      return timestamp; // Return the relative time string as-is
+    }
+
+    // Check for other common relative time patterns
+    const commonRelativePatterns = [
+      /^just\s+now$/i,
+      /^a\s+few\s+minutes\s+ago$/i,
+      /^a\s+few\s+hours\s+ago$/i,
+      /^yesterday$/i,
+      /^today$/i,
+      /^(\d+)\s+weeks?\s+ago$/i,
+      /^(\d+)\s+days?\s+ago$/i,
+      /^(\d+)\s+hours?\s+ago$/i,
+      /^(\d+)\s+minutes?\s+ago$/i
+    ];
+
+    for (const pattern of commonRelativePatterns) {
+      if (pattern.test(timestamp)) {
+        console.log('✅ Detected common relative time pattern, returning as-is:', timestamp);
+        return timestamp;
+      }
+    }
+
+    // Try to parse the timestamp as a date
+    let date: Date;
+    try {
+      date = new Date(timestamp);
+    } catch (error) {
+      console.log('❌ Error parsing timestamp:', timestamp, 'Error:', error);
+      return 'Invalid date';
+    }
+    
     const now = new Date();
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.log('❌ Invalid date created from timestamp:', timestamp);
+      // Try alternative parsing methods
+      const alternativeDate = new Date(timestamp.replace(' ', 'T')); // Try ISO format
+      if (!isNaN(alternativeDate.getTime())) {
+        console.log('✅ Alternative parsing worked');
+        date = alternativeDate;
+      } else {
+        return 'Invalid date';
+      }
+    }
+    
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    console.log('🔍 Time calculation - now:', now.getTime(), 'date:', date.getTime(), 'diffInHours:', diffInHours);
+    
+    // Handle negative time differences (future dates)
+    if (diffInHours < 0) {
+      console.log('⚠️ Future date detected, returning "Just now"');
+      return 'Just now';
+    }
     
     if (diffInHours < 1) {
       return 'Just now';
@@ -401,6 +481,12 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
       return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
     } else {
       const diffInDays = Math.floor(diffInHours / 24);
+      console.log('🔍 diffInDays calculated:', diffInDays);
+      // Additional check to ensure diffInDays is valid
+      if (isNaN(diffInDays) || diffInDays < 0) {
+        console.log('❌ Invalid diffInDays:', diffInDays);
+        return 'Just now';
+      }
       return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
     }
   };
@@ -439,11 +525,11 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
               <MaterialIcons 
                 name={getCategoryIcon(notification.category || 'system')} 
                 size={14} 
-                color="#666" 
+                color="#F56E0F" 
               />
               <Text style={styles.categoryText}>{notification.category || 'system'}</Text>
             </View>
-            <Text style={styles.notificationTime}>{formatTimestamp(notification.timestamp)}</Text>
+            <Text style={styles.notificationTime}>{formatTimestamp(notification.timestamp || notification.created_at || notification.createdAt || '')}</Text>
           </View>
         </View>
         <View style={styles.notificationActions}>
@@ -456,7 +542,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
       {notification.actionRequired && (
         <View style={styles.notificationAction}>
           <Text style={styles.actionText}>Action Required</Text>
-          <MaterialIcons name="arrow-forward-ios" size={16} color="#4285f4" />
+          <MaterialIcons name="arrow-forward-ios" size={16} color="#F56E0F" />
         </View>
       )}
     </TouchableOpacity>
@@ -468,7 +554,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
     console.log('🔄 Showing loading screen');
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading notifications...</Text>
       </View>
     );
@@ -476,53 +562,51 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Header */}
+      {/* Header with integrated filter tabs */}
       <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
-        <View style={styles.headerGradient}>
-          <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerContent}>
+          <View style={styles.titleRow}>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'all' && styles.activeFilterTab]}
+                onPress={() => setFilter('all')}
+              >
+                <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
+                  All ({notifications.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'unread' && styles.activeFilterTab]}
+                onPress={() => setFilter('unread')}
+              >
+                <Text style={[styles.filterText, filter === 'unread' && styles.activeFilterText]}>
+                  Unread ({notifications.filter(n => !n.isRead).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'important' && styles.activeFilterTab]}
+                onPress={() => setFilter('important')}
+              >
+                <Text style={[styles.filterText, filter === 'important' && styles.activeFilterText]}>
+                  Important ({notifications.filter(n => n.isImportant).length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterTab, filter === 'action-required' && styles.activeFilterTab]}
+                onPress={() => setFilter('action-required')}
+              >
+                <Text style={[styles.filterText, filter === 'action-required' && styles.activeFilterText]}>
+                  Action Required ({notifications.filter(n => n.actionRequired).length})
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
           <Text style={styles.headerSubtitle}>
             {notifications.filter(n => !n.isRead).length} unread notifications
           </Text>
         </View>
       </Animated.View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'all' && styles.activeFilterTab]}
-            onPress={() => setFilter('all')}
-          >
-            <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
-              All ({notifications.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'unread' && styles.activeFilterTab]}
-            onPress={() => setFilter('unread')}
-          >
-            <Text style={[styles.filterText, filter === 'unread' && styles.activeFilterText]}>
-              Unread ({notifications.filter(n => !n.isRead).length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'important' && styles.activeFilterTab]}
-            onPress={() => setFilter('important')}
-          >
-            <Text style={[styles.filterText, filter === 'important' && styles.activeFilterText]}>
-              Important ({notifications.filter(n => n.isImportant).length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterTab, filter === 'action-required' && styles.activeFilterTab]}
-            onPress={() => setFilter('action-required')}
-          >
-            <Text style={[styles.filterText, filter === 'action-required' && styles.activeFilterText]}>
-              Action Required ({notifications.filter(n => n.actionRequired).length})
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
 
       {/* Actions */}
       <View style={styles.actionsContainer}>
@@ -530,7 +614,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
           style={styles.actionButton}
           onPress={handleMarkAllAsRead}
         >
-          <MaterialIcons name="done-all" size={20} color="#4285f4" />
+          <MaterialIcons name="done-all" size={20} color="#F56E0F" />
           <Text style={styles.actionButtonText}>Mark All Read</Text>
         </TouchableOpacity>
       </View>
@@ -550,7 +634,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
           </>
         ) : filteredNotifications.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="notifications-none" size={64} color="#02050a" />
+            <MaterialIcons name="notifications-none" size={64} color="#F56E0F" />
             <Text style={styles.emptyStateTitle}>No notifications</Text>
             <Text style={styles.emptyStateText}>
               {filter === 'all' 
@@ -572,114 +656,121 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#2A2A2E',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    backgroundColor: '#2A2A2E',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  headerGradient: {
-    position: 'relative',
+  headerContent: {
+    flexDirection: 'column',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginRight: 16,
     fontFamily: 'System',
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    fontSize: 14,
+    color: '#F56E0F',
     fontWeight: '500',
   },
-  filterContainer: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+  filterScrollView: {
+    flex: 1,
   },
   filterTab: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    marginHorizontal: 6,
-    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 2,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   activeFilterTab: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F',
   },
   filterText: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: '600',
     color: '#fff',
   },
   activeFilterText: {
-    color: '#02050a', // Dark navy text on yellow
+    color: '#FBFBFB',
     fontWeight: 'bold',
   },
   actionsContainer: {
-    backgroundColor: '#2D5A3D', // Forest green
-    padding: 20,
+    backgroundColor: '#1B1B1E',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   actionButtonText: {
-    fontSize: 15,
+    fontSize: 13,
     color: '#fff',
-    marginLeft: 8,
+    marginLeft: 6,
     fontWeight: '600',
   },
   notificationsList: {
     flex: 1,
   },
   notificationItem: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E',
     marginHorizontal: 20,
     marginVertical: 8,
     borderRadius: 16,
     padding: 20,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   unreadNotification: {
     borderLeftWidth: 6,
-    borderLeftColor: '#F4D03F', // Bright yellow
+    borderLeftColor: '#F56E0F',
     elevation: 8,
     shadowOpacity: 0.2,
   },
   urgentNotification: {
     borderLeftWidth: 6,
-    borderLeftColor: '#E8A598', // Soft coral
+    borderLeftColor: '#F56E0F',
     elevation: 8,
     shadowOpacity: 0.2,
   },
@@ -723,7 +814,7 @@ const styles = StyleSheet.create({
   },
   notificationMessage: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     lineHeight: 22,
     fontWeight: '500',
     opacity: 0.9,
@@ -756,7 +847,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F',
   },
   notificationAction: {
     flexDirection: 'row',
@@ -769,7 +860,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     fontWeight: '600',
   },
   emptyState: {
@@ -779,14 +870,14 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB',
     marginTop: 20,
     marginBottom: 12,
     fontFamily: 'System',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#878787',
     textAlign: 'center',
     lineHeight: 24,
     opacity: 0.7,
@@ -794,16 +885,18 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonNotificationItem: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     marginHorizontal: 20,
     marginVertical: 8,
     borderRadius: 16,
     padding: 20,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     opacity: 0.7,
   },
   skeletonNotificationHeader: {
@@ -813,7 +906,7 @@ const styles = StyleSheet.create({
   skeletonNotificationIcon: {
     width: 48,
     height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 24,
     marginRight: 16,
   },
@@ -823,14 +916,14 @@ const styles = StyleSheet.create({
   skeletonNotificationTitle: {
     width: '70%',
     height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
     marginBottom: 8,
   },
   skeletonNotificationMessage: {
     width: '90%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 4,
   },
@@ -840,20 +933,20 @@ const styles = StyleSheet.create({
   skeletonNotificationTime: {
     width: 60,
     height: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
   },
   skeletonUnreadDot: {
     width: 10,
     height: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 5,
   },
   skeletonNotificationAction: {
     width: '40%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginTop: 16,
   },

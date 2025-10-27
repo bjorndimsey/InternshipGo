@@ -892,7 +892,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#2A2A2E',
   },
   loadingContainer: {
     flex: 1,
@@ -906,7 +906,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     color: '#666',
   },
   header: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E',
     padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -949,7 +949,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: responsiveValues.isDesktop ? 16 : 14,
-    color: '#F4D03F',
+    color: '#F56E0F',
     fontWeight: '500',
   },
   headerFilters: {
@@ -980,7 +980,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     marginRight: responsiveValues.isDesktop ? 8 : 3,
   },
   headerFilterChipSelected: {
-    backgroundColor: '#F4D03F',
+    backgroundColor: '#F56E0F',
   },
   headerFilterChipText: {
     fontSize: responsiveValues.isDesktop ? 12 : 8,
@@ -1011,7 +1011,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     minWidth: responsiveValues.isDesktop ? 80 : 60,
   },
   headerViewModeButtonActive: {
-    backgroundColor: '#F4D03F',
+    backgroundColor: '#F56E0F',
   },
   headerViewModeText: {
     fontSize: responsiveValues.isDesktop ? 14 : 11,
@@ -1072,7 +1072,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     marginRight: 8,
   },
   selectedInternChip: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#878787',
   },
   internChipText: {
     fontSize: 14,
@@ -1080,7 +1080,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     fontWeight: '500',
   },
   selectedInternChipText: {
-    color: '#fff',
+    color: '#151419',
   },
   selectedInternInfo: {
     flexDirection: 'row',
@@ -1488,13 +1488,13 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     position: 'absolute',
     bottom: 2,
     left: 2,
-    backgroundColor: '#F4D03F',
+    backgroundColor: '#F56E0F',
     borderRadius: 8,
     minWidth: 18,
     height: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
@@ -1553,7 +1553,7 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     fontWeight: 'bold',
   },
   calendarLegendInternBadge: {
-    backgroundColor: '#F4D03F',
+    backgroundColor: '#F56E0F',
   },
   imageModalOverlay: {
     flex: 1,

@@ -201,7 +201,7 @@ export default function ForgotPasswordScreen({ onBack, onSuccess }: ForgotPasswo
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+      <StatusBar barStyle="light-content" backgroundColor="#151419" />
       
       {/* Background Bubbles */}
       <View style={styles.bubbleContainer}>
@@ -221,7 +221,7 @@ export default function ForgotPasswordScreen({ onBack, onSuccess }: ForgotPasswo
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.logoContainer}>
-                <Ionicons name="school-outline" size={60} color="#1E3A5F" />
+                <Ionicons name="business" size={60} color="#FBFBFB" />
               </View>
               <Text style={styles.appTitle}>InternshipGo</Text>
             </View>
@@ -238,7 +238,7 @@ export default function ForgotPasswordScreen({ onBack, onSuccess }: ForgotPasswo
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
-                  placeholderTextColor="#A0A0A0"
+                  placeholderTextColor="#878787"
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -286,7 +286,7 @@ export default function ForgotPasswordScreen({ onBack, onSuccess }: ForgotPasswo
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419', // Dark background
   },
   bubbleContainer: {
     position: 'absolute',
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   bubble: {
     position: 'absolute',
     borderRadius: 50,
-    backgroundColor: 'rgba(245, 241, 232, 0.3)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble1: {
     width: 100,
@@ -309,28 +309,28 @@ const styles = StyleSheet.create({
     height: 80,
     top: height * 0.2,
     right: width * 0.15,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   bubble3: {
     width: 120,
     height: 120,
     bottom: height * 0.2,
     left: width * 0.05,
-    backgroundColor: 'rgba(245, 241, 232, 0.2)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.08)', // Medium orange with opacity
   },
   bubble4: {
     width: 60,
     height: 60,
     bottom: height * 0.1,
     right: width * 0.2,
-    backgroundColor: 'rgba(30, 58, 95, 0.15)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble5: {
     width: 90,
     height: 90,
     top: height * 0.5,
     right: width * 0.1,
-    backgroundColor: 'rgba(245, 241, 232, 0.25)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   safeArea: {
     flex: 1,
@@ -353,11 +353,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#F4D03F', // Soft cream
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -369,19 +369,19 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   formCard: {
-    backgroundColor: 'rgba(245, 241, 232, 0.95)', // Soft cream with opacity
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 24,
     padding: 32,
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 12,
@@ -390,18 +390,18 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 20,
     borderWidth: 1,
-    borderColor: 'rgba(244, 208, 63, 0.2)',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#878787', // Muted gray
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 22,
@@ -413,19 +413,19 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
   },
   input: {
     borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#1E3A5F', // Deep navy blue
-    shadowColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E', // Dark input background
+    color: '#FBFBFB', // Light text
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -435,11 +435,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   sendButton: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 16,
     paddingVertical: 18,
     marginBottom: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 6,
@@ -449,14 +449,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   sendButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#878787', // Muted gray
     shadowOpacity: 0,
     elevation: 0,
   },
   sendButtonText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
   },
   backButton: {
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#F56E0F', // Primary orange
     fontWeight: '600',
   },
 });

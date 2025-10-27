@@ -75,13 +75,13 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [submissionCounts, setSubmissionCounts] = useState<{[key: string]: number}>({});
-  const [statusFilter, setStatusFilter] = useState<'all' | 'done' | 'pending'>('all');
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -114,7 +114,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [selectedStatus]);
+  }, []);
 
   // Pre-fetch submission counts for all requirements
   useEffect(() => {
@@ -145,6 +145,15 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
     }
   }, [showSkeleton]);
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchSubmissions = async () => {
     if (!currentUser) {
       console.log('❌ No current user available');
@@ -155,10 +164,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
       setLoading(true);
       console.log('📋 Fetching submissions for coordinator:', currentUser.id);
       
-      const response = await apiService.getCoordinatorSubmissions(
-        currentUser.id,
-        selectedStatus === 'all' ? undefined : selectedStatus
-      );
+      const response = await apiService.getCoordinatorSubmissions(currentUser.id);
       
       if (response.success) {
         console.log('📋 Found submissions:', response.data?.length || 0);
@@ -478,10 +484,13 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
   };
 
   const getFilteredSubmissions = (submissions: any[]) => {
-    if (statusFilter === 'all') return submissions;
-    if (statusFilter === 'done') return submissions.filter(sub => isSubmissionDone(sub.status));
-    if (statusFilter === 'pending') return submissions.filter(sub => !isSubmissionDone(sub.status));
-    return submissions;
+    if (!searchQuery.trim()) return submissions;
+    
+    return submissions.filter(sub => 
+      sub.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sub.requirement_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sub.status?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   };
 
 
@@ -520,7 +529,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading submissions...</Text>
       </View>
     );
@@ -533,76 +542,54 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
         <Text style={styles.subtitle}>View requirements and track student submissions</Text>
       </Animated.View>
 
-      {/* Status Filter */}
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['all', 'submitted', 'approved', 'rejected', 'needs_revision'].map((status) => (
-            <TouchableOpacity
-              key={status}
-              style={[
-                styles.filterButton,
-                selectedStatus === status && styles.filterButtonActive
-              ]}
-              onPress={() => setSelectedStatus(status)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                selectedStatus === status && styles.filterButtonTextActive
-              ]}>
-                {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-              </Text>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search requirements, students, or status..."
+            placeholderTextColor="#878787"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <MaterialIcons name="clear" size={20} color="#878787" />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Done/Pending Toggle */}
-      <View style={styles.toggleContainer}>
-        <Text style={styles.toggleLabel}>Filter by Status:</Text>
-        <View style={styles.toggleButtons}>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              statusFilter === 'all' && styles.toggleButtonActive
-            ]}
-            onPress={() => setStatusFilter('all')}
-          >
-            <Text style={[
-              styles.toggleButtonText,
-              statusFilter === 'all' && styles.toggleButtonTextActive
-            ]}>
-              All
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              statusFilter === 'pending' && styles.toggleButtonActive
-            ]}
-            onPress={() => setStatusFilter('pending')}
-          >
-            <Text style={[
-              styles.toggleButtonText,
-              statusFilter === 'pending' && styles.toggleButtonTextActive
-            ]}>
-              Pending
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              statusFilter === 'done' && styles.toggleButtonActive
-            ]}
-            onPress={() => setStatusFilter('done')}
-          >
-            <Text style={[
-              styles.toggleButtonText,
-              statusFilter === 'done' && styles.toggleButtonTextActive
-            ]}>
-              Done
-            </Text>
-          </TouchableOpacity>
+          )}
         </View>
+        {searchQuery.trim() && debouncedSearchQuery !== searchQuery && (
+          <Text style={styles.searchResultsText}>
+            Searching...
+          </Text>
+        )}
+        {debouncedSearchQuery.trim() && debouncedSearchQuery === searchQuery && (() => {
+          const filteredCount = requirements.filter(requirement => {
+            const searchLower = debouncedSearchQuery.toLowerCase();
+            const submissionCount = submissionCounts[requirement.requirement_id] || 0;
+            
+            return (
+              requirement.requirement_name?.toLowerCase().includes(searchLower) ||
+              requirement.requirement_description?.toLowerCase().includes(searchLower) ||
+              requirement.requirement_id?.toLowerCase().includes(searchLower) ||
+              (searchLower === 'submitted' && submissionCount > 0) ||
+              (searchLower === 'no submissions' && submissionCount === 0) ||
+              (searchLower === 'pending' && submissionCount > 0) ||
+              (searchLower === 'done' && submissionCount > 0) ||
+              (searchLower === 'approved' && submissionCount > 0) ||
+              (searchLower === 'rejected' && submissionCount > 0) ||
+              (searchLower === 'needs revision' && submissionCount > 0) ||
+              (searchLower === 'needs_revision' && submissionCount > 0)
+            );
+          }).length;
+
+          return (
+            <Text style={styles.searchResultsText}>
+              {filteredCount} result{filteredCount !== 1 ? 's' : ''} found
+            </Text>
+          );
+        })()}
       </View>
 
       {/* Requirements List */}
@@ -615,14 +602,47 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
           </>
         ) : requirements.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="assignment" size={64} color="#02050a" />
+            <MaterialIcons name="assignment" size={64} color="#F56E0F" />
             <Text style={styles.emptyText}>No requirements found</Text>
             <Text style={styles.emptySubtext}>
               No requirements assigned to your students yet
             </Text>
           </View>
-        ) : (
-          requirements.map((requirement, index) => {
+        ) : (() => {
+          const filteredRequirements = requirements.filter(requirement => {
+            if (!debouncedSearchQuery.trim()) return true;
+            
+            const searchLower = debouncedSearchQuery.toLowerCase();
+            const submissionCount = submissionCounts[requirement.requirement_id] || 0;
+            
+            return (
+              requirement.requirement_name?.toLowerCase().includes(searchLower) ||
+              requirement.requirement_description?.toLowerCase().includes(searchLower) ||
+              requirement.requirement_id?.toLowerCase().includes(searchLower) ||
+              (searchLower === 'submitted' && submissionCount > 0) ||
+              (searchLower === 'no submissions' && submissionCount === 0) ||
+              (searchLower === 'pending' && submissionCount > 0) ||
+              (searchLower === 'done' && submissionCount > 0) ||
+              (searchLower === 'approved' && submissionCount > 0) ||
+              (searchLower === 'rejected' && submissionCount > 0) ||
+              (searchLower === 'needs revision' && submissionCount > 0) ||
+              (searchLower === 'needs_revision' && submissionCount > 0)
+            );
+          });
+
+          if (filteredRequirements.length === 0 && debouncedSearchQuery.trim()) {
+            return (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="search-off" size={64} color="#F56E0F" />
+                <Text style={styles.emptyText}>No results found</Text>
+                <Text style={styles.emptySubtext}>
+                  No requirements match "{debouncedSearchQuery}"
+                </Text>
+              </View>
+            );
+          }
+
+          return filteredRequirements.map((requirement, index) => {
             const submissionCount = submissionCounts[requirement.requirement_id] || 0;
             
             return (
@@ -688,7 +708,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                         setShowDetailsModal(true);
                       }}
                     >
-                      <MaterialIcons name="people" size={24} color="#F4D03F" />
+                      <MaterialIcons name="people" size={24} color="#FBFBFB" />
                       <Text style={styles.submissionCountText}>
                         {submissionCount}
                       </Text>
@@ -697,8 +717,8 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                 </View>
               </View>
             );
-          })
-        )}
+          });
+        })()}
       </Animated.ScrollView>
 
       {/* Submission Details Modal */}
@@ -714,7 +734,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
               style={styles.closeButton}
               onPress={() => setShowDetailsModal(false)}
             >
-              <MaterialIcons name="close" size={24} color="#fff" />
+              <MaterialIcons name="close" size={24} color="#F56E0F" />
             </TouchableOpacity>
           </View>
 
@@ -753,7 +773,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                               style={styles.downloadButton}
                               onPress={() => handleDownloadStudentFile(student.submitted_file_url, student.submitted_file_name)}
                             >
-                              <MaterialIcons name="download" size={16} color="#007AFF" />
+                              <MaterialIcons name="download" size={16} color="#FBFBFB" />
                               <Text style={styles.downloadButtonText}>Download</Text>
                             </TouchableOpacity>
                           </View>
@@ -810,7 +830,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                           style={styles.downloadButton}
                           onPress={() => handleDownloadStudentFile(selectedSubmission.submitted_file_url, selectedSubmission.submitted_file_name)}
                         >
-                          <MaterialIcons name="download" size={16} color="#007AFF" />
+                          <MaterialIcons name="download" size={16} color="#FBFBFB" />
                           <Text style={styles.downloadButtonText}>Download</Text>
                         </TouchableOpacity>
                       </View>
@@ -877,7 +897,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                       style={[styles.statusButton, { backgroundColor: '#4CAF50' }]}
                       onPress={() => handleStatusUpdate(selectedSubmission.id, 'approved')}
                     >
-                      <MaterialIcons name="check" size={20} color="white" />
+                      <MaterialIcons name="check" size={20} color="#FBFBFB" />
                       <Text style={styles.statusButtonText}>Approve</Text>
                     </TouchableOpacity>
 
@@ -885,7 +905,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                       style={[styles.statusButton, { backgroundColor: '#F44336' }]}
                       onPress={() => handleStatusUpdate(selectedSubmission.id, 'rejected')}
                     >
-                      <MaterialIcons name="close" size={20} color="white" />
+                      <MaterialIcons name="close" size={20} color="#FBFBFB" />
                       <Text style={styles.statusButtonText}>Reject</Text>
                     </TouchableOpacity>
 
@@ -893,7 +913,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                       style={[styles.statusButton, { backgroundColor: '#2196F3' }]}
                       onPress={() => handleStatusUpdate(selectedSubmission.id, 'needs_revision')}
                     >
-                      <MaterialIcons name="edit" size={20} color="white" />
+                      <MaterialIcons name="edit" size={20} color="#FBFBFB" />
                       <Text style={styles.statusButtonText}>Needs Revision</Text>
                     </TouchableOpacity>
                   </View>
@@ -910,24 +930,24 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#F5F1E8', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark background
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -936,46 +956,58 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginTop: 4,
     opacity: 0.9,
   },
-  filterContainer: {
-    backgroundColor: '#fff',
+  searchContainer: {
+    backgroundColor: '#1B1B1E', // Dark secondary background
+    paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
     marginBottom: 20,
     borderRadius: 16,
     marginHorizontal: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2A2A2E', // Dark input background
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
-  filterButtonActive: {
-    backgroundColor: '#2D5A3D', // Forest green
+  searchIcon: {
+    marginRight: 10,
   },
-  filterButtonText: {
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#FBFBFB', // Light text
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  searchResultsText: {
     fontSize: 14,
-    color: '#666',
+    color: '#F56E0F',
+    marginTop: 8,
+    textAlign: 'center',
     fontWeight: '500',
-  },
-  filterButtonTextActive: {
-    color: 'white',
   },
   submissionsList: {
     flex: 1,
@@ -986,17 +1018,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   emptyText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#878787', // Muted gray
     marginTop: 8,
     textAlign: 'center',
     opacity: 0.7,
@@ -1076,15 +1108,15 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#F5F1E8', // Dark background
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    shadowColor: '#000',
+    backgroundColor: '#151419', // Dark background
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -1093,13 +1125,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     letterSpacing: -0.3,
   },
   closeButton: {
     padding: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalContent: {
     flex: 1,
@@ -1107,50 +1139,52 @@ const styles = StyleSheet.create({
   },
   detailSection: {
     marginBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 16,
     borderRadius: 12,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   detailLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
     letterSpacing: -0.2,
   },
   detailValue: {
     fontSize: 14,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginBottom: 6,
     fontWeight: '500',
   },
   detailDescription: {
     fontSize: 13,
-    color: '#02050a',
+    color: '#878787', // Muted gray
     lineHeight: 20,
     opacity: 0.8,
   },
   inputLabel: {
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     marginBottom: 12,
     fontWeight: '600',
   },
   textArea: {
     borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     textAlignVertical: 'top',
-    backgroundColor: '#fff',
-    shadowColor: '#000',
+    backgroundColor: '#2A2A2E', // Dark input background
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -1161,8 +1195,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: '#fff',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
@@ -1181,7 +1215,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   statusButtonText: {
-    color: 'white',
+    color: '#FBFBFB', // Light text
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
@@ -1218,14 +1252,16 @@ const styles = StyleSheet.create({
   },
   // Requirement Card Styles
   requirementCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     marginBottom: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
     minHeight: 100, // Ensure enough height for absolute positioning
     padding: 20,
@@ -1250,7 +1286,7 @@ const styles = StyleSheet.create({
   requirementNumber: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginRight: 12,
     marginTop: 2,
   },
@@ -1260,20 +1296,20 @@ const styles = StyleSheet.create({
   requirementName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
     letterSpacing: -0.3,
   },
   requirementDescription: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
     lineHeight: 20,
     opacity: 0.9,
   },
   requirementDate: {
     fontSize: 12,
-    color: '#E8A598', // Soft coral
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
     marginTop: 4,
   },
@@ -1287,7 +1323,7 @@ const styles = StyleSheet.create({
     marginRight: 60, // Space for the submission count button
   },
   requirementBadgeText: {
-    color: 'white',
+    color: '#FBFBFB', // Light text
     fontSize: 10,
     fontWeight: '600',
   },
@@ -1296,13 +1332,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
-    backgroundColor: '#2D5A3D', // Dark green/teal
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 12,
     minWidth: 60,
     position: 'absolute',
     top: 0,
     right: 0,
-    shadowColor: '#2D5A3D',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1310,19 +1346,21 @@ const styles = StyleSheet.create({
   submissionCountText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F4D03F',
+    color: '#FBFBFB', // Light text
     marginTop: 4,
   },
   // Skeleton Loading Styles
   skeletonRequirementCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     marginBottom: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
     opacity: 0.7,
     padding: 20,
@@ -1340,7 +1378,7 @@ const styles = StyleSheet.create({
   skeletonRequirementNumber: {
     width: 20,
     height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 10,
     marginRight: 12,
     marginTop: 2,
@@ -1350,14 +1388,14 @@ const styles = StyleSheet.create({
   },
   skeletonTextLine: {
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonSubmissionCountButton: {
     width: 60,
     height: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
   },
   // Student Submission Item Styles
@@ -1367,14 +1405,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark input background
     borderRadius: 8,
     marginBottom: 8,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.1)',
   },
   studentSubmissionInfo: {
     flex: 1,
@@ -1382,66 +1422,20 @@ const styles = StyleSheet.create({
   studentSubmissionName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     marginBottom: 3,
     letterSpacing: -0.2,
   },
   studentSubmissionDate: {
     fontSize: 13,
-    color: '#02050a',
+    color: '#878787', // Muted gray
     marginBottom: 3,
     opacity: 0.7,
   },
   studentSubmissionFile: {
     fontSize: 13,
-    color: '#2D5A3D',
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
-  },
-  // Toggle Container Styles
-  toggleContainer: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    marginBottom: 20,
-    borderRadius: 16,
-    marginHorizontal: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  toggleLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#02050a',
-    marginBottom: 12,
-  },
-  toggleButtons: {
-    flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 4,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  toggleButtonActive: {
-    backgroundColor: '#2D5A3D', // Forest green
-  },
-  toggleButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  toggleButtonTextActive: {
-    color: 'white',
   },
   // File Info Container Styles
   fileInfoContainer: {
@@ -1453,19 +1447,19 @@ const styles = StyleSheet.create({
   downloadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2D5A3D',
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
     marginLeft: 8,
-    shadowColor: '#2D5A3D',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
   },
   downloadButtonText: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginLeft: 4,
     fontWeight: '600',
   },
@@ -1485,12 +1479,12 @@ const styles = StyleSheet.create({
   },
   switchLabel: {
     fontSize: 12,
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     fontWeight: '600',
   },
   feedbackText: {
     fontSize: 11,
-    color: '#02050a',
+    color: '#878787', // Muted gray
     marginTop: 4,
     fontStyle: 'italic',
     textAlign: 'right',

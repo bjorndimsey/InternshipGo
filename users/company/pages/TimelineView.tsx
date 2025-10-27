@@ -331,7 +331,7 @@ export default function TimelineView({ interns, filteredInterns, companyId, curr
             style={styles.navButton}
             onPress={() => navigateMonth('prev')}
           >
-            <MaterialIcons name="chevron-left" size={24} color="#1E3A5F" />
+            <MaterialIcons name="chevron-left" size={24} color="#F56E0F" />
           </TouchableOpacity>
           
           <View style={styles.monthTitleContainer}>
@@ -350,7 +350,7 @@ export default function TimelineView({ interns, filteredInterns, companyId, curr
             style={styles.navButton}
             onPress={() => navigateMonth('next')}
           >
-            <MaterialIcons name="chevron-right" size={24} color="#1E3A5F" />
+            <MaterialIcons name="chevron-right" size={24} color="#F56E0F" />
           </TouchableOpacity>
         </View>
 
@@ -361,7 +361,7 @@ export default function TimelineView({ interns, filteredInterns, companyId, curr
             onPress={() => navigateWeek('prev')}
             disabled={currentWeek === 0}
           >
-            <MaterialIcons name="chevron-left" size={20} color={currentWeek === 0 ? "#ccc" : "#1E3A5F"} />
+            <MaterialIcons name="chevron-left" size={20} color={currentWeek === 0 ? "#878787" : "#F56E0F"} />
             <Text style={[styles.weekNavText, currentWeek === 0 && styles.disabledText]}>Previous Week</Text>
           </TouchableOpacity>
           
@@ -383,7 +383,7 @@ export default function TimelineView({ interns, filteredInterns, companyId, curr
             disabled={currentWeek === totalWeeks - 1}
           >
             <Text style={[styles.weekNavText, currentWeek === totalWeeks - 1 && styles.disabledText]}>Next Week</Text>
-            <MaterialIcons name="chevron-right" size={20} color={currentWeek === totalWeeks - 1 ? "#ccc" : "#1E3A5F"} />
+            <MaterialIcons name="chevron-right" size={20} color={currentWeek === totalWeeks - 1 ? "#878787" : "#F56E0F"} />
           </TouchableOpacity>
         </View>
 
@@ -610,10 +610,10 @@ const styles = StyleSheet.create({
   // Timeline View Styles
   timelineContainer: {
     flex: 1,
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.79);',
+    marginHorizontal: 12,
     marginVertical: 12,
-    borderRadius: 12,
+    borderRadius: 10,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -631,15 +631,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-    backgroundColor: '#f8f9fa',
+    borderBottomColor: 'rgba(245, 110, 15, 0.3)',
+    backgroundColor: '#1B1B1E',
   },
   navButton: {
     padding: 8,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   monthTitleContainer: {
     alignItems: 'center',
@@ -647,11 +647,11 @@ const styles = StyleSheet.create({
   monthTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB',
   },
   weekIndicator: {
     fontSize: 10,
-    color: '#6c757d',
+    color: '#878787',
     marginTop: 2,
   },
   weekNavigation: {
@@ -660,9 +660,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1B1B1E',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: 'rgba(245, 110, 15, 0.3)',
   },
   weekNavButton: {
     flexDirection: 'row',
@@ -670,29 +670,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     gap: 3,
   },
   disabledButton: {
-    backgroundColor: '#f5f5f5',
-    borderColor: '#e0e0e0',
+    backgroundColor: 'rgba(245, 110, 15, 0.05)',
+    borderColor: 'rgba(245, 110, 15, 0.1)',
   },
   weekNavText: {
     fontSize: 11,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   disabledText: {
-    color: '#ccc',
+    color: '#878787',
   },
   weekInfo: {
     alignItems: 'center',
   },
   weekDateRange: {
     fontSize: 11,
-    color: '#1E3A5F',
+    color: '#F56E0F',
     fontWeight: '600',
   },
   timelineScrollContainer: {
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
   },
   timelineHeader: {
     flexDirection: 'row',
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E',
     paddingVertical: 8,
   },
   timelineRow: {
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   },
   employeeHeaderCell: {
     width: 160, // Fixed width for employee column
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E',
   },
   employeeCell: {
     width: 160, // Fixed width for employee column

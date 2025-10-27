@@ -1709,7 +1709,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading attendance data...</Text>
       </View>
     );
@@ -1902,7 +1902,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         <View style={styles.mobileTimeSection}>
           <View style={styles.mobileTimeItem}>
             <View style={styles.mobileTimeIconContainer}>
-              <MaterialIcons name="schedule" size={16} color="#1E3A5F" />
+              <MaterialIcons name="schedule" size={16} color="#F56E0F" />
             </View>
             <View style={styles.mobileTimeContent}>
               <Text style={styles.mobileTimeLabel}>AM Shift</Text>
@@ -1916,7 +1916,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
           </View>
           <View style={styles.mobileTimeItem}>
             <View style={styles.mobileTimeIconContainer}>
-              <MaterialIcons name="schedule" size={16} color="#1E3A5F" />
+              <MaterialIcons name="schedule" size={16} color="#F56E0F" />
             </View>
             <View style={styles.mobileTimeContent}>
               <Text style={styles.mobileTimeLabel}>PM Shift</Text>
@@ -2036,7 +2036,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             style={styles.detailArrowButton}
             onPress={() => openDetailPanel(intern)}
           >
-            <MaterialIcons name="arrow-back" size={20} color="#666" />
+            <MaterialIcons name="arrow-back" size={20} color="#878787" />
           </TouchableOpacity>
         </View>
 
@@ -2369,7 +2369,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             style={styles.detailArrowButton}
             onPress={() => openDetailPanel(intern)}
           >
-            <MaterialIcons name="arrow-back" size={20} color="#666" />
+            <MaterialIcons name="arrow-back" size={20} color="#878787" />
           </TouchableOpacity>
         </View>
       </View>
@@ -2664,7 +2664,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                   style={styles.detailArrowButton}
                   onPress={() => openDetailPanel(intern)}
                 >
-                  <MaterialIcons name="arrow-back" size={16} color="#1E3A5F" />
+                  <MaterialIcons name="arrow-back" size={16} color="#F56E0F" />
                 </TouchableOpacity>
               </View>
             )}
@@ -2819,7 +2819,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 ]}
                 onPress={() => setShowDatePicker(true)}
               >
-                <MaterialIcons name="calendar-today" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#1E3A5F" />
+                <MaterialIcons name="calendar-today" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#F56E0F" />
               </TouchableOpacity>
 
               {/* Search Button */}
@@ -2832,7 +2832,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 ]}
                 onPress={toggleSearch}
               >
-                <MaterialIcons name="search" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#1E3A5F" />
+                <MaterialIcons name="search" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#F56E0F" />
               </TouchableOpacity>
 
               {/* Animated Search Input */}
@@ -2864,7 +2864,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                     isDesktop && styles.desktopHeaderSearchInput
                   ]}
                   placeholder="Search interns by name, ID, or position..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor="#878787"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   onFocus={() => setSearchFocused(true)}
@@ -2879,7 +2879,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                   ]}
                   onPress={toggleSearch}
                 >
-                  <MaterialIcons name="close" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#666" />
+                  <MaterialIcons name="close" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#878787" />
                 </TouchableOpacity>
               </Animated.View>
                 </View>
@@ -3012,7 +3012,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         ]}>
           {getFilteredInternsByDate().length === 0 ? (
             <View style={styles.emptyState}>
-              <MaterialIcons name="school" size={64} color="#ccc" />
+              <MaterialIcons name="school" size={64} color="#F56E0F" />
               <Text style={styles.emptyStateTitle}>No interns found</Text>
               <Text style={styles.emptyStateText}>
                 {searchQuery 
@@ -3649,7 +3649,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(255, 255, 255, 0.79);',
     minWidth: 0, // Allow content to wrap properly
   },
   loadingContainer: {
@@ -3657,23 +3657,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#151419',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   // Header Section
   headerSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     paddingHorizontal: '2%',
     paddingVertical: '1.5%',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -3703,13 +3703,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     fontFamily: 'System',
     flexWrap: 'wrap',
   },
   pageSubtitle: {
     fontSize: 16,
-    color: '#6c757d',
+    color: '#878787',
     fontWeight: '400',
     lineHeight: 22,
     flexWrap: 'wrap',
@@ -3717,16 +3717,16 @@ const styles = StyleSheet.create({
   headerSearchButton: {
     padding: 8,
     borderRadius: 8,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   headerSearchContainer: {
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -3736,7 +3736,7 @@ const styles = StyleSheet.create({
   headerSearchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     paddingVertical: 8,
   },
   headerSearchCloseButton: {
@@ -3756,20 +3756,20 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e9ecef',
-    backgroundColor: '#fff',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    backgroundColor: '#2A2A2E',
   },
   activeToggleButton: {
-    backgroundColor: '#1E3A5F',
-    borderColor: '#1E3A5F',
+    backgroundColor: '#F56E0F',
+    borderColor: '#F56E0F',
   },
   // Controls Section
   controlsSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     paddingHorizontal: 24,
     paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchContainer: {
     // Removed marginBottom since no stats below
@@ -3777,17 +3777,17 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E',
     borderRadius: 8,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     marginLeft: 8,
   },
   // Responsive Container
@@ -3814,11 +3814,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   desktopTableContainer: {
     marginHorizontal: 24,
@@ -3836,15 +3838,17 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   tabletCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 16,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     marginBottom: '2%',
     minHeight: 44, // Accessibility: minimum touch target
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   tabletCardContent: {
     padding: 20,
@@ -3872,14 +3876,14 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#e9ecef',
+    backgroundColor: '#2A2A2E',
     justifyContent: 'center',
     alignItems: 'center',
   },
   tabletProfileText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
   },
   tabletProfileInfo: {
     flex: 1,
@@ -3887,20 +3891,20 @@ const styles = StyleSheet.create({
   tabletInternName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     marginBottom: 4,
   },
   tabletInternId: {
     fontSize: 14,
-    color: '#6c757d',
+    color: '#878787',
   },
   tabletDetailArrow: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3919,13 +3923,13 @@ const styles = StyleSheet.create({
   },
   tabletTimeLabel: {
     fontSize: 14,
-    color: '#6c757d',
+    color: '#878787',
     marginLeft: 6,
     marginRight: 8,
   },
   tabletTimeValue: {
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   tabletHoursSection: {
@@ -3941,18 +3945,18 @@ const styles = StyleSheet.create({
   },
   tabletHoursLabel: {
     fontSize: 14,
-    color: '#6c757d',
+    color: '#878787',
     marginBottom: 4,
   },
   tabletHoursValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
   },
   tabletRemainingValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
   },
   tabletActionsSection: {
     alignItems: 'center',
@@ -3970,15 +3974,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 16,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     marginBottom: '2%',
     minHeight: 44, // Accessibility: minimum touch target
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   mobileCardContent: {
     padding: 16,
@@ -4006,14 +4012,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e9ecef',
+    backgroundColor: '#2A2A2E',
     justifyContent: 'center',
     alignItems: 'center',
   },
   mobileProfileText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
   },
   mobileProfileInfo: {
     flex: 1,
@@ -4021,20 +4027,20 @@ const styles = StyleSheet.create({
   mobileInternName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     marginBottom: 2,
   },
   mobileInternId: {
     fontSize: 12,
-    color: '#6c757d',
+    color: '#878787',
   },
   mobileDetailArrow: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -4049,12 +4055,12 @@ const styles = StyleSheet.create({
   },
   mobileTimeLabel: {
     fontSize: 12,
-    color: '#6c757d',
+    color: '#878787',
     marginBottom: 2,
   },
   mobileTimeValue: {
     fontSize: 14,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   mobileHoursSection: {
@@ -4070,18 +4076,18 @@ const styles = StyleSheet.create({
   },
   mobileHoursLabel: {
     fontSize: 12,
-    color: '#6c757d',
+    color: '#878787',
     marginBottom: 2,
   },
   mobileHoursValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
   },
   mobileRemainingValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
   },
   mobileActionsSection: {
     alignItems: 'center',
@@ -4660,7 +4666,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E',
     paddingVertical: 20,
     paddingHorizontal: 24,
     borderTopLeftRadius: 16,
@@ -4973,24 +4979,24 @@ const styles = StyleSheet.create({
     height: 40,
   },
   presentActionButton: {
-    backgroundColor: '#e8f5e8',
+    backgroundColor: 'rgba(52, 168, 83, 0.2)',
     borderColor: '#34a853',
   },
   lateActionButton: {
-    backgroundColor: '#fff8e1',
-    borderColor: '#fbbc04',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+    borderColor: '#F56E0F',
   },
   absentActionButton: {
-    backgroundColor: '#ffebee',
+    backgroundColor: 'rgba(234, 67, 53, 0.2)',
     borderColor: '#ea4335',
   },
   leaveActionButton: {
-    backgroundColor: '#f3e5f5',
+    backgroundColor: 'rgba(156, 39, 176, 0.2)',
     borderColor: '#9c27b0',
   },
   timeOutActionButton: {
-    backgroundColor: '#e3f2fd',
-    borderColor: '#1E3A5F',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+    borderColor: '#F56E0F',
   },
   presentButtonText: {
     color: '#34a853',
@@ -4998,22 +5004,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   lateButtonText: {
-    color: '#f57c00',
+    color: '#F56E0F',
     fontSize: 12,
     fontWeight: '600',
   },
   absentButtonText: {
-    color: '#d32f2f',
+    color: '#ea4335',
     fontSize: 12,
     fontWeight: '600',
   },
   leaveButtonText: {
-    color: '#7b1fa2',
+    color: '#9c27b0',
     fontSize: 12,
     fontWeight: '600',
   },
   timeOutButtonText: {
-    color: '#1E3A5F',
+    color: '#F56E0F',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -5036,13 +5042,13 @@ const styles = StyleSheet.create({
   },
   rowNumber: {
     fontSize: 14,
-    color: '#1E3A5F',
+    color: '#2A2A2E',
     fontWeight: '500',
     textAlign: 'left',
   },
   desktopRowNumber: {
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#2A2A2E',
     fontWeight: '500',
     textAlign: 'left',
   },

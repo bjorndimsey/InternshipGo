@@ -676,7 +676,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
@@ -685,7 +685,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   if (!profile) {
     return (
       <View style={styles.errorContainer}>
-        <MaterialIcons name="error" size={64} color="#ea4335" />
+        <MaterialIcons name="error" size={64} color="#F56E0F" />
         <Text style={styles.errorTitle}>
           {currentUser?.google_id ? 'Account Setup Required' : 'Error loading profile'}
         </Text>
@@ -720,7 +720,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <Image source={{ uri: profile.backgroundPicture }} style={styles.coverPhoto} />
             ) : (
               <View style={styles.coverPhotoPlaceholder}>
-                <MaterialIcons name="landscape" size={64} color="#F4D03F" />
+                <MaterialIcons name="landscape" size={64} color="#F56E0F" />
                 <Text style={styles.coverPhotoPlaceholderText}>Add Cover Photo</Text>
               </View>
             )}
@@ -732,10 +732,10 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               disabled={uploadingBackgroundPicture}
             >
               {uploadingBackgroundPicture ? (
-                <ActivityIndicator size="small" color="#1E3A5F" />
+                <ActivityIndicator size="small" color="#F56E0F" />
               ) : (
                 <>
-                  <MaterialIcons name="camera-alt" size={16} color="#1E3A5F" />
+                  <MaterialIcons name="camera-alt" size={16} color="#FBFBFB" />
                   <Text style={styles.editCoverText}>Edit Cover</Text>
                 </>
               )}
@@ -777,7 +777,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             </View>
             
             <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
-              <MaterialIcons name="edit" size={18} color="#F4D03F" />
+              <MaterialIcons name="edit" size={18} color="#F56E0F" />
               <Text style={styles.editProfileButtonText}>Edit Profile</Text>
             </TouchableOpacity>
           </>
@@ -809,7 +809,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="business" size={24} color="#02050a" />
+                    <MaterialIcons name="business" size={24} color="#F56E0F" />
                   </View>
                   <Text style={styles.cardTitle}>Company Information</Text>
                 </View>
@@ -830,7 +830,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="email" size={24} color="#02050a" />
+                    <MaterialIcons name="email" size={24} color="#F56E0F" />
                   </View>
                   <Text style={styles.cardTitle}>Contact Information</Text>
                 </View>
@@ -854,7 +854,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                 <View style={styles.infoCard}>
                   <View style={styles.cardHeader}>
                     <View style={styles.cardIcon}>
-                      <MaterialIcons name="language" size={24} color="#02050a" />
+                      <MaterialIcons name="language" size={24} color="#F56E0F" />
                     </View>
                     <Text style={styles.cardTitle}>Website</Text>
                   </View>
@@ -878,7 +878,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="info" size={24} color="#02050a" />
+                    <MaterialIcons name="info" size={24} color="#F56E0F" />
                   </View>
                   <Text style={styles.cardTitle}>Company Details</Text>
                 </View>
@@ -906,7 +906,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="group" size={24} color="#02050a" />
+                    <MaterialIcons name="group" size={24} color="#F56E0F" />
                   </View>
                   <Text style={styles.cardTitle}>Internship Capacity</Text>
                 </View>
@@ -928,7 +928,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <TouchableOpacity style={styles.editCard} onPress={handleEditProfile}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="edit" size={24} color="#02050a" />
+                    <MaterialIcons name="edit" size={24} color="#F56E0F" />
                   </View>
                   <Text style={styles.cardTitle}>Edit Profile</Text>
                 </View>
@@ -960,7 +960,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             <>
               {profile.companyDescription && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="description" size={20} color="#02050a" />
+                  <MaterialIcons name="description" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Description</Text>
                     <Text style={styles.infoValue}>{profile.companyDescription}</Text>
@@ -969,7 +969,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.website && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="language" size={20} color="#02050a" />
+                  <MaterialIcons name="language" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Website</Text>
                     <Text style={styles.infoValue}>{profile.website}</Text>
@@ -978,7 +978,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.phoneNumber && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="phone" size={20} color="#02050a" />
+                  <MaterialIcons name="phone" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Phone Number</Text>
                     <Text style={styles.infoValue}>{profile.phoneNumber}</Text>
@@ -987,7 +987,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.contactPerson && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="person" size={20} color="#02050a" />
+                  <MaterialIcons name="person" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Contact Person</Text>
                     <Text style={styles.infoValue}>{profile.contactPerson}</Text>
@@ -996,7 +996,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.companySize && (
                 <View style={styles.infoItem}>
-                  <MaterialIcons name="group" size={20} color="#02050a" />
+                  <MaterialIcons name="group" size={20} color="#F56E0F" />
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Company Size</Text>
                     <Text style={styles.infoValue}>{profile.companySize}</Text>
@@ -1005,7 +1005,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.foundedYear && (
                 <View style={styles.infoItem}>
-                  <MaterialIcons name="calendar-today" size={20} color="#02050a" />
+                  <MaterialIcons name="calendar-today" size={20} color="#F56E0F" />
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Founded Year</Text>
                     <Text style={styles.infoValue}>{profile.foundedYear}</Text>
@@ -1035,7 +1035,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             <>
               {profile.qualifications && (
           <View style={styles.infoItem}>
-            <MaterialIcons name="school" size={20} color="#02050a" />
+                  <MaterialIcons name="school" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Required Qualifications</Text>
                     <Text style={styles.infoValue}>{profile.qualifications}</Text>
@@ -1044,7 +1044,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.skillsRequired && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="build" size={20} color="#02050a" />
+                  <MaterialIcons name="build" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Skills Required</Text>
                     <Text style={styles.infoValue}>{profile.skillsRequired}</Text>
@@ -1054,7 +1054,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             </>
           ) : (
             <View style={styles.emptyState}>
-              <MaterialIcons name="school" size={48} color="#F4D03F" />
+              <MaterialIcons name="school" size={48} color="#F56E0F" />
               <Text style={styles.emptyStateText}>No qualifications & skills added yet</Text>
               <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
             </View>
@@ -1074,7 +1074,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             <>
               {profile.workEnvironment && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="work" size={20} color="#02050a" />
+                  <MaterialIcons name="work" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Work Environment</Text>
                     <Text style={styles.infoValue}>{profile.workEnvironment}</Text>
@@ -1083,7 +1083,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               )}
               {profile.benefits && (
           <View style={styles.infoItem}>
-                  <MaterialIcons name="card-giftcard" size={20} color="#02050a" />
+                  <MaterialIcons name="card-giftcard" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>Benefits</Text>
                     <Text style={styles.infoValue}>{profile.benefits}</Text>
@@ -1093,7 +1093,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             </>
           ) : (
             <View style={styles.emptyState}>
-              <MaterialIcons name="work" size={48} color="#F4D03F" />
+              <MaterialIcons name="work" size={48} color="#F56E0F" />
               <Text style={styles.emptyStateText}>No work environment & benefits added yet</Text>
               <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
             </View>
@@ -1110,21 +1110,21 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
         />
         <View style={styles.infoCard}>
           <View style={styles.infoItem}>
-            <MaterialIcons name="group-add" size={20} color="#02050a" />
+            <MaterialIcons name="group-add" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Available Intern Slots</Text>
               <Text style={styles.infoValue}>{profile.availableInternSlots || 0}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
-            <MaterialIcons name="business-center" size={20} color="#02050a" />
+            <MaterialIcons name="business-center" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Total Intern Capacity</Text>
               <Text style={styles.infoValue}>{profile.totalInternCapacity || 0}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
-            <MaterialIcons name="people" size={20} color="#02050a" />
+            <MaterialIcons name="people" size={20} color="#F56E0F" />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Current Intern Count</Text>
               <Text style={styles.infoValue}>{profile.currentInternCount || 0}</Text>
@@ -1132,7 +1132,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           </View>
           {profile.totalInternCapacity && profile.currentInternCount && (
             <View style={styles.infoItem}>
-              <MaterialIcons name="trending-up" size={20} color="#02050a" />
+              <MaterialIcons name="trending-up" size={20} color="#F56E0F" />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Capacity Utilization</Text>
               <Text style={styles.infoValue}>
@@ -1149,7 +1149,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
         <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Account Information</Text>
           <View style={styles.sectionBadge}>
-            <MaterialIcons name="account-circle" size={16} color="#02050a" />
+            <MaterialIcons name="account-circle" size={16} color="#F56E0F" />
             <Text style={styles.sectionBadgeText}>Account</Text>
           </View>
         </View>
@@ -1157,7 +1157,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           <View style={styles.infoGrid}>
           <View style={styles.infoItem}>
               <View style={styles.infoIconContainer}>
-                <MaterialIcons name="person" size={20} color="#02050a" />
+                <MaterialIcons name="person" size={20} color="#F56E0F" />
               </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>User Type</Text>
@@ -1551,19 +1551,19 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#2A2A2E'
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   errorContainer: {
@@ -1571,18 +1571,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#E8A598', // Soft coral
+    color: '#F56E0F', // Primary orange
     marginTop: 16,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     fontWeight: '400',
   },
@@ -1700,13 +1700,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   section: {
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: width < 768 ? 16 : 20,
     marginVertical: 8,
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue border
-    shadowColor: '#000',
+    borderWidth: 0,
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -1727,7 +1726,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: width < 768 ? 20 : 22,
     fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontFamily: 'System',
   },
   sectionBadge: {
@@ -1735,14 +1734,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 16,
     alignSelf: width < 768 ? 'flex-start' : 'auto',
   },
   sectionBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 4,
   },
   editSectionButton: {
@@ -1752,17 +1751,17 @@ const styles = StyleSheet.create({
     paddingVertical: width < 768 ? 10 : 6,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
-    backgroundColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
+    backgroundColor: '#F56E0F', // Primary orange
     minHeight: width < 768 ? 44 : 32,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
   editSectionButtonText: {
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     fontSize: width < 768 ? 16 : 14,
     fontWeight: 'bold',
     marginLeft: 4,
@@ -1773,14 +1772,14 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: width < 768 ? 18 : 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     marginTop: 12,
     fontWeight: '600',
     textAlign: 'center',
   },
   emptyStateSubtext: {
     fontSize: width < 768 ? 16 : 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginTop: 4,
     textAlign: 'center',
     fontWeight: '500',
@@ -1792,13 +1791,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: width < 768 ? 12 : 8,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     borderRadius: 12,
     padding: 16,
     marginVertical: 4,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
-    shadowColor: '#000',
+    borderColor: '#F56E0F', // Primary orange border
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -1808,7 +1807,7 @@ const styles = StyleSheet.create({
     width: width < 768 ? 48 : 40,
     height: width < 768 ? 48 : 40,
     borderRadius: width < 768 ? 24 : 20,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: width < 768 ? 20 : 16,
@@ -1818,7 +1817,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: width < 768 ? 14 : 13,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: 4,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -1826,7 +1825,7 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     fontSize: width < 768 ? 18 : 16,
-    color: '#fff', // White text on navy background
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
     lineHeight: width < 768 ? 24 : 22,
   },
@@ -1933,15 +1932,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   settingsCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
+    borderColor: '#F56E0F', // Primary orange border
     overflow: 'hidden',
   },
   settingItem: {
@@ -1956,7 +1955,7 @@ const styles = StyleSheet.create({
     width: width < 768 ? 48 : 40,
     height: width < 768 ? 48 : 40,
     borderRadius: width < 768 ? 24 : 20,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: width < 768 ? 20 : 16,
@@ -1966,29 +1965,29 @@ const styles = StyleSheet.create({
   },
   settingText: {
     fontSize: width < 768 ? 18 : 16,
-    color: '#fff', // White text on navy background
+    color: '#FBFBFB', // Light text
     fontWeight: '600',
     marginBottom: 2,
   },
   settingSubtext: {
     fontSize: width < 768 ? 16 : 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: width < 768 ? 16 : 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 16 : 20,
     width: '100%',
     maxWidth: width < 768 ? width - 32 : 500,
     maxHeight: '90%',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -2000,15 +1999,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: width < 768 ? 20 : 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#e8eaed',
-    backgroundColor: '#f8f9fa',
+    borderBottomColor: 'rgba(245, 110, 15, 0.3)',
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     borderTopLeftRadius: width < 768 ? 16 : 20,
     borderTopRightRadius: width < 768 ? 16 : 20,
   },
   modalTitle: {
     fontSize: width < 768 ? 18 : 20,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB', // Light text
   },
   closeModalButton: {
     padding: 4,
@@ -2016,6 +2015,7 @@ const styles = StyleSheet.create({
   modalBody: {
     padding: width < 768 ? 20 : 24,
     maxHeight: width < 768 ? 500 : 400,
+    backgroundColor: '#1B1B1E', // Dark secondary background
   },
   inputGroup: {
     marginBottom: width < 768 ? 24 : 20,
@@ -2023,18 +2023,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: width < 768 ? 16 : 14,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#e8eaed',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
     paddingHorizontal: width < 768 ? 20 : 16,
     paddingVertical: width < 768 ? 18 : 14,
     fontSize: width < 768 ? 18 : 16,
-    color: '#1a1a2e',
-    backgroundColor: '#f8f9fa',
+    color: '#FBFBFB', // Light text
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     minHeight: width < 768 ? 56 : 48,
   },
   textArea: {
@@ -2045,7 +2045,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: width < 768 ? 20 : 24,
     gap: width < 768 ? 12 : 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     borderBottomLeftRadius: width < 768 ? 16 : 20,
     borderBottomRightRadius: width < 768 ? 16 : 20,
   },
@@ -2054,23 +2054,23 @@ const styles = StyleSheet.create({
     paddingVertical: width < 768 ? 16 : 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8eaed',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     minHeight: width < 768 ? 52 : 48,
   },
   cancelButtonText: {
     fontSize: width < 768 ? 18 : 16,
-    color: '#5f6368',
+    color: '#FBFBFB', // Light text
     fontWeight: '600',
   },
   saveButton: {
     flex: 1,
     paddingVertical: width < 768 ? 16 : 14,
     borderRadius: 12,
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F', // Primary orange
     alignItems: 'center',
-    shadowColor: '#4285f4',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -2097,18 +2097,18 @@ const styles = StyleSheet.create({
   },
   successModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: width < 768 ? 20 : 40,
   },
   successModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 20 : 24,
     padding: width < 768 ? 32 : 40,
     alignItems: 'center',
     maxWidth: width < 768 ? width - 40 : 400,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -2120,23 +2120,23 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: width < 768 ? 24 : 28,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB', // Light text
     marginBottom: width < 768 ? 12 : 16,
     textAlign: 'center',
   },
   successMessage: {
     fontSize: width < 768 ? 16 : 18,
-    color: '#5f6368',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     lineHeight: width < 768 ? 24 : 26,
     marginBottom: width < 768 ? 24 : 32,
   },
   successButton: {
-    backgroundColor: '#4caf50',
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 32 : 40,
     paddingVertical: width < 768 ? 14 : 16,
     borderRadius: width < 768 ? 12 : 14,
-    shadowColor: '#4caf50',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2144,7 +2144,7 @@ const styles = StyleSheet.create({
     minWidth: width < 768 ? 120 : 140,
   },
   successButtonText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: width < 768 ? 16 : 18,
     fontWeight: '600',
     textAlign: 'center',
@@ -2284,13 +2284,13 @@ const styles = StyleSheet.create({
   coverPhotoPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     justifyContent: 'center',
     alignItems: 'center',
   },
   coverPhotoPlaceholderText: {
     fontSize: width < 768 ? 16 : 18,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginTop: 12,
     fontWeight: '600',
   },
@@ -2298,13 +2298,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: width < 768 ? 16 : 20,
     right: width < 768 ? 16 : 20,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 12 : 16,
     paddingVertical: width < 768 ? 8 : 10,
     borderRadius: width < 768 ? 20 : 24,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2312,19 +2312,19 @@ const styles = StyleSheet.create({
   },
   editCoverText: {
     fontSize: width < 768 ? 12 : 14,
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 6,
     fontWeight: 'bold',
   },
   // Profile Section Styles
   profileSection: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: width < 768 ? 16 : 24,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2350,12 +2350,12 @@ const styles = StyleSheet.create({
     width: width < 768 ? 80 : 100,
     height: width < 768 ? 80 : 100,
     borderRadius: width < 768 ? 40 : 50,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2364,13 +2364,13 @@ const styles = StyleSheet.create({
   profileText: {
     fontSize: width < 768 ? 32 : 40,
     fontWeight: 'bold',
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
   },
   profileUploadButton: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: width < 768 ? 16 : 20,
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
@@ -2378,7 +2378,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2397,19 +2397,19 @@ const styles = StyleSheet.create({
   },
   companyIndustry: {
     fontSize: width < 768 ? 14 : 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '600',
   },
   editProfileButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 16 : 20,
     paddingVertical: width < 768 ? 10 : 12,
     borderRadius: width < 768 ? 8 : 10,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
+    borderColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -2417,19 +2417,19 @@ const styles = StyleSheet.create({
   },
   editProfileButtonText: {
     fontSize: width < 768 ? 14 : 16,
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 6,
     fontWeight: 'bold',
   },
   // About Section Styles
   aboutSection: {
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#2A2A2E', // Dark background
     padding: width < 768 ? 16 : 24,
   },
   aboutTitle: {
     fontSize: width < 768 ? 24 : 28,
     fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     marginBottom: width < 768 ? 16 : 20,
     fontFamily: 'System',
   },
@@ -2452,12 +2452,12 @@ const styles = StyleSheet.create({
     maxWidth: width < 768 ? '48%' : '45%',
   },
   infoCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 12 : 16,
     padding: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
-    shadowColor: '#000',
+    borderColor: '#1B1B1E', // Primary orange border
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2469,12 +2469,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   editCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 12 : 16,
     padding: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
-    shadowColor: '#000',
+    borderColor: '#F56E0F', // Primary orange border
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2495,7 +2495,7 @@ const styles = StyleSheet.create({
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
     borderRadius: width < 768 ? 16 : 18,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -2516,7 +2516,7 @@ const styles = StyleSheet.create({
   },
   cardSubtitle: {
     fontSize: width < 768 ? 11 : 13,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: width < 768 ? 2 : 4,
     lineHeight: width < 768 ? 14 : 16,
     fontWeight: '500',
@@ -2525,13 +2525,13 @@ const styles = StyleSheet.create({
   cardEditButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 8 : 12,
     paddingVertical: width < 768 ? 4 : 6,
     borderRadius: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
+    borderColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -2540,18 +2540,18 @@ const styles = StyleSheet.create({
   },
   cardEditButtonText: {
     fontSize: width < 768 ? 10 : 12,
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 4,
     fontWeight: 'bold',
   },
   // Skeleton Loading Styles
   skeletonInfoCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 12 : 16,
     padding: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
+    borderColor: '#F56E0F', // Primary orange
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2572,14 +2572,14 @@ const styles = StyleSheet.create({
   skeletonCardIcon: {
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: width < 768 ? 16 : 18,
     marginRight: 8,
   },
   skeletonCardTitle: {
     width: '60%',
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
   },
   skeletonCardContent: {
@@ -2591,14 +2591,14 @@ const styles = StyleSheet.create({
   skeletonCardSubtitle: {
     width: '80%',
     height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 3,
     marginBottom: width < 768 ? 2 : 4,
   },
   skeletonCardEditButton: {
     width: 60,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: width < 768 ? 12 : 16,
     alignSelf: 'center',
   },
@@ -2606,7 +2606,7 @@ const styles = StyleSheet.create({
   skeletonCoverPhoto: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     justifyContent: 'center',
     alignItems: 'center',
     opacity: 0.7,
@@ -2614,25 +2614,25 @@ const styles = StyleSheet.create({
   skeletonCoverPhotoIcon: {
     width: 64,
     height: 64,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 32,
     marginBottom: 12,
   },
   skeletonCoverPhotoText: {
     width: 120,
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
   },
   // Profile Section Skeleton Styles
   skeletonProfileSection: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: width < 768 ? 16 : 24,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2646,11 +2646,11 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: width < 768 ? 80 : 100,
     height: width < 768 ? 80 : 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: width < 768 ? 40 : 50,
     borderWidth: 4,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -2660,13 +2660,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: width < 768 ? 16 : 20,
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2679,14 +2679,14 @@ const styles = StyleSheet.create({
   skeletonCompanyName: {
     width: '70%',
     height: width < 768 ? 24 : 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
     marginBottom: width < 768 ? 4 : 6,
   },
   skeletonCompanyIndustry: {
     width: '50%',
     height: width < 768 ? 14 : 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
   },
 });

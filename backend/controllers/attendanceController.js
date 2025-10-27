@@ -156,7 +156,7 @@ const getAttendanceRecords = async (req, res) => {
         // Get all students and filter by user_id in JavaScript
         const { data: studentsData, error: studentsError } = await supabase
           .from('students')
-          .select('*');
+          .select('*, users!inner(profile_picture)');
         
         if (studentsError) {
           throw studentsError;
@@ -193,7 +193,8 @@ const getAttendanceRecords = async (req, res) => {
         // Include student data
         first_name: student.first_name || 'N/A',
         last_name: student.last_name || 'N/A',
-        email: student.email || 'N/A'
+        email: student.email || 'N/A',
+        profile_picture: student.users?.profile_picture || null
       };
     });
 
@@ -709,7 +710,7 @@ const getTodayAttendance = async (req, res) => {
         // Get all students and filter by user_id in JavaScript
         const { data: studentsData, error: studentsError } = await supabase
           .from('students')
-          .select('*');
+          .select('*, users!inner(profile_picture)');
         
         if (studentsError) {
           throw studentsError;
@@ -759,7 +760,8 @@ const getTodayAttendance = async (req, res) => {
         // Include student data
         first_name: student.first_name || 'N/A',
         last_name: student.last_name || 'N/A',
-        email: student.email || 'N/A'
+        email: student.email || 'N/A',
+        profile_picture: student.users?.profile_picture || null
       };
       
       console.log('🔄 Converted record:', {

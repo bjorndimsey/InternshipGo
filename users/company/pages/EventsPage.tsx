@@ -436,7 +436,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
             <MaterialIcons 
               name={isExpanded ? "expand-less" : "expand-more"} 
               size={24} 
-              color="#F4D03F" 
+              color="#F56E0F" 
               style={styles.expandIcon}
             />
           </View>
@@ -462,11 +462,11 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
           <View style={styles.expandedContent}>
             <View style={styles.eventMeta}>
               <View style={styles.metaItem}>
-                <MaterialIcons name="location-on" size={16} color="#F4D03F" />
+                <MaterialIcons name="location-on" size={16} color="#F56E0F" />
                 <Text style={styles.metaText}>{event.location}</Text>
               </View>
               <View style={styles.metaItem}>
-                <MaterialIcons name="people" size={16} color="#F4D03F" />
+                <MaterialIcons name="people" size={16} color="#F56E0F" />
                 <Text style={styles.metaText}>
                   {event.attendees}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attendees
                 </Text>
@@ -478,7 +478,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                 style={[styles.actionButton, styles.viewButton]} 
                 onPress={() => handleViewEvent(event)}
               >
-                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <MaterialIcons name="visibility" size={16} color="#FBFBFB" />
                 <Text style={styles.actionButtonText}>View</Text>
               </TouchableOpacity>
               
@@ -486,7 +486,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                 style={[styles.actionButton, styles.editButton]} 
                 onPress={() => Alert.alert('Edit Event', `Edit functionality for ${event.title}`)}
               >
-                <MaterialIcons name="edit" size={16} color="#fff" />
+                <MaterialIcons name="edit" size={16} color="#FBFBFB" />
                 <Text style={styles.actionButtonText}>Edit</Text>
               </TouchableOpacity>
               
@@ -494,7 +494,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                 style={[styles.actionButton, styles.deleteButton]} 
                 onPress={() => handleDeleteEvent(event)}
               >
-                <MaterialIcons name="delete" size={16} color="#fff" />
+                <MaterialIcons name="delete" size={16} color="#FBFBFB" />
                 <Text style={styles.actionButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
@@ -543,13 +543,13 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
       <View style={styles.calendarContainer}>
         <View style={styles.calendarHeader}>
           <TouchableOpacity onPress={() => navigateMonth('prev')} style={styles.navButton}>
-            <MaterialIcons name="chevron-left" size={24} color="#4285f4" />
+            <MaterialIcons name="chevron-left" size={24} color="#F56E0F" />
           </TouchableOpacity>
           <Text style={styles.calendarTitle}>
             {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
           </Text>
           <TouchableOpacity onPress={() => navigateMonth('next')} style={styles.navButton}>
-            <MaterialIcons name="chevron-right" size={24} color="#4285f4" />
+            <MaterialIcons name="chevron-right" size={24} color="#F56E0F" />
           </TouchableOpacity>
         </View>
         <View style={styles.calendarGrid}>
@@ -584,7 +584,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                     <Text style={styles.selectedDateEventTitle}>{event.title}</Text>
                     <Text style={styles.selectedDateEventTime}>{event.time}</Text>
                   </View>
-                  <MaterialIcons name="chevron-right" size={20} color="#666" />
+                  <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -597,7 +597,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading events...</Text>
       </View>
     );
@@ -617,14 +617,14 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
               style={styles.calendarButton}
               onPress={() => setShowCalendar(!showCalendar)}
             >
-              <MaterialIcons name="calendar-today" size={20} color="#F4D03F" />
+              <MaterialIcons name="calendar-today" size={20} color="#F56E0F" />
               <Text style={styles.calendarButtonText}>Calendar</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.createButton}
               onPress={() => setShowCreateModal(true)}
             >
-              <MaterialIcons name="add" size={20} color="#fff" />
+              <MaterialIcons name="add" size={20} color="#FBFBFB" />
               <Text style={styles.createButtonText}>Create Event</Text>
             </TouchableOpacity>
           </View>
@@ -654,7 +654,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
             </>
           ) : getUpcomingEvents().length === 0 ? (
             <View style={styles.emptyState}>
-              <MaterialIcons name="event" size={64} color="#02050a" />
+              <MaterialIcons name="event" size={64} color="#F56E0F" />
               <Text style={styles.emptyStateTitle}>No upcoming events</Text>
               <Text style={styles.emptyStateText}>
                 Create your first event to get started with event management.
@@ -684,7 +684,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                 style={styles.closeModalButton}
                 onPress={() => setShowCreateModal(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
             </View>
 
@@ -752,7 +752,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                     onPress={() => setShowTypeSelector(!showTypeSelector)}
                   >
                     <Text style={styles.typeText}>{newEvent.type}</Text>
-                    <MaterialIcons name="arrow-drop-down" size={20} color="#666" />
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#F56E0F" />
                   </TouchableOpacity>
                   {showTypeSelector && (
                     <View style={styles.typeDropdown}>
@@ -817,7 +817,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                 style={styles.closeEventDetailsButton}
                 onPress={() => setShowEventDetails(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#F56E0F" />
               </TouchableOpacity>
             </View>
 
@@ -891,7 +891,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                   Alert.alert('Edit Event', `Edit functionality for ${selectedEvent.title}`);
                 }}
               >
-                <MaterialIcons name="edit" size={20} color="#fff" />
+                <MaterialIcons name="edit" size={20} color="#FBFBFB" />
                 <Text style={styles.eventDetailsActionButtonText}>Edit Event</Text>
               </TouchableOpacity>
               
@@ -902,7 +902,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
                   handleDeleteEvent(selectedEvent);
                 }}
               >
-                <MaterialIcons name="delete" size={20} color="#fff" />
+                <MaterialIcons name="delete" size={20} color="#FBFBFB" />
                 <Text style={styles.eventDetailsActionButtonText}>Remove Event</Text>
               </TouchableOpacity>
             </View>
@@ -916,7 +916,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.79);', // Dark background
   },
   contentWrapper: {
     flex: 1,
@@ -928,21 +928,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419',
     padding: 24,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FBFBFB',
     letterSpacing: -0.5,
   },
   headerActions: {
@@ -965,15 +965,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    backgroundColor: 'rgba(244, 208, 63, 0.1)',
-    shadowColor: '#F4D03F',
+    borderColor: '#F56E0F',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   calendarButtonText: {
-    color: '#F4D03F',
+    color: '#F56E0F',
     fontSize: 15,
     fontWeight: '600',
     marginLeft: 6,
@@ -985,32 +985,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#2D5A3D', // Forest green
-    shadowColor: '#2D5A3D',
+    backgroundColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
   },
   createButtonText: {
-    color: '#fff',
+    color: '#FBFBFB',
     fontSize: 15,
     fontWeight: '600',
     marginLeft: 6,
     letterSpacing: 0.2,
   },
   calendarSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     margin: 20,
     borderRadius: 16,
     padding: 24,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     maxHeight: 500,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   calendarContainer: {
     alignItems: 'center',
@@ -1027,10 +1027,10 @@ const styles = StyleSheet.create({
   navButton: {
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
   calendarTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     letterSpacing: -0.5,
   },
   calendarGrid: {
@@ -1047,11 +1047,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 700,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#fff',
-    shadowColor: '#000',
+    backgroundColor: '#2A2A2E',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -1061,11 +1061,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
+    color: '#FBFBFB',
     paddingVertical: 12,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
+    borderRightColor: 'rgba(245, 110, 15, 0.2)',
     letterSpacing: 0.5,
   },
   calendarDay: {
@@ -1075,34 +1075,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderRightColor: '#f0f0f0',
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
+    borderRightColor: 'rgba(245, 110, 15, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.1)',
+    backgroundColor: '#2A2A2E',
     position: 'relative',
   },
   today: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
     borderRadius: 8,
     margin: 2,
   },
   selectedDay: {
-    backgroundColor: '#e3f2fd',
-    borderColor: '#4285f4',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+    borderColor: '#F56E0F',
     borderWidth: 2,
     borderRadius: 8,
     margin: 2,
   },
   dayText: {
     fontSize: 15,
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   todayText: {
-    color: '#fff',
+    color: '#FBFBFB',
     fontWeight: 'bold',
   },
   selectedDayText: {
-    color: '#4285f4',
+    color: '#F56E0F',
     fontWeight: 'bold',
   },
   eventIndicator: {
@@ -1116,8 +1116,8 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#ea4335',
-    shadowColor: '#ea4335',
+    backgroundColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
@@ -1126,14 +1126,14 @@ const styles = StyleSheet.create({
     marginTop: 20,
     width: '100%',
     maxHeight: 180,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderRadius: 12,
     padding: 16,
   },
   selectedDateTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginBottom: 12,
     letterSpacing: -0.3,
   },
@@ -1143,13 +1143,13 @@ const styles = StyleSheet.create({
   selectedDateEventItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -1166,12 +1166,12 @@ const styles = StyleSheet.create({
   selectedDateEventTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginBottom: 2,
   },
   selectedDateEventTime: {
     fontSize: 12,
-    color: '#666',
+    color: '#878787',
   },
   eventsList: {
     padding: 20,
@@ -1182,24 +1182,26 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#151419',
     marginBottom: 6,
     letterSpacing: -0.5,
   },
   sectionSubtitle: {
     fontSize: 15,
-    color: '#666',
+    color: '#878787',
     fontWeight: '500',
   },
   eventCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     marginBottom: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
   },
   expandedEventCard: {
@@ -1248,13 +1250,13 @@ const styles = StyleSheet.create({
   eventTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FBFBFB',
     marginBottom: 6,
     letterSpacing: -0.3,
   },
   eventDate: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     fontWeight: '500',
   },
   eventStatus: {
@@ -1275,7 +1277,7 @@ const styles = StyleSheet.create({
   },
   eventDescription: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB',
     lineHeight: 20,
     marginBottom: 10,
     opacity: 0.9,
@@ -1288,7 +1290,7 @@ const styles = StyleSheet.create({
   },
   attendanceLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB',
     opacity: 0.9,
     fontWeight: '500',
     marginBottom: 8,
@@ -1311,7 +1313,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F',
     fontWeight: 'bold',
     marginLeft: 12,
   },
@@ -1324,7 +1326,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB',
     marginLeft: 8,
     opacity: 0.9,
   },
@@ -1347,16 +1349,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   viewButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F',
   },
   editButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#878787',
   },
   deleteButton: {
-    backgroundColor: '#E8A598', // Soft coral
+    backgroundColor: '#ea4335',
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#FBFBFB',
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
@@ -1365,32 +1367,34 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#878787',
     textAlign: 'center',
     lineHeight: 22,
     opacity: 0.7,
   },
   // Skeleton Loading Styles
   skeletonEventCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     marginBottom: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
     opacity: 0.7,
     padding: 24,
@@ -1404,7 +1408,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     marginRight: 16,
   },
   skeletonEventInfo: {
@@ -1412,7 +1416,7 @@ const styles = StyleSheet.create({
   },
   skeletonTextLine: {
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -1427,16 +1431,18 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     width: '100%',
     maxWidth: 520,
     maxHeight: '90%',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1444,15 +1450,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#f8f9fa',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     letterSpacing: -0.3,
   },
   closeModalButton: {
@@ -1468,20 +1474,20 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginBottom: 10,
     letterSpacing: 0.1,
   },
   textInput: {
     borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1a1a2e',
-    backgroundColor: '#f8f9fa',
-    shadowColor: '#000',
+    color: '#FBFBFB',
+    backgroundColor: '#2A2A2E',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -1499,29 +1505,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     position: 'relative',
+    backgroundColor: '#2A2A2E',
   },
   typeText: {
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#FBFBFB',
   },
   typeDropdown: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 8,
     marginTop: 4,
     zIndex: 1000,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -1530,11 +1537,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.1)',
   },
   typeOptionText: {
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     textTransform: 'capitalize',
   },
   dateTimeButton: {
@@ -1555,7 +1562,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 24,
     gap: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
@@ -1564,17 +1571,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    shadowColor: '#000',
+    backgroundColor: '#2A2A2E',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787',
     fontWeight: '600',
     letterSpacing: 0.2,
   },
@@ -1582,23 +1589,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
     alignItems: 'center',
-    shadowColor: '#4285f4',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
   },
   saveButtonText: {
     fontSize: 16,
-    color: '#fff',
+    color: '#FBFBFB',
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   // Event Details Modal Styles
   eventDetailsContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#151419',
   },
   eventDetailsHeader: {
     flexDirection: 'row',
@@ -1606,9 +1613,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#f8f9fa',
-    shadowColor: '#000',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -1616,7 +1623,7 @@ const styles = StyleSheet.create({
   eventDetailsTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     letterSpacing: -0.5,
   },
   closeEventDetailsButton: {
@@ -1641,25 +1648,25 @@ const styles = StyleSheet.create({
   eventDetailsEventTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginBottom: 6,
     letterSpacing: -0.5,
   },
   eventDetailsEventDate: {
     fontSize: 17,
-    color: '#666',
+    color: '#F56E0F',
     fontWeight: '500',
   },
   eventDetailsSectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginBottom: 16,
     letterSpacing: -0.3,
   },
   eventDetailsDescription: {
     fontSize: 17,
-    color: '#666',
+    color: '#878787',
     lineHeight: 26,
     fontWeight: '400',
   },
@@ -1674,13 +1681,13 @@ const styles = StyleSheet.create({
   eventDetailsInfoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: '#878787',
     marginLeft: 8,
     minWidth: 80,
   },
   eventDetailsInfoValue: {
     fontSize: 14,
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     flex: 1,
     marginLeft: 8,
   },
@@ -1692,8 +1699,8 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: '#f8f9fa',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   eventDetailsActionButton: {
     flex: 1,
@@ -1709,13 +1716,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   editActionButton: {
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
   },
   deleteActionButton: {
     backgroundColor: '#ea4335',
   },
   eventDetailsActionButtonText: {
-    color: '#fff',
+    color: '#FBFBFB',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

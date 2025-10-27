@@ -144,7 +144,7 @@ export default function SplashScreen({ onAnimationFinish }: SplashScreenProps) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+      <StatusBar barStyle="light-content" backgroundColor="#151419" />
       
       {/* Background Bubbles */}
       <View style={styles.bubbleContainer}>
@@ -265,7 +265,7 @@ export default function SplashScreen({ onAnimationFinish }: SplashScreenProps) {
               },
             ]}
           >
-            <Ionicons name="school-outline" size={60} color="#fff" />
+            <Ionicons name="business" size={60} color="#FBFBFB" />
             <View style={styles.logoShine} />
           </Animated.View>
         </View>
@@ -321,7 +321,7 @@ export default function SplashScreen({ onAnimationFinish }: SplashScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419', // Dark background
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -339,35 +339,35 @@ const styles = StyleSheet.create({
     height: 80,
     top: height * 0.1,
     left: width * 0.1,
-    backgroundColor: 'rgba(244, 208, 63, 0.15)', // Bright yellow with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble2: {
     width: 120,
     height: 120,
     top: height * 0.2,
     right: width * 0.1,
-    backgroundColor: 'rgba(45, 90, 61, 0.2)', // Forest green with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   bubble3: {
     width: 60,
     height: 60,
     bottom: height * 0.3,
     left: width * 0.2,
-    backgroundColor: 'rgba(232, 165, 152, 0.2)', // Soft coral with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.08)', // Medium orange with opacity
   },
   bubble4: {
     width: 100,
     height: 100,
     bottom: height * 0.1,
     right: width * 0.2,
-    backgroundColor: 'rgba(244, 208, 63, 0.1)', // Bright yellow with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble5: {
     width: 40,
     height: 40,
     top: height * 0.5,
     left: width * 0.5,
-    backgroundColor: 'rgba(45, 90, 61, 0.15)', // Forest green with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   shimmer: {
     position: 'absolute',
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     width: 100,
     height: '100%',
   },
@@ -390,10 +390,10 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 15,
@@ -410,12 +410,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   appName: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     marginBottom: 12,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 18,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     textAlign: 'center',
     fontWeight: '400',
     marginBottom: 30,
@@ -445,6 +445,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
   },
 });

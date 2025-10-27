@@ -483,7 +483,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
                 size={24} 
-                color="#F4D03F" 
+                color="#F56E0F" 
                 style={styles.expandIcon}
               />
             </View>
@@ -494,7 +494,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <Text style={styles.attendanceLabel}>Attendance Progress:</Text>
               <ProgressBar 
                 progress={attendancePercentage} 
-                color={attendancePercentage >= 90 ? '#2D5A3D' : '#F4D03F'} 
+                color={attendancePercentage >= 90 ? '#34a853' : '#F56E0F'} 
               />
               <Text style={styles.attendanceDetails}>
                 {intern.attendance?.present || 0} present, {intern.attendance?.absent || 0} absent, {intern.attendance?.late || 0} late
@@ -505,7 +505,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <View style={styles.performanceHeader}>
                 <Text style={styles.performanceLabel}>Performance:</Text>
                 <View style={styles.ratingContainer}>
-                  <MaterialIcons name="star" size={16} color="#fbbc04" />
+                  <MaterialIcons name="star" size={16} color="#F56E0F" />
                   <Text style={styles.ratingText}>{intern.performance?.rating || 0}/5</Text>
                 </View>
               </View>
@@ -584,7 +584,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading interns...</Text>
       </View>
     );
@@ -611,13 +611,13 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       <View style={styles.searchSection}>
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
-            <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search interns..."
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
+              placeholderTextColor="#878787"
             />
           </View>
         </View>
@@ -730,7 +730,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           ))
         ) : filteredInterns.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="school" size={64} color="#ccc" />
+            <MaterialIcons name="school" size={64} color="#F56E0F" />
             <Text style={styles.emptyStateTitle}>No interns found</Text>
             <Text style={styles.emptyStateText}>
               {searchQuery 
@@ -763,7 +763,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 style={styles.closeModalButton}
                 onPress={() => setShowAttendanceModal(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#878787" />
               </TouchableOpacity>
             </View>
 
@@ -830,7 +830,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 style={styles.closeModalButton}
                 onPress={() => setShowDetailsModal(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#878787" />
               </TouchableOpacity>
             </View>
 
@@ -918,7 +918,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 style={styles.closeModalButton}
                 onPress={() => setShowRemoveConfirmModal(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#878787" />
               </TouchableOpacity>
             </View>
 
@@ -973,32 +973,34 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.79);', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   searchSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     padding: 20,
     marginBottom: 20,
     borderRadius: 16,
     marginHorizontal: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchContainer: {
     marginBottom: 15,
@@ -1006,21 +1008,21 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E',
     borderRadius: 12,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   searchIcon: {
     marginRight: 10,
-    color: '#F4D03F',
+    color: '#F56E0F',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -1030,25 +1032,27 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#F56E0F',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB',
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -1057,15 +1061,17 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   internCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   expandedInternCard: {
     elevation: 8,
@@ -1106,7 +1112,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 35,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#2A2A2E',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1126,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   studentId: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     marginBottom: 4,
     fontWeight: '500',
   },
@@ -1238,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F',
     fontWeight: 'bold',
     marginLeft: 12,
   },
@@ -1257,10 +1263,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F',
   },
   attendanceButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F',
   },
   removeButton: {
     backgroundColor: '#ea4335',
@@ -1277,32 +1283,34 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787',
     textAlign: 'center',
     lineHeight: 22,
   },
   // Skeleton Loading Styles
   skeletonInternCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   skeletonInternHeader: {
     flexDirection: 'row',
@@ -1315,14 +1323,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
   },
   skeletonInternInfo: {
     flex: 1,
   },
   skeletonTextLine: {
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -1332,7 +1340,7 @@ const styles = StyleSheet.create({
   skeletonStatusBadge: {
     width: 60,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
   },
   skeletonInternDetails: {
@@ -1343,7 +1351,7 @@ const styles = StyleSheet.create({
   },
   skeletonContactItem: {
     height: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 7,
     marginBottom: 4,
     width: '80%',
@@ -1358,14 +1366,14 @@ const styles = StyleSheet.create({
   },
   skeletonProgressBar: {
     height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 3,
     overflow: 'hidden',
   },
   skeletonProgressFill: {
     height: '100%',
     width: '60%',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.4)',
     borderRadius: 3,
   },
   skeletonActionButtons: {
@@ -1376,32 +1384,34 @@ const styles = StyleSheet.create({
   skeletonActionButton: {
     flex: 1,
     height: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
   },
   skeletonStatItem: {
     flex: 1,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   skeletonStatNumber: {
     width: 40,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
     marginBottom: 8,
   },
   skeletonStatLabel: {
     width: 60,
     height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
   },
   modalOverlay: {
@@ -1412,11 +1422,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 12,
     width: '100%',
     maxWidth: 500,
     maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1424,12 +1436,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     flex: 1,
   },
   closeModalButton: {
@@ -1449,12 +1461,12 @@ const styles = StyleSheet.create({
   attendanceStatNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#F56E0F',
     marginBottom: 4,
   },
   attendanceStatLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#FBFBFB',
   },
   attendancePercentageContainer: {
     alignItems: 'center',
@@ -1462,13 +1474,13 @@ const styles = StyleSheet.create({
   },
   attendancePercentageLabel: {
     fontSize: 16,
-    color: '#666',
+    color: '#FBFBFB',
     marginBottom: 8,
   },
   attendancePercentageValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#F56E0F',
   },
   attendanceActions: {
     flexDirection: 'row',
@@ -1511,13 +1523,13 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#F56E0F',
     marginTop: 16,
     marginBottom: 8,
   },
   modalText: {
     fontSize: 14,
-    color: '#666',
+    color: '#FBFBFB',
     marginBottom: 4,
     lineHeight: 20,
   },
@@ -1532,12 +1544,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     alignItems: 'center',
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
 });

@@ -503,7 +503,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
           
           <View style={styles.headerContent}>
             <View style={styles.logo}>
-              <Ionicons name="briefcase-outline" size={24} color="#F4D03F" />
+              <Ionicons name="briefcase-outline" size={24} color="#F56E0F" />
             </View>
             <Text style={styles.headerTitle}>InternshipGo</Text>
             <Text style={styles.headerSubtitle}>Company</Text>
@@ -562,7 +562,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
       >
         <View style={styles.sidebarHeader}>
           <View style={styles.sidebarLogo}>
-            <Ionicons name="briefcase-outline" size={32} color="#F4D03F" />
+            <Ionicons name="briefcase-outline" size={32} color="#F56E0F" />
           </View>
           <Text style={styles.sidebarTitle}>InternshipGo</Text>
           <Text style={styles.sidebarSubtitle}>Company Dashboard</Text>
@@ -581,7 +581,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                 <Ionicons 
                   name={item.icon as any} 
                   size={20} 
-                  color={(activeScreen === item.screen || (item.subItems && item.subItems.some(subItem => activeScreen === subItem.screen))) ? '#F4D03F' : '#fff'} 
+                  color={(activeScreen === item.screen || (item.subItems && item.subItems.some(subItem => activeScreen === subItem.screen))) ? '#F56E0F' : '#fff'} 
                 />
                 <Text style={[
                   styles.navText,
@@ -593,7 +593,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                   <Ionicons 
                     name={expandedDropdown === item.name ? 'chevron-down' : 'chevron-forward'} 
                     size={16} 
-                    color={(activeScreen === item.screen || (item.subItems && item.subItems.some(subItem => activeScreen === subItem.screen))) ? '#F4D03F' : '#fff'} 
+                    color={(activeScreen === item.screen || (item.subItems && item.subItems.some(subItem => activeScreen === subItem.screen))) ? '#F56E0F' : '#fff'} 
                     style={styles.dropdownIcon}
                   />
                 )}
@@ -625,7 +625,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                         <Ionicons 
                           name={subItem.icon as any} 
                           size={16} 
-                          color={activeScreen === subItem.screen ? '#F4D03F' : '#fff'} 
+                          color={activeScreen === subItem.screen ? '#F56E0F' : '#fff'} 
                         />
                         <Text style={[
                           styles.dropdownText,
@@ -674,7 +674,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
           </View>
           
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color="#E8A598" />
+            <Ionicons name="log-out-outline" size={20} color="#F56E0F" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
@@ -710,9 +710,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                     <View style={styles.notificationIconContainer}>
                       <View style={[
                         styles.notificationIcon,
-                        { backgroundColor: notification.type === 'success' ? '#2D5A3D' : 
-                                         notification.type === 'warning' ? '#F4D03F' : 
-                                         notification.type === 'error' ? '#E8A598' : '#1E3A5F' }
+                        { backgroundColor: '#F56E0F' } // Primary orange for all notification types
                       ]}>
                         <Ionicons 
                           name={notification.type === 'success' ? 'checkmark' : 
@@ -732,7 +730,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                         <Ionicons 
                           name={notification.isRead ? 'checkmark-circle' : 'time'} 
                           size={12} 
-                          color={notification.isRead ? '#2D5A3D' : '#F4D03F'} 
+                          color={notification.isRead ? '#F56E0F' : '#F56E0F'} 
                         />
                         <Text style={styles.notificationTime}>
                           {notification.created_at ? 
@@ -753,7 +751,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                 ))
               ) : (
                 <View style={styles.emptyNotifications}>
-                  <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
+                  <Ionicons name="notifications-off-outline" size={48} color="#F56E0F" />
                   <Text style={styles.emptyNotificationsText}>No notifications</Text>
                 </View>
               )}
@@ -852,7 +850,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                 },
               ]}
             >
-              <Ionicons name="hand-left" size={80} color="#F4D03F" />
+              <Ionicons name="hand-left" size={80} color="#F56E0F" />
             </Animated.View>
             
             <Animated.Text 
@@ -989,9 +987,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
                     <View style={styles.autoNotificationIconContainer}>
                       <View style={[
                         styles.autoNotificationIcon,
-                        { backgroundColor: notification.type === 'success' ? '#2D5A3D' : 
-                                         notification.type === 'warning' ? '#F4D03F' : 
-                                         notification.type === 'error' ? '#E8A598' : '#1E3A5F' }
+                        { backgroundColor: '#F56E0F' } // Primary orange for all notification types
                       ]}>
                         <Ionicons 
                           name={notification.type === 'success' ? 'checkmark' : 
@@ -1020,7 +1016,7 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#151419', // Dark background
   },
   mainContent: {
     flex: 1,
@@ -1031,8 +1027,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between' as const,
     paddingHorizontal: 24,
     paddingVertical: 20,
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    shadowColor: '#000',
+    backgroundColor: '#1B1B1E', // Dark secondary background
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1041,8 +1037,10 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   headerContent: {
     flex: 1,
@@ -1064,9 +1062,9 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: width < 400 ? 14 : 16, // Smaller font on mobile
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: 'bold' as const,
-    backgroundColor: 'rgba(244, 208, 63, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     paddingHorizontal: width < 400 ? 8 : 12, // Smaller padding on mobile
     paddingVertical: width < 400 ? 4 : 6, // Smaller padding on mobile
     borderRadius: 20,
@@ -1084,15 +1082,17 @@ const styles = StyleSheet.create({
   notificationButton: {
     position: 'relative' as const,
     padding: width < 400 ? 8 : 12, // Smaller padding on mobile
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
     minWidth: width < 400 ? 40 : 48, // Ensure minimum touch target
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   notificationBadge: {
     position: 'absolute' as const,
     top: 6,
     right: 6,
-    backgroundColor: '#E8A598', // Soft coral
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1100,7 +1100,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center' as const,
   },
   notificationCount: {
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontSize: 12,
     fontWeight: 'bold' as const,
   },
@@ -1133,9 +1133,9 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: 300,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     zIndex: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   sidebarLogo: {
     marginBottom: 12,
@@ -1160,7 +1160,7 @@ const styles = StyleSheet.create({
   },
   sidebarSubtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '600' as const,
   },
   navigation: {
@@ -1174,13 +1174,13 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
     position: 'relative' as const,
   },
   activeNavItem: {
-    backgroundColor: 'rgba(244, 208, 63, 0.15)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRightWidth: 4,
-    borderRightColor: '#F4D03F',
+    borderRightColor: '#F56E0F',
   },
   navText: {
     marginLeft: 16,
@@ -1189,7 +1189,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   activeNavText: {
-    color: '#F4D03F',
+    color: '#F56E0F',
     fontWeight: 'bold' as const,
   },
   dropdownIcon: {
@@ -1198,14 +1198,14 @@ const styles = StyleSheet.create({
   },
   // Dropdown Menu Styles
   dropdownMenu: {
-    backgroundColor: '#2A4A6B', // Slightly lighter blue than main sidebar
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     marginLeft: 20,
     marginRight: 8,
     borderRadius: 8,
     overflow: 'hidden',
     maxHeight: 200, // Limit height to prevent overlap
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1220,10 +1220,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     position: 'relative' as const,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   activeDropdownItem: {
-    backgroundColor: '#1E3A5F', // Darker blue background for active item
+    backgroundColor: '#1B1B1E', // Dark secondary background for active item
   },
   dropdownText: {
     marginLeft: 12,
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activeDropdownText: {
-    color: '#F4D03F', // Yellow text for active item
+    color: '#F56E0F', // Primary orange text for active item
     fontWeight: '500',
   },
   dropdownActiveIndicator: {
@@ -1242,10 +1242,10 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 3,
-    backgroundColor: '#F4D03F', // Yellow right border
+    backgroundColor: '#F56E0F', // Primary orange right border
   },
   messageBadge: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1259,7 +1259,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold' as const,
   },
   notificationSidebarBadge: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1268,13 +1268,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   notificationSidebarText: {
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontSize: 12,
     fontWeight: 'bold' as const,
   },
   sidebarFooter: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
     padding: 24,
   },
   userInfo: {
@@ -1286,7 +1286,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
@@ -1297,7 +1297,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   userAvatarText: {
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     fontSize: 20,
     fontWeight: 'bold' as const,
   },
@@ -1312,7 +1312,7 @@ const styles = StyleSheet.create({
   },
   userRole: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500' as const,
   },
   logoutButton: {
@@ -1323,13 +1323,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E8A598', // Soft coral
-    backgroundColor: 'rgba(232, 165, 152, 0.2)',
+    borderColor: '#F56E0F', // Primary orange
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
   },
   logoutText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#E8A598', // Soft coral
+    color: '#F56E0F', // Primary orange
     fontWeight: '600' as const,
   },
   // Notification Modal Styles
@@ -1353,22 +1353,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 12,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#fff',
+    borderBottomColor: '#1B1B1E', // Dark secondary background to match modal
     zIndex: 1001,
   },
   notificationModal: {
     position: 'absolute',
     top: 70,
     right: width < 400 ? 20 : 30,
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 12,
     width: width < 400 ? width - 40 : 350,
     maxHeight: 500,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   notificationModalHeader: {
     flexDirection: 'row',
@@ -1376,15 +1378,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   notificationModalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
   },
   clearAllText: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1397,7 +1399,7 @@ const styles = StyleSheet.create({
   },
   emptyNotificationsText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginTop: 12,
   },
   notificationItem: {
@@ -1405,7 +1407,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.1)',
   },
   notificationIconContainer: {
     marginRight: 12,
@@ -1423,7 +1425,7 @@ const styles = StyleSheet.create({
   },
   notificationMessage: {
     fontSize: 14,
-    color: '#333',
+    color: '#FBFBFB', // Light text
     lineHeight: 20,
     marginBottom: 4,
   },
@@ -1433,7 +1435,7 @@ const styles = StyleSheet.create({
   },
   notificationTime: {
     fontSize: 12,
-    color: '#666',
+    color: '#F56E0F', // Primary orange
     marginLeft: 4,
   },
   clearNotificationButton: {
@@ -1441,7 +1443,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   clearNotificationText: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontSize: 12,
     fontWeight: '500',
   },
@@ -1449,10 +1451,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   viewAllText: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1470,30 +1472,32 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logoutModal: {
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     width: '100%',
     maxWidth: 350,
     elevation: 10,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   logoutModalHeader: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(30, 58, 95, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   logoutModalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
   },
   logoutModalMessage: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     marginTop: 8,
   },
@@ -1507,11 +1511,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   logoutCancelText: {
-    color: '#6c757d',
+    color: '#878787', // Muted gray
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
@@ -1520,7 +1526,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: '#dc3545',
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 8,
   },
   logoutConfirmText: {
@@ -1542,16 +1548,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutSuccessContainer: {
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 40,
     alignItems: 'center',
     maxWidth: 300,
     elevation: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   logoutSuccessIcon: {
     marginBottom: 20,
@@ -1585,14 +1593,16 @@ const styles = StyleSheet.create({
     left: 0, // Will be positioned by transform
     width: width < 400 ? Math.min(width - 40, 300) : 320, // Responsive width that fits screen
     maxWidth: width < 400 ? width - 40 : 320, // Ensure it doesn't exceed screen width
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   autoNotificationContent: {
     flexDirection: 'row',
@@ -1606,13 +1616,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F4D03F',
+    backgroundColor: '#F56E0F', // Primary orange
     alignItems: 'center',
     justifyContent: 'center',
   },
   autoNotificationText: {
     flex: 1,
-    color: '#1E3A5F',
+    color: '#FBFBFB', // Light text
     fontSize: 14,
     fontWeight: '500',
   },

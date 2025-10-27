@@ -802,37 +802,78 @@ class AuthController {
   // Get all users' locations
   static async getUserLocations(req, res) {
     try {
-      const { query } = require('../config/supabase');
+      const { supabase } = require('../config/supabase');
+      
+      console.log('🔍 Fetching all user locations...');
       
       // Get all active users with their location data
-      const usersResult = await query('users', 'select', 
-        ['id', 'first_name', 'last_name', 'profile_picture', 'latitude', 'longitude', 'user_type'],
-        { is_active: true }
-      );
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('is_active', true)
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
 
-      if (usersResult.error) {
-        throw usersResult.error;
+      if (usersError) {
+        console.error('❌ Error fetching users:', usersError);
+        throw usersError;
       }
 
-      // Filter out users without location data and format response
-      const usersWithLocations = usersResult.data
-        .filter(user => user.latitude !== null && user.longitude !== null)
-        .map(user => ({
+      console.log(`✅ Found ${users.length} users with location data`);
+
+      // For each user type, get additional data from their specific tables
+      const formattedUsers = [];
+      
+      for (const user of users) {
+        let displayName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown User';
+        let userType = user.user_type?.toLowerCase() || 'unknown';
+        
+        // Fetch additional data based on user type
+        if (user.user_type === 'Company') {
+          try {
+            const { data: companyData } = await supabase
+              .from('companies')
+              .select('company_name')
+              .eq('user_id', user.id)
+              .single();
+            
+            if (companyData && companyData.company_name) {
+              displayName = companyData.company_name;
+            }
+            userType = 'company';
+          } catch (err) {
+            console.log(`⚠️ Could not fetch company data for user ${user.id}`);
+          }
+        } else if (user.user_type === 'Coordinator' || user.user_type === 'Admin Coordinator') {
+          userType = 'coordinator';
+        } else if (user.user_type === 'Student') {
+          userType = 'student';
+        }
+        
+        formattedUsers.push({
           id: user.id,
-          name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown User',
+          name: displayName,
           latitude: user.latitude,
           longitude: user.longitude,
           avatar: user.profile_picture,
-          userType: user.user_type
-        }));
+          userType: userType
+        });
+      }
+
+      console.log('✅ Formatted users:', formattedUsers.length);
+      console.log('📍 User type breakdown:', {
+        company: formattedUsers.filter(u => u.userType === 'company').length,
+        student: formattedUsers.filter(u => u.userType === 'student').length,
+        coordinator: formattedUsers.filter(u => u.userType === 'coordinator').length
+      });
 
       res.json({
         success: true,
-        data: usersWithLocations
+        data: formattedUsers
       });
 
     } catch (error) {
-      console.error('Get user locations error:', error);
+      console.error('❌ Get user locations error:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error',

@@ -1267,10 +1267,34 @@ class ApiService {
     console.log('📝 API SERVICE - updateEvidenceStatus result:', result);
     return result;
   }
+
+  // Platform Statistics
+  async getPlatformStats(): Promise<ApiResponse> {
+    console.log('📊 API SERVICE - getPlatformStats called');
+    
+    const result = await this.makeRequest('/platform/stats');
+    
+    console.log('📊 API SERVICE - getPlatformStats result:', result);
+    return result;
+  }
+
+  // Companies Landing Page
+  async getCompaniesLandingPage(): Promise<ApiResponse> {
+    console.log('🏢 API SERVICE - getCompaniesLandingPage called');
+    
+    const result = await this.makeRequest('/landing/companies');
+    
+    console.log('🏢 API SERVICE - getCompaniesLandingPage result:', result);
+    return result;
+  }
 }
 
 // Create and export API service instance
 export const apiService = new ApiService();
+
+// Convenience functions
+export const getPlatformStats = () => apiService.getPlatformStats();
+export const getCompaniesLandingPage = () => apiService.getCompaniesLandingPage();
 
 // Export types for use in components
 export type { ApiResponse, RegisterData, Coordinator, CreateCoordinatorData, UpdateCoordinatorData };

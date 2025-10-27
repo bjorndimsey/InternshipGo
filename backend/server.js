@@ -25,6 +25,8 @@ const workingHoursRoutes = require('./routes/workingHoursRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const evidenceRoutes = require('./routes/evidenceRoutes');
 const cloudinaryRoutes = require('./routes/cloudinaryRoutes');
+const platformStatsRoutes = require('./routes/platformStatsRoutes');
+const companiesLandingPageRoutes = require('./routes/companiesLandingPageRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -117,6 +119,8 @@ app.use('/api/working-hours', workingHoursRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/evidences', evidenceRoutes);
 app.use('/api/cloudinary', cloudinaryRoutes);
+app.use('/api/platform', platformStatsRoutes);
+app.use('/api/landing', companiesLandingPageRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

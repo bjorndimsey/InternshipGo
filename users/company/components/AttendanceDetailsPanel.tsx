@@ -311,7 +311,7 @@ export default function AttendanceDetailsPanel({
           style={styles.backButton}
           onPress={onClose}
         >
-          <MaterialIcons name="arrow-forward" size={24} color="#1E3A5F" />
+          <MaterialIcons name="arrow-forward" size={24} color="#F56E0F" />
         </TouchableOpacity>
         <Text style={[
           styles.detailTitle,
@@ -322,7 +322,7 @@ export default function AttendanceDetailsPanel({
           style={styles.calendarIconContainer}
           onPress={() => setShowDatePicker(true)}
         >
-          <MaterialIcons name="calendar-today" size={24} color="#1E3A5F" />
+          <MaterialIcons name="calendar-today" size={24} color="#F56E0F" />
         </TouchableOpacity>
       </View>
 
@@ -592,7 +592,7 @@ export default function AttendanceDetailsPanel({
                 style={styles.closeModalButton}
                 onPress={() => setShowDatePicker(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="##F56E0" />
               </TouchableOpacity>
             </View>
             
@@ -661,14 +661,14 @@ export default function AttendanceDetailsPanel({
 const styles = StyleSheet.create({
   detailPanel: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(255, 255, 255, 0.79);',
   },
   detailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
   },
@@ -679,16 +679,16 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#F56E0F',
     flex: 1,
     textAlign: 'center',
   },
   calendarIconContainer: {
     padding: 8,
     borderRadius: 6,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(255, 255, 255, 0.79);',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: '#F56E0',
   },
   internSummaryCard: {
     backgroundColor: '#fff',

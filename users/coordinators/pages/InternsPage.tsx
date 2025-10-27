@@ -936,7 +936,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
                 size={24} 
-                color="#F4D03F" 
+                color="#F56E0F" 
                 style={styles.expandIcon}
               />
             </View>
@@ -945,11 +945,11 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           <View style={styles.internDetails}>
             <View style={styles.contactInfo}>
               <View style={styles.contactItem}>
-                <MaterialIcons name="email" size={16} color="#666" />
+                <MaterialIcons name="email" size={16} color="#F56E0F" />
                 <Text style={styles.contactText}>{intern.email}</Text>
               </View>
               <View style={styles.contactItem}>
-                <MaterialIcons name="phone" size={16} color="#666" />
+                <MaterialIcons name="phone" size={16} color="#F56E0F" />
                 <Text style={styles.contactText}>{intern.phoneNumber}</Text>
               </View>
             </View>
@@ -958,7 +958,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <Text style={styles.requirementsLabel}>Requirements Progress:</Text>
               <ProgressBar 
                 progress={requirementsProgress} 
-                color={requirementsProgress === 100 ? '#2D5A3D' : '#F4D03F'} 
+                color={requirementsProgress === 100 ? '#34a853' : '#F56E0F'} 
               />
             </View>
           </View>
@@ -1098,13 +1098,13 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       <View style={styles.searchSection}>
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
-            <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search interns..."
+              placeholderTextColor="#878787"
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
             />
           </View>
         </View>
@@ -1116,7 +1116,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
             onPress={() => setShowYearSelector(true)}
           >
             <Text style={styles.yearText}>{selectedSchoolYear}</Text>
-            <MaterialIcons name="arrow-drop-down" size={20} color="#666" />
+            <MaterialIcons name="arrow-drop-down" size={20} color="#F56E0F" />
           </TouchableOpacity>
           
           <View style={styles.buttonContainer}>
@@ -1823,32 +1823,34 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
-  },
+    backgroundColor: 'rgb(255, 255, 255);', // Dark background
+  },  
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   searchSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark secondary background
     padding: 20,
     marginBottom: 20,
     borderRadius: 16,
     marginHorizontal: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchContainer: {
     marginBottom: 15,
@@ -1856,21 +1858,21 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input background
     borderRadius: 12,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   searchIcon: {
     marginRight: 10,
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
   },
   filterContainer: {
     flexDirection: 'row',
@@ -1883,22 +1885,22 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   yearSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E', // Dark input background
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   yearText: {
     fontSize: 14,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginRight: 4,
   },
   statsContainer: {
@@ -1909,25 +1911,27 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -1936,14 +1940,16 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   internCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     overflow: 'hidden',
   },
   expandedInternCard: {
@@ -1990,14 +1996,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 35,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
   },
   internInfo: {
     flex: 1,
@@ -2005,24 +2011,24 @@ const styles = StyleSheet.create({
   internName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 6,
   },
   studentId: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: 4,
     fontWeight: '500',
   },
   major: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
     opacity: 0.9,
   },
   academicYear: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.8,
   },
   statusContainer: {
@@ -2037,7 +2043,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
   },
   internDetails: {
     marginBottom: 15,
@@ -2052,7 +2058,7 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginLeft: 8,
     opacity: 0.9,
   },
@@ -2064,19 +2070,19 @@ const styles = StyleSheet.create({
   },
   internshipLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
     opacity: 0.8,
   },
   internshipCompany: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     marginBottom: 2,
   },
   internshipDates: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.8,
   },
   requirementsContainer: {
@@ -2087,7 +2093,7 @@ const styles = StyleSheet.create({
   },
   requirementsLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     opacity: 0.9,
     fontWeight: '500',
     marginBottom: 8,
@@ -2110,7 +2116,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     fontWeight: 'bold',
     marginLeft: 12,
   },
@@ -2129,16 +2135,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
   },
   requirementsButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
   },
   deleteButton: {
     backgroundColor: '#ea4335',
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
@@ -2146,18 +2152,18 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -2169,16 +2175,18 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2186,17 +2194,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     flex: 1,
   },
   requirementScopeText: {
     fontSize: 12,
-    color: '#666',
+    color: '#878787', // Muted gray
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -2208,7 +2216,7 @@ const styles = StyleSheet.create({
   refreshButton: {
     padding: 8,
     borderRadius: 6,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
   },
   closeModalButton: {
     padding: 4,
@@ -2223,12 +2231,12 @@ const styles = StyleSheet.create({
   },
   requirementLabel: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginLeft: 12,
   },
   completedRequirement: {
     textDecorationLine: 'line-through',
-    color: '#999',
+    color: '#878787', // Muted gray
   },
   // Add Intern Modal Styles
   addButton: {
@@ -2240,9 +2248,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   internButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     elevation: 3,
-    shadowColor: '#2D5A3D',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -2251,7 +2259,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ea4335',
   },
   addButtonText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 6,
@@ -2263,12 +2271,12 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
   },
   formSubLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginBottom: 20,
   },
   inputContainer: {
@@ -2277,38 +2285,38 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#02050a',
-    backgroundColor: '#fff',
+    color: '#FBFBFB', // Light text
+    backgroundColor: '#2A2A2E', // Dark input background
   },
   pickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark input background
   },
   pickerText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
   },
   searchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -2316,13 +2324,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   searchButtonText: {
-    color: '#fff',
+    color: '#FBFBFB', // Light text
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
   disabledButton: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#878787', // Muted gray
   },
   errorContainer: {
     backgroundColor: '#ffebee',
@@ -2336,10 +2344,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   studentFoundContainer: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     padding: 16,
     borderRadius: 8,
     marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   studentFoundProfile: {
     flexDirection: 'row',
@@ -2358,19 +2368,19 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#2D5A3D',
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
   },
   studentFoundProfileText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB', // Light text
   },
   studentFoundTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginBottom: 12,
   },
   studentInfo: {
@@ -2379,12 +2389,12 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
   },
   studentDetails: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginBottom: 2,
   },
   // Requirements Management Styles
@@ -2565,7 +2575,7 @@ const styles = StyleSheet.create({
   },
   checkboxLabel: {
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#fff',
     marginLeft: 8,
   },
   buttonRow: {
@@ -2966,15 +2976,17 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonInternCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   skeletonInternHeader: {
     flexDirection: 'row',
@@ -2987,14 +2999,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
   },
   skeletonInternInfo: {
     flex: 1,
   },
   skeletonTextLine: {
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -3004,7 +3016,7 @@ const styles = StyleSheet.create({
   skeletonStatusBadge: {
     width: 60,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
   skeletonInternDetails: {
@@ -3015,7 +3027,7 @@ const styles = StyleSheet.create({
   },
   skeletonContactItem: {
     height: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 7,
     marginBottom: 4,
     width: '80%',
@@ -3030,14 +3042,14 @@ const styles = StyleSheet.create({
   },
   skeletonProgressBar: {
     height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 3,
     overflow: 'hidden',
   },
   skeletonProgressFill: {
     height: '100%',
     width: '60%',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.4)',
     borderRadius: 3,
   },
   skeletonActionButtons: {
@@ -3048,32 +3060,34 @@ const styles = StyleSheet.create({
   skeletonActionButton: {
     flex: 1,
     height: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
   },
   skeletonStatItem: {
     flex: 1,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   skeletonStatNumber: {
     width: 40,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
     marginBottom: 8,
   },
   skeletonStatLabel: {
     width: 60,
     height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
   },
   // Year Selector Modal Styles
@@ -3085,16 +3099,18 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   yearModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   yearModalHeader: {
     flexDirection: 'row',
@@ -3102,12 +3118,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   yearModalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
   },
   yearModalBody: {
     maxHeight: 400,
@@ -3121,20 +3137,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     marginBottom: 8,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   yearOptionSelected: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderWidth: 1,
-    borderColor: '#1E3A5F',
+    borderColor: '#F56E0F',
   },
   yearOptionText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   yearOptionTextSelected: {
-    color: '#1E3A5F',
+    color: '#F56E0F', // Primary orange
     fontWeight: '700',
   },
 });

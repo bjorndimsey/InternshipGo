@@ -82,6 +82,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
   const [pageAnimation] = useState(new Animated.Value(0));
   const [statsAnimation] = useState(new Animated.Value(0));
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [showSearchBar, setShowSearchBar] = useState(false);
 
   useEffect(() => {
     fetchApplications();
@@ -705,7 +706,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
     );
   };
 
-  const ApplicationCard = ({ application }: { application: Application }) => {
+  const ApplicationCard = ({ application, index }: { application: Application; index: number }) => {
     const isExpanded = expandedCard === application.id;
     
     return (
@@ -718,6 +719,9 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
           style={styles.cardTouchable}
         >
           <View style={styles.applicationHeader}>
+            <View style={styles.rowNumberContainer}>
+              <Text style={styles.rowNumber}>{index + 1}</Text>
+            </View>
             <View style={styles.profileContainer}>
               {application.student_profile_picture ? (
                 <Image source={{ uri: application.student_profile_picture }} style={styles.profileImage} />
@@ -742,7 +746,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
                 size={24} 
-                color="#F4D03F" 
+                color="#F56E0F" 
                 style={styles.expandIcon}
               />
             </View>
@@ -843,7 +847,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading applications...</Text>
       </View>
     );
@@ -868,7 +872,31 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Applications Management</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>Applications Management</Text>
+          <TouchableOpacity 
+            style={styles.searchIconButton}
+            onPress={() => setShowSearchBar(!showSearchBar)}
+          >
+            <MaterialIcons name="search" size={24} color="#F56E0F" />
+          </TouchableOpacity>
+        </View>
+        
+        {showSearchBar && (
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search applications..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="#878787"
+              />
+            </View>
+          </View>
+        )}
+        
         {companySlots && (
           <View style={styles.slotInfoContainer}>
             <View style={styles.slotInfoItem}>
@@ -889,21 +917,8 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
         )}
       </View>
 
-      {/* Search and Filter Section */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search applications..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
-            />
-          </View>
-        </View>
-        
+      {/* Filter Section */}
+      <View style={styles.filterSection}>
         <View style={styles.filterContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <TouchableOpacity
@@ -950,103 +965,6 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
         </View>
       </View>
 
-      {/* Stats */}
-      <View style={styles.statsContainer}>
-        {showSkeleton ? (
-          // Show skeleton stats
-          Array.from({ length: 4 }).map((_, index) => (
-            <View key={`skeleton-stat-${index}`} style={styles.skeletonStatItem}>
-              <View style={styles.skeletonStatNumber} />
-              <View style={styles.skeletonStatLabel} />
-            </View>
-          ))
-        ) : (
-          <>
-            <Animated.View 
-              style={[
-                styles.statItem,
-                {
-                  opacity: statsAnimation,
-                  transform: [
-                    {
-                      scale: statsAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.statNumber}>{filteredApplications.length}</Text>
-              <Text style={styles.statLabel}>Total Applications</Text>
-            </Animated.View>
-            <Animated.View 
-              style={[
-                styles.statItem,
-                {
-                  opacity: statsAnimation,
-                  transform: [
-                    {
-                      scale: statsAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={[styles.statNumber, { color: '#F4D03F' }]}>
-                {filteredApplications.filter(a => a.status === 'pending').length}
-              </Text>
-              <Text style={styles.statLabel}>Pending</Text>
-            </Animated.View>
-            <Animated.View 
-              style={[
-                styles.statItem,
-                {
-                  opacity: statsAnimation,
-                  transform: [
-                    {
-                      scale: statsAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={[styles.statNumber, { color: '#1E3A5F' }]}>
-                {filteredApplications.filter(a => a.status === 'under-review').length}
-              </Text>
-              <Text style={styles.statLabel}>Under Review</Text>
-            </Animated.View>
-            <Animated.View 
-              style={[
-                styles.statItem,
-                {
-                  opacity: statsAnimation,
-                  transform: [
-                    {
-                      scale: statsAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={[styles.statNumber, { color: '#2D5A3D' }]}>
-                {filteredApplications.filter(a => a.status === 'approved').length}
-              </Text>
-              <Text style={styles.statLabel}>Approved</Text>
-            </Animated.View>
-          </>
-        )}
-      </View>
 
       {/* Applications List */}
       <ScrollView style={styles.applicationsList} showsVerticalScrollIndicator={false}>
@@ -1057,7 +975,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
           ))
         ) : filteredApplications.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="assignment" size={64} color="#F4D03F" />
+            <MaterialIcons name="assignment" size={64} color="#F56E0F" />
             <Text style={styles.emptyStateTitle}>No applications found</Text>
             <Text style={styles.emptyStateText}>
               {searchQuery 
@@ -1067,8 +985,8 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
             </Text>
           </View>
         ) : (
-          filteredApplications.map((application) => (
-            <ApplicationCard key={application.id} application={application} />
+          filteredApplications.map((application, index) => (
+            <ApplicationCard key={application.id} application={application} index={index} />
           ))
         )}
       </ScrollView>
@@ -1090,7 +1008,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
                 style={styles.closeModalButton}
                 onPress={() => setShowApplicationModal(false)}
               >
-                <MaterialIcons name="close" size={24} color="#666" />
+                <MaterialIcons name="close" size={24} color="#878787" />
               </TouchableOpacity>
             </View>
 
@@ -1186,23 +1104,23 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.79);', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     padding: 20,
     marginBottom: 20,
     borderRadius: 16,
@@ -1213,16 +1131,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1E3A5F',
-    marginBottom: 10,
+    color: '#FBFBFB',
+  },
+  searchIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
   },
   slotInfoContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E',
     borderRadius: 8,
     padding: 15,
     marginTop: 10,
@@ -1233,17 +1161,17 @@ const styles = StyleSheet.create({
   },
   slotInfoLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#878787',
     marginBottom: 4,
     fontWeight: '500',
   },
   slotInfoValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
   },
-  searchSection: {
-    backgroundColor: '#fff',
+  filterSection: {
+    backgroundColor: '#1B1B1E',
     padding: 20,
     marginBottom: 20,
     borderRadius: 16,
@@ -1260,83 +1188,54 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E',
     borderRadius: 12,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(245, 110, 15, 0.3)',
   },
   searchIcon: {
     marginRight: 10,
-    color: '#F4D03F',
+    color: '#F56E0F',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1E3A5F',
+    color: '#FBFBFB',
   },
   filterContainer: {
     flexDirection: 'row',
+    marginBottom: 0,
   },
   filterTab: {
     paddingHorizontal: 20,
     paddingVertical: 10,
     marginHorizontal: 5,
     borderRadius: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2A2A2E',
   },
   activeFilterTab: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#F56E0F',
   },
   filterText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#666',
+    color: '#878787',
   },
   activeFilterText: {
-    color: '#fff',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 16,
-  },
-  statItem: {
-    flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#1E3A5F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: '600',
+    color: '#FBFBFB',
   },
   applicationsList: {
     flex: 1,
     padding: 20,
   },
   applicationCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1368,6 +1267,21 @@ const styles = StyleSheet.create({
   applicationHeader: {
     flexDirection: 'row',
     marginBottom: 15,
+    alignItems: 'center',
+  },
+  rowNumberContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F56E0F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  rowNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
   },
   profileContainer: {
     marginRight: 15,
@@ -1381,7 +1295,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 35,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1401,7 +1315,7 @@ const styles = StyleSheet.create({
   },
   studentId: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F',
     marginBottom: 4,
     fontWeight: '500',
   },
@@ -1509,16 +1423,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F',
   },
   downloadButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F',
   },
   transcriptButton: {
     backgroundColor: '#9c27b0',
   },
   approveButton: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#34a853',
   },
   rejectButton: {
     backgroundColor: '#ea4335',
@@ -1532,29 +1446,29 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 60,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E3A5F',
+    color: '#FBFBFB',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787',
     textAlign: 'center',
     lineHeight: 22,
   },
   // Skeleton Loading Styles
   skeletonApplicationCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1610,31 +1524,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
   },
-  skeletonStatItem: {
-    flex: 1,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#1E3A5F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  skeletonStatNumber: {
-    width: 40,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  skeletonStatLabel: {
-    width: 60,
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 6,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1643,7 +1532,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E',
     borderRadius: 12,
     width: '100%',
     maxWidth: 600,
@@ -1660,7 +1549,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     flex: 1,
   },
   closeModalButton: {
@@ -1673,13 +1562,13 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a1a2e',
+    color: '#FBFBFB',
     marginTop: 16,
     marginBottom: 8,
   },
   modalText: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787',
     marginBottom: 4,
     lineHeight: 20,
   },
@@ -1715,14 +1604,14 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: '#878787',
     fontWeight: '500',
   },
   locationButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
-    backgroundColor: '#4285f4',
+    backgroundColor: '#F56E0F',
     alignItems: 'center',
   },
   locationButtonText: {

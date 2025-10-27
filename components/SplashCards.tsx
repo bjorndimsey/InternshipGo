@@ -401,13 +401,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 40,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
+    boxShadow: '0px 10px 20px rgba(0, 0, 0, 0.3)',
     elevation: 15,
   },
   iconContainer: {
@@ -417,13 +411,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
+    boxShadow: '0px 8px 15px rgba(0, 0, 0, 0.3)',
     elevation: 10,
   },
   title: {
@@ -472,13 +460,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.3)',
     elevation: 6,
   },
   nextText: {

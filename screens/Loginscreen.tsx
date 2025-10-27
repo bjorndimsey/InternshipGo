@@ -613,7 +613,7 @@ export default function GoogleLogin({
               },
             ]}
           >
-            <Ionicons name="hand-left" size={80} color="#F4D03F" />
+            <Ionicons name="hand-left" size={80} color="#F56E0F" />
           </Animated.View>
           
           <Animated.Text 
@@ -829,7 +829,7 @@ export default function GoogleLogin({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A5F" />
+      <StatusBar barStyle="light-content" backgroundColor="#151419" />
       
       {/* Background Bubbles */}
       <View style={styles.bubbleContainer}>
@@ -986,7 +986,7 @@ export default function GoogleLogin({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              <Ionicons name="school-outline" size={60} color="#1E3A5F" />
+              <Ionicons name="business" size={60} color="#FBFBFB" />
             </View>
             <Text style={styles.appTitle}>InternshipGo</Text>
             <Text style={styles.subtitle}>Find Your Perfect Internship</Text>
@@ -1109,7 +1109,7 @@ export default function GoogleLogin({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419', // Dark background
   },
   bubbleContainer: {
     position: 'absolute',
@@ -1125,35 +1125,35 @@ const styles = StyleSheet.create({
     height: 100,
     top: height * 0.1,
     left: width * 0.1,
-    backgroundColor: 'rgba(245, 241, 232, 0.3)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble2: {
     width: 80,
     height: 80,
     top: height * 0.2,
     right: width * 0.15,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   bubble3: {
     width: 120,
     height: 120,
     bottom: height * 0.2,
     left: width * 0.05,
-    backgroundColor: 'rgba(245, 241, 232, 0.2)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.08)', // Medium orange with opacity
   },
   bubble4: {
     width: 60,
     height: 60,
     bottom: height * 0.1,
     right: width * 0.2,
-    backgroundColor: 'rgba(30, 58, 95, 0.15)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.1)', // Orange with opacity
   },
   bubble5: {
     width: 90,
     height: 90,
     top: height * 0.5,
     right: width * 0.1,
-    backgroundColor: 'rgba(245, 241, 232, 0.25)', // Soft cream with opacity
+    backgroundColor: 'rgba(245, 110, 15, 0.05)', // Lighter orange with opacity
   },
   scrollContainer: {
     flexGrow: 1,
@@ -1175,11 +1175,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#F4D03F', // Soft cream
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -1191,12 +1191,12 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FBFBFB',
   },
   appTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
@@ -1205,7 +1205,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 18,
-    color: '#F5F1E8', // Soft cream
+    color: '#F56E0F', // Primary orange
     textAlign: 'center',
     fontWeight: '400',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
@@ -1213,12 +1213,12 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   loginCard: {
-    backgroundColor: 'rgba(245, 241, 232, 0.95)', // Soft cream with opacity
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 24,
     padding: 32,
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 12,
@@ -1227,24 +1227,24 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 20,
     borderWidth: 1,
-    borderColor: 'rgba(244, 208, 63, 0.2)',
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   cardTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     marginBottom: 8,
   },
   cardSubtitle: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#878787', // Muted gray
     textAlign: 'center',
     marginBottom: 30,
     fontWeight: '500',
   },
   googleButton: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 24,
@@ -1252,7 +1252,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 6,
@@ -1262,24 +1262,24 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   googleButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#878787',
     shadowOpacity: 0,
     elevation: 0,
   },
   googleIcon: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     marginRight: 12,
   },
   googleButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
   },
   termsText: {
     fontSize: 12,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#878787', // Muted gray
     textAlign: 'center',
     lineHeight: 16,
     marginBottom: 20,
@@ -1291,12 +1291,12 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#878787', // Muted gray
   },
   registerLink: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#F56E0F', // Primary orange
   },
   dividerContainer: {
     flexDirection: 'row',
@@ -1306,12 +1306,12 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#878787', // Muted gray
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 14,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#878787', // Muted gray
     fontWeight: '500',
   },
   inputContainer: {
@@ -1320,7 +1320,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
   },
   inputWrapper: {
@@ -1328,14 +1328,14 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 16,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#1E3A5F', // Deep navy blue
-    shadowColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E', // Dark input background
+    color: '#FBFBFB', // Light text
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1348,10 +1348,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#1E3A5F', // Deep navy blue
+    borderColor: 'rgba(245, 110, 15, 0.3)', // Orange border
     borderRadius: 16,
-    backgroundColor: '#fff',
-    shadowColor: '#1E3A5F',
+    backgroundColor: '#2A2A2E', // Dark input background
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1365,7 +1365,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
   },
   showPasswordButton: {
     paddingHorizontal: 16,
@@ -1375,11 +1375,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   emailButton: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 16,
     paddingVertical: 18,
     marginBottom: 20,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 6,
@@ -1389,14 +1389,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   emailButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#878787',
     shadowOpacity: 0,
     elevation: 0,
   },
   emailButtonText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F5F1E8', // Soft cream
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
   },
   forgotPasswordButton: {
@@ -1406,17 +1406,17 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontSize: 14,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   userCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 30,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 10,
@@ -1424,16 +1424,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   userAvatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#2A2A2E',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -1450,24 +1452,24 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#FF8400',
+    color: '#F56E0F', // Primary orange
   },
   welcomeText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#FBFBFB', // Light text
     marginBottom: 8,
   },
   userName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#FBFBFB', // Light text
     marginBottom: 4,
     textAlign: 'center',
   },
   userEmail: {
     fontSize: 14,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginBottom: 30,
     textAlign: 'center',
   },
@@ -1497,17 +1499,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(30, 58, 95, 0.95)', // Deep navy blue with opacity
+    backgroundColor: 'rgba(21, 20, 25, 0.95)', // Dark background with opacity
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   loginSuccessContainer: {
-    backgroundColor: '#F5F1E8', // Soft cream
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 24,
     padding: 40,
     alignItems: 'center',
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: {
       width: 0,
       height: 12,
@@ -1516,7 +1518,7 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 20,
     borderWidth: 2,
-    borderColor: '#1E3A5F',
+    borderColor: '#F56E0F',
   },
   loginSuccessIcon: {
     marginBottom: 24,
@@ -1525,13 +1527,13 @@ const styles = StyleSheet.create({
   loginSuccessTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     marginBottom: 12,
   },
   loginSuccessMessage: {
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
+    color: '#878787', // Muted gray
     textAlign: 'center',
     fontWeight: '500',
   },

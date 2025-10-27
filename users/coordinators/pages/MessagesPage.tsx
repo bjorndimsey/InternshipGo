@@ -98,13 +98,13 @@ const SearchInput = memo(({
 }) => {
   return (
     <View style={styles.searchInputContainer}>
-      <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+      <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
       <TextInput
         style={styles.searchInput}
         placeholder={placeholder}
         value={value}
         onChangeText={onChangeText}
-        placeholderTextColor="#999"
+        placeholderTextColor="#878787"
         autoCorrect={false}
         autoCapitalize="none"
         returnKeyType="search"
@@ -1331,7 +1331,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading messages...</Text>
       </View>
     );
@@ -1358,7 +1358,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
               style={styles.newGroupButton}
               onPress={() => setShowGroupModal(true)}
               >
-              <MaterialIcons name="group-add" size={24} color="#F4D03F" />
+              <MaterialIcons name="group-add" size={24} color="#FBFBFB" />
               </TouchableOpacity>
           </Animated.View>
 
@@ -1472,7 +1472,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
               placeholder="Type a message..."
               value={newMessage}
               onChangeText={setNewMessage}
-              placeholderTextColor="#999"
+              placeholderTextColor="#878787"
               multiline
               maxLength={1000}
               returnKeyType="send"
@@ -1525,7 +1525,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                   value={groupName}
                   onChangeText={setGroupName}
                   placeholder="Enter group name"
-                  placeholderTextColor="#999"
+                  placeholderTextColor="#878787"
                 />
               </View>
 
@@ -1642,7 +1642,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 value={groupSearchQuery}
                 onChangeText={setGroupSearchQuery}
                 placeholder="Search users..."
-                placeholderTextColor="#999"
+                placeholderTextColor="#878787"
               />
             </View>
 
@@ -1945,7 +1945,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                 value={addMemberSearchQuery}
                 onChangeText={setAddMemberSearchQuery}
                 placeholder="Search users to add..."
-                placeholderTextColor="#999"
+                placeholderTextColor="#878787"
               />
             </View>
 
@@ -2019,7 +2019,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
                   value={newGroupName}
                   onChangeText={setNewGroupName}
                   placeholder="Enter new group name"
-                  placeholderTextColor="#999"
+                  placeholderTextColor="#878787"
                   maxLength={50}
                 />
               </View>
@@ -2080,28 +2080,28 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.83);', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   conversationsContainer: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark background
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -2120,7 +2120,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   filterContainer: {
@@ -2154,19 +2154,21 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   conversationItem: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 6,
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   selectedConversation: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     elevation: 8,
     shadowOpacity: 0.2,
   },
@@ -2226,7 +2228,7 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
     opacity: 0.9,
   },
@@ -2240,7 +2242,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   unreadBadge: {
-    backgroundColor: '#E8A598', // Soft coral
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -2248,7 +2250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     elevation: 2,
-    shadowColor: '#E8A598',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -2260,14 +2262,14 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#151419', // Dark background
   },
   messagesHeader: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark background
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -2334,13 +2336,13 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 14,
-    color: '#1a1a2e',
+    color: '#FBFBFB', // Light text
     lineHeight: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark message background
     padding: 12,
     borderRadius: 12,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -2349,33 +2351,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: 20,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark background
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
   },
   messageInput: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 15,
-    color: '#02050a',
-    backgroundColor: '#fff',
+    color: '#FBFBFB', // Light text
+    backgroundColor: '#151419', // Dark input background
     fontWeight: '500',
   },
   sendButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 24,
     width: 48,
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -2386,8 +2388,8 @@ const styles = StyleSheet.create({
   newGroupButton: {
     padding: 12,
     borderRadius: 24,
-    backgroundColor: '#2D5A3D', // Forest green
-    shadowColor: '#2D5A3D',
+    backgroundColor: '#F56E0F', // Primary orange
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2399,15 +2401,15 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark input background
     borderRadius: 16,
     margin: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -2418,7 +2420,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '600',
   },
   searchButton: {
@@ -2426,12 +2428,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   searchResultsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
     elevation: 10,
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2447,7 +2449,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchResultAvatar: {
     width: 40,
@@ -2461,12 +2463,12 @@ const styles = StyleSheet.create({
   searchResultName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontFamily: 'System',
   },
   searchResultEmail: {
     fontSize: 15,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginTop: 4,
     fontWeight: '500',
   },
@@ -2876,16 +2878,18 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonConversationItem: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 6,
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#1E3A5F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     opacity: 0.7,
   },
   skeletonConversationHeader: {
@@ -2899,7 +2903,7 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: 50,
     height: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 25,
   },
   skeletonConversationInfo: {
@@ -2908,14 +2912,14 @@ const styles = StyleSheet.create({
   skeletonParticipantName: {
     width: '60%',
     height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
     marginBottom: 8,
   },
   skeletonLastMessage: {
     width: '80%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
   },
   skeletonConversationMeta: {
@@ -2924,14 +2928,14 @@ const styles = StyleSheet.create({
   skeletonTimestamp: {
     width: 40,
     height: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
   },
   skeletonUnreadBadge: {
     width: 24,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
   },
 });
