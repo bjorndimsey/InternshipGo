@@ -15,6 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as XLSX from 'xlsx';
 import { AttendanceRecordEntry } from '../utils/journalGenerator';
 import { apiService } from '../../../lib/api';
 
@@ -51,6 +52,9 @@ export default function AttendanceHistoryPanel({
     pmOut: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [userName, setUserName] = useState<string>('');
 
   useEffect(() => {
     if (visible) {
@@ -59,6 +63,10 @@ export default function AttendanceHistoryPanel({
         duration: 300,
         useNativeDriver: true,
       }).start();
+      // Reset filter when modal opens
+      setSelectedMonth(null);
+      // Fetch user name when modal opens
+      fetchUserName();
     } else {
       Animated.timing(slideAnim, {
         toValue: width,
@@ -66,7 +74,53 @@ export default function AttendanceHistoryPanel({
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim]);
+  }, [visible, slideAnim, userId]);
+
+  const fetchUserName = async () => {
+    if (!userId) return;
+    try {
+      const response = await apiService.getProfile(userId);
+      if (response.success && response.user) {
+        const firstName = response.user.first_name || '';
+        const lastName = response.user.last_name || '';
+        setUserName(`${firstName} ${lastName}`.trim() || 'User');
+      }
+    } catch (error) {
+      console.error('Error fetching user name:', error);
+      setUserName('User');
+    }
+  };
+
+  // Get unique months from records
+  const getAvailableMonths = () => {
+    const monthSet = new Set<string>();
+    records.forEach(record => {
+      const date = new Date(record.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthSet.add(monthKey);
+    });
+    return Array.from(monthSet).sort().reverse(); // Most recent first
+  };
+
+  // Format month for display
+  const formatMonthDisplay = (monthKey: string) => {
+    const [year, month] = monthKey.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  // Filter records by selected month
+  const getFilteredRecords = () => {
+    if (!selectedMonth) return records;
+    return records.filter(record => {
+      const date = new Date(record.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      return monthKey === selectedMonth;
+    });
+  };
+
+  const filteredRecords = getFilteredRecords();
+  const availableMonths = getAvailableMonths();
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', {
@@ -219,6 +273,92 @@ export default function AttendanceHistoryPanel({
     }
   };
 
+  const downloadExcel = async () => {
+    try {
+      if (filteredRecords.length === 0) {
+        Alert.alert('Info', 'No attendance records to export.');
+        return;
+      }
+
+      Alert.alert('Processing', 'Preparing Excel file...');
+
+      // Prepare data for Excel
+      const excelData = filteredRecords.map((record, index) => {
+        const date = new Date(record.date);
+        const formattedDate = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'Asia/Manila',
+        });
+
+        const formatTimeForExcel = (timeStr: string | undefined) => {
+          if (!timeStr || timeStr === '--:--') return 'N/A';
+          return timeStr.split(' ')[0];
+        };
+
+        const getStatusText = (status: string) => {
+          return status.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+        };
+
+        const getVerificationText = (status: string | undefined) => {
+          const verificationStatus = status || 'pending';
+          return verificationStatus.charAt(0).toUpperCase() + verificationStatus.slice(1);
+        };
+
+        return {
+          'No.': index + 1,
+          'Date': formattedDate,
+          'Status': getStatusText(record.status),
+          'AM In': formatTimeForExcel(record.amIn),
+          'AM Out': formatTimeForExcel(record.amOut),
+          'PM In': formatTimeForExcel(record.pmIn),
+          'PM Out': formatTimeForExcel(record.pmOut),
+          'Total Hours': record.totalHours ? record.totalHours.toFixed(2) : '0.00',
+          'Verification Status': getVerificationText(record.verification_status),
+          'Notes': record.notes || 'N/A',
+        };
+      });
+
+      // Create a new workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance History');
+
+      // Generate Excel file
+      const excelBuffer = XLSX.write(workbook, { 
+        bookType: 'xlsx', 
+        type: 'array' 
+      });
+
+      // Create blob and download
+      if (Platform.OS === 'web') {
+        const blob = new Blob([excelBuffer], { 
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const fileName = `${userName || 'Attendance'}_${companyName}_${selectedMonth ? formatMonthDisplay(selectedMonth).replace(/\s+/g, '_') : 'All_Months'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        Alert.alert('Success', 'Excel file downloaded successfully!');
+      } else {
+        Alert.alert(
+          'Info', 
+          'Excel download is available on web platform. Please use the web version to download the file.'
+        );
+      }
+    } catch (error) {
+      console.error('Error downloading Excel file:', error);
+      Alert.alert('Error', 'Failed to download Excel file. Please try again.');
+    }
+  };
+
   if (!visible) return null;
 
   return (
@@ -242,6 +382,40 @@ export default function AttendanceHistoryPanel({
           </TouchableOpacity>
           <Text style={styles.title}>Attendance History</Text>
           <Text style={styles.subtitle}>{companyName}</Text>
+          {userName && (
+            <Text style={styles.userNameText}>{userName}</Text>
+          )}
+          
+          {/* Month Filter and Download Button */}
+          {!loading && records.length > 0 && (
+            <View style={styles.filterContainer}>
+              <TouchableOpacity
+                style={styles.monthFilterButton}
+                onPress={() => setShowMonthPicker(true)}
+              >
+                <MaterialIcons name="filter-list" size={18} color="#1E3A5F" />
+                <Text style={styles.monthFilterText}>
+                  {selectedMonth ? formatMonthDisplay(selectedMonth) : 'All Months'}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={20} color="#1E3A5F" />
+              </TouchableOpacity>
+              {selectedMonth && (
+                <TouchableOpacity
+                  style={styles.clearFilterButton}
+                  onPress={() => setSelectedMonth(null)}
+                >
+                  <MaterialIcons name="close" size={16} color="#6c757d" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.downloadButton}
+                onPress={downloadExcel}
+              >
+                <MaterialIcons name="download" size={18} color="#fff" />
+                <Text style={styles.downloadButtonText}>Excel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View style={styles.contentContainer}>
@@ -250,10 +424,12 @@ export default function AttendanceHistoryPanel({
               <ActivityIndicator size="large" color="#F56E0F" />
               <Text style={styles.loadingText}>Loading attendance history...</Text>
             </View>
-          ) : records.length === 0 ? (
+          ) : filteredRecords.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialIcons name="history" size={64} color="#ccc" />
-              <Text style={styles.emptyText}>No attendance records found</Text>
+              <Text style={styles.emptyText}>
+                {selectedMonth ? `No attendance records found for ${formatMonthDisplay(selectedMonth)}` : 'No attendance records found'}
+              </Text>
             </View>
           ) : (
             <ScrollView 
@@ -297,7 +473,7 @@ export default function AttendanceHistoryPanel({
                 </View>
 
                 {/* Table Rows */}
-                {records.map((record, index) => {
+                {filteredRecords.map((record, index) => {
                   const isDenied = record.verification_status === 'denied';
                   return (
                   <View
@@ -354,6 +530,74 @@ export default function AttendanceHistoryPanel({
           )}
         </View>
       </Animated.View>
+
+      {/* Month Picker Modal */}
+      <Modal
+        visible={showMonthPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMonthPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.monthPickerOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMonthPicker(false)}
+        >
+          <View style={styles.monthPickerContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.monthPickerHeader}>
+              <Text style={styles.monthPickerTitle}>Select Month</Text>
+              <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.monthPickerList}>
+              <TouchableOpacity
+                style={[
+                  styles.monthPickerItem,
+                  !selectedMonth && styles.monthPickerItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedMonth(null);
+                  setShowMonthPicker(false);
+                }}
+              >
+                <Text style={[
+                  styles.monthPickerItemText,
+                  !selectedMonth && styles.monthPickerItemTextSelected
+                ]}>
+                  All Months
+                </Text>
+                {!selectedMonth && (
+                  <MaterialIcons name="check" size={20} color="#F56E0F" />
+                )}
+              </TouchableOpacity>
+              {availableMonths.map((monthKey) => (
+                <TouchableOpacity
+                  key={monthKey}
+                  style={[
+                    styles.monthPickerItem,
+                    selectedMonth === monthKey && styles.monthPickerItemSelected
+                  ]}
+                  onPress={() => {
+                    setSelectedMonth(monthKey);
+                    setShowMonthPicker(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.monthPickerItemText,
+                    selectedMonth === monthKey && styles.monthPickerItemTextSelected
+                  ]}>
+                    {formatMonthDisplay(monthKey)}
+                  </Text>
+                  {selectedMonth === monthKey && (
+                    <MaterialIcons name="check" size={20} color="#F56E0F" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Edit Modal */}
       <Modal
@@ -539,6 +783,58 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#6c757d',
+  },
+  userNameText: {
+    fontSize: 14,
+    color: '#1E3A5F',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+  monthFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+    flex: 1,
+    maxWidth: 250,
+  },
+  monthFilterText: {
+    fontSize: 14,
+    color: '#1E3A5F',
+    fontWeight: '500',
+    flex: 1,
+  },
+  clearFilterButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F56E0F',
+    borderWidth: 1,
+    borderColor: '#F56E0F',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  downloadButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
   contentContainer: {
     flex: 1,
@@ -818,6 +1114,56 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  monthPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  monthPickerContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  monthPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  monthPickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E3A5F',
+  },
+  monthPickerList: {
+    maxHeight: 400,
+  },
+  monthPickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  monthPickerItemSelected: {
+    backgroundColor: '#FFF3E0',
+  },
+  monthPickerItemText: {
+    fontSize: 16,
+    color: '#1E3A5F',
+  },
+  monthPickerItemTextSelected: {
+    fontWeight: '600',
+    color: '#F56E0F',
   },
 });
 
