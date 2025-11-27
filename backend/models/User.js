@@ -139,10 +139,61 @@ class User {
           profileResult = await query('students', 'select', null, { user_id: user.id });
           if (profileResult.data && profileResult.data.length > 0) {
             const profile = profileResult.data[0];
+            
+            // Get personal info from separate table
+            let personalInfo = null;
+            try {
+              const personalInfoResult = await query('student_personal_info', 'select', null, { student_id: profile.id });
+              personalInfo = personalInfoResult.data && personalInfoResult.data.length > 0 ? personalInfoResult.data[0] : null;
+              if (personalInfo) {
+                console.log('✅ Found personal info for student:', profile.id, personalInfo);
+              }
+            } catch (error) {
+              // Table might not exist yet, or other error - just log and continue with null
+              console.log('⚠️ Could not fetch personal info (table may not exist):', error.message);
+              personalInfo = null;
+            }
+            
+            // Get academic year (school_year) from classes via class_enrollments
+            let academicYear = personalInfo?.academic_year || null;
+            try {
+              // Get active enrollments for this student
+              const enrollmentsResult = await query('class_enrollments', 'select', null, {
+                student_id: profile.id,
+                status: 'enrolled'
+              });
+              
+              if (enrollmentsResult.data && enrollmentsResult.data.length > 0) {
+                // Get the most recent enrollment's class to get school_year
+                const enrollments = enrollmentsResult.data;
+                // Sort by enrolled_at descending to get the most recent
+                enrollments.sort((a, b) => new Date(b.enrolled_at) - new Date(a.enrolled_at));
+                
+                // Get school_year from the most recent class
+                for (const enrollment of enrollments) {
+                  const classResult = await query('classes', 'select', null, { 
+                    id: enrollment.class_id,
+                    status: 'active'
+                  });
+                  
+                  if (classResult.data && classResult.data.length > 0) {
+                    const classItem = classResult.data[0];
+                    academicYear = classItem.school_year;
+                    console.log('✅ Found academic year from class enrollment:', academicYear);
+                    break; // Use the first active class found
+                  }
+                }
+              }
+            } catch (error) {
+              // Tables might not exist yet, or other error - just log and continue
+              console.log('⚠️ Could not fetch academic year from classes (tables may not exist):', error.message);
+            }
+            
             return {
               ...user,
               id_number: profile.id_number,
               first_name: profile.first_name,
+              middle_name: profile.middle_name,
               last_name: profile.last_name,
               age: profile.age,
               year: profile.year,
@@ -164,7 +215,24 @@ class User {
               work_experience: profile.work_experience,
               projects: profile.projects,
               achievements: profile.achievements,
-              profile_picture: user.profile_picture
+              profile_picture: user.profile_picture,
+              // Personal info fields - use personalInfo data if available
+              sex: personalInfo?.sex || null,
+              civil_status: personalInfo?.civil_status || null,
+              religion: personalInfo?.religion || null,
+              citizenship: personalInfo?.citizenship || null,
+              permanent_address: personalInfo?.permanent_address || null,
+              present_address: personalInfo?.present_address || null,
+              academic_year: academicYear, // Use school_year from classes, fallback to personalInfo
+              father_name: personalInfo?.father_name || null,
+              father_occupation: personalInfo?.father_occupation || null,
+              mother_name: personalInfo?.mother_name || null,
+              mother_occupation: personalInfo?.mother_occupation || null,
+              emergency_contact_name: personalInfo?.emergency_contact_name || null,
+              emergency_contact_relationship: personalInfo?.emergency_contact_relationship || null,
+              emergency_contact_number: personalInfo?.emergency_contact_number || null,
+              // Note: emergency_contact_address removed - it now uses permanent_address value
+              photo_url: personalInfo?.photo_url || null,
             };
           }
           break;
@@ -467,11 +535,62 @@ class User {
           profileResult = await query('students', 'select', null, { user_id: user.id });
           if (profileResult.data && profileResult.data.length > 0) {
             const profile = profileResult.data[0];
+            
+            // Get personal info from separate table
+            let personalInfo = null;
+            try {
+              const personalInfoResult = await query('student_personal_info', 'select', null, { student_id: profile.id });
+              personalInfo = personalInfoResult.data && personalInfoResult.data.length > 0 ? personalInfoResult.data[0] : null;
+              if (personalInfo) {
+                console.log('✅ Found personal info for student:', profile.id, personalInfo);
+              }
+            } catch (error) {
+              // Table might not exist yet, or other error - just log and continue with null
+              console.log('⚠️ Could not fetch personal info (table may not exist):', error.message);
+              personalInfo = null;
+            }
+            
+            // Get academic year (school_year) from classes via class_enrollments
+            let academicYear = personalInfo?.academic_year || null;
+            try {
+              // Get active enrollments for this student
+              const enrollmentsResult = await query('class_enrollments', 'select', null, {
+                student_id: profile.id,
+                status: 'enrolled'
+              });
+              
+              if (enrollmentsResult.data && enrollmentsResult.data.length > 0) {
+                // Get the most recent enrollment's class to get school_year
+                const enrollments = enrollmentsResult.data;
+                // Sort by enrolled_at descending to get the most recent
+                enrollments.sort((a, b) => new Date(b.enrolled_at) - new Date(a.enrolled_at));
+                
+                // Get school_year from the most recent class
+                for (const enrollment of enrollments) {
+                  const classResult = await query('classes', 'select', null, { 
+                    id: enrollment.class_id,
+                    status: 'active'
+                  });
+                  
+                  if (classResult.data && classResult.data.length > 0) {
+                    const classItem = classResult.data[0];
+                    academicYear = classItem.school_year;
+                    console.log('✅ Found academic year from class enrollment:', academicYear);
+                    break; // Use the first active class found
+                  }
+                }
+              }
+            } catch (error) {
+              // Tables might not exist yet, or other error - just log and continue
+              console.log('⚠️ Could not fetch academic year from classes (tables may not exist):', error.message);
+            }
+            
             return {
               ...user,
               student_id: profile.id, // Add the student table ID
               id_number: profile.id_number,
               first_name: profile.first_name,
+              middle_name: profile.middle_name,
               last_name: profile.last_name,
               age: profile.age,
               year: profile.year,
@@ -493,7 +612,24 @@ class User {
               work_experience: profile.work_experience,
               projects: profile.projects,
               achievements: profile.achievements,
-              profile_picture: user.profile_picture
+              profile_picture: user.profile_picture,
+              // Personal info fields - use personalInfo data if available
+              sex: personalInfo?.sex || null,
+              civil_status: personalInfo?.civil_status || null,
+              religion: personalInfo?.religion || null,
+              citizenship: personalInfo?.citizenship || null,
+              permanent_address: personalInfo?.permanent_address || null,
+              present_address: personalInfo?.present_address || null,
+              academic_year: academicYear, // Use school_year from classes, fallback to personalInfo
+              father_name: personalInfo?.father_name || null,
+              father_occupation: personalInfo?.father_occupation || null,
+              mother_name: personalInfo?.mother_name || null,
+              mother_occupation: personalInfo?.mother_occupation || null,
+              emergency_contact_name: personalInfo?.emergency_contact_name || null,
+              emergency_contact_relationship: personalInfo?.emergency_contact_relationship || null,
+              emergency_contact_number: personalInfo?.emergency_contact_number || null,
+              // Note: emergency_contact_address removed - it now uses permanent_address value
+              photo_url: personalInfo?.photo_url || null,
             };
           }
           break;

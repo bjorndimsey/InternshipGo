@@ -27,6 +27,12 @@ const evidenceRoutes = require('./routes/evidenceRoutes');
 const cloudinaryRoutes = require('./routes/cloudinaryRoutes');
 const platformStatsRoutes = require('./routes/platformStatsRoutes');
 const companiesLandingPageRoutes = require('./routes/companiesLandingPageRoutes');
+const classRoutes = require('./routes/classRoutes');
+const hteRoutes = require('./routes/hteRoutes');
+const certificateRoutes = require('./routes/certificateRoutes');
+const trainingScheduleRoutes = require('./routes/trainingScheduleRoutes');
+const internFeedbackFormRoutes = require('./routes/internFeedbackFormRoutes');
+const supervisorEvaluationRoutes = require('./routes/supervisorEvaluationRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -121,6 +127,12 @@ app.use('/api/evidences', evidenceRoutes);
 app.use('/api/cloudinary', cloudinaryRoutes);
 app.use('/api/platform', platformStatsRoutes);
 app.use('/api/landing', companiesLandingPageRoutes);
+app.use('/api/classes', classRoutes);
+app.use('/api/hte', hteRoutes);
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/training-schedules', trainingScheduleRoutes);
+app.use('/api/intern-feedback-forms', internFeedbackFormRoutes);
+app.use('/api/supervisor-evaluations', supervisorEvaluationRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

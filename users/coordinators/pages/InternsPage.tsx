@@ -27,8 +27,16 @@ if (Platform.OS !== 'web') {
 }
 import { apiService } from '../../../lib/api';
 import { CloudinaryService } from '../../../lib/cloudinaryService';
+import * as XLSX from 'xlsx';
+import AttendanceHistoryPanel from '../../studentinterns/components/AttendanceHistoryModal';
+import { AttendanceRecordEntry } from '../../studentinterns/utils/journalGenerator';
 
-const { width } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Responsive breakpoints
+const isMobile = screenWidth < 768;
+const isTablet = screenWidth >= 768 && screenWidth < 1024;
+const isDesktop = screenWidth >= 1024;
 
 interface Requirement {
   id: string;
@@ -54,6 +62,7 @@ interface Intern {
   phoneNumber: string;
   profilePicture?: string;
   studentId: string;
+  userId?: string; // User ID for fetching applications
   academicYear: string;
   major: string;
   university: string;
@@ -66,6 +75,16 @@ interface Intern {
   requirements: Requirement[];
 }
 
+interface Company {
+  id: string;
+  company_name: string;
+  industry: string;
+  company_address: string;
+  company_profile_picture?: string;
+  status: string;
+  application_date?: string;
+}
+
 interface UserInfo {
   id: string;
   email: string;
@@ -74,9 +93,10 @@ interface UserInfo {
 
 interface InternsPageProps {
   currentUser: UserInfo | null;
+  onViewAssignedCompanies?: (intern: Intern) => void;
 }
 
-export default function InternsPage({ currentUser }: InternsPageProps) {
+export default function InternsPage({ currentUser, onViewAssignedCompanies }: InternsPageProps) {
   const [interns, setInterns] = useState<Intern[]>([]);
   const [filteredInterns, setFilteredInterns] = useState<Intern[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +112,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [searchingStudent, setSearchingStudent] = useState(false);
   const [studentFound, setStudentFound] = useState<any>(null);
   const [searchError, setSearchError] = useState('');
+  const [dimensions, setDimensions] = useState({ width: screenWidth, height: screenHeight });
   
   // Requirements management states
   const [newRequirement, setNewRequirement] = useState({
@@ -101,6 +122,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     dueDate: '',
     fileUrl: '',
     fileName: '',
+    schoolYear: '2024-2025', // Default to current selected school year
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<Requirement | null>(null);
@@ -111,7 +133,25 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [showYearSelector, setShowYearSelector] = useState(false);
+  const [showAddInternYearSelector, setShowAddInternYearSelector] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [showAssignedCompanyModal, setShowAssignedCompanyModal] = useState(false);
+  const [assignedCompanies, setAssignedCompanies] = useState<Company[]>([]);
+  const [loadingCompany, setLoadingCompany] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [internToDelete, setInternToDelete] = useState<Intern | null>(null);
+  const [deletingIntern, setDeletingIntern] = useState(false);
+  const [showCreateClassModal, setShowCreateClassModal] = useState(false);
+  const [className, setClassName] = useState('');
+  const [selectedClassSchoolYear, setSelectedClassSchoolYear] = useState('');
+  const [showClassYearDropdown, setShowClassYearDropdown] = useState(false);
+  const [classCode, setClassCode] = useState('');
+  const [showAttendanceHistoryModal, setShowAttendanceHistoryModal] = useState(false);
+  const [selectedInternForAttendance, setSelectedInternForAttendance] = useState<Intern | null>(null);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordEntry[]>([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [selectedCompanyForAttendance, setSelectedCompanyForAttendance] = useState<Company | null>(null);
+  const [showCompanySelectorModal, setShowCompanySelectorModal] = useState(false);
 
   const schoolYears = [
     '2023-2024', 
@@ -136,6 +176,14 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     filterInterns();
   }, [searchQuery, selectedSchoolYear, interns]);
 
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions({ width: window.width, height: window.height });
+    });
+
+    return () => subscription?.remove();
+  }, []);
+
   const fetchInterns = async () => {
     try {
       setLoading(true);
@@ -148,6 +196,26 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       }
 
       console.log('Fetching interns for coordinator:', currentUser.id);
+      
+      // First, fetch the coordinator's requirements to filter by
+      const coordinatorRequirementsResponse = await apiService.getCoordinatorRequirements(currentUser.id);
+      const coordinatorRequirementIds = new Set<string>();
+      
+      if (coordinatorRequirementsResponse.success && coordinatorRequirementsResponse.requirements) {
+        coordinatorRequirementsResponse.requirements.forEach((req: any) => {
+          // Ensure requirement_id is stored as string for consistent comparison
+          const reqId = String(req.requirement_id || '');
+          if (reqId) {
+            coordinatorRequirementIds.add(reqId);
+          }
+        });
+        console.log('📋 Coordinator requirement IDs:', Array.from(coordinatorRequirementIds));
+        console.log('📋 Coordinator requirement details:', coordinatorRequirementsResponse.requirements.map((r: any) => ({
+          requirement_id: r.requirement_id,
+          type: typeof r.requirement_id,
+          name: r.requirement_name
+        })));
+      }
       
       // Fetch interns from the database
       const response = await apiService.getCoordinatorInterns(currentUser.id);
@@ -171,16 +239,53 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               fetchStudentSubmissions(intern.student_id)
             ]);
             
-            console.log(`📋 Student ${intern.student_id} (intern ${intern.id}) - Requirements:`, requirements.length);
-            console.log(`📋 Student ${intern.student_id} (intern ${intern.id}) - Submissions:`, submissions.length);
+            console.log(`📋 Student ${intern.student_id} (intern ${intern.id}) - All Requirements:`, requirements.length);
+            console.log(`📋 Student ${intern.student_id} (intern ${intern.id}) - All Submissions:`, submissions.length);
+            
+            // Debug: Log requirement IDs for this student
+            if (requirements.length > 0) {
+              console.log(`📋 Student ${intern.student_id} - Requirement IDs:`, requirements.map((r: any) => ({
+                requirement_id: r.requirement_id,
+                type: typeof r.requirement_id,
+                name: r.requirement_name || r.name
+              })));
+            }
+            
+            // Filter requirements to only include those from this coordinator
+            // Ensure both sides are strings for comparison
+            const coordinatorRequirements = requirements.filter((req: any) => {
+              const reqId = String(req.requirement_id || req.id || '');
+              const matches = coordinatorRequirementIds.has(reqId);
+              if (!matches && req.requirement_id) {
+                console.log(`❌ Requirement ${req.requirement_id} (${typeof req.requirement_id}) not found in coordinator set for student ${intern.student_id}`);
+              }
+              return matches;
+            });
+            
+            // Filter submissions to only include those from this coordinator
+            const coordinatorSubmissions = submissions.filter((sub: any) => {
+              const subId = String(sub.requirement_id || '');
+              return coordinatorRequirementIds.has(subId);
+            });
+            
+            console.log(`📋 Student ${intern.student_id} (intern ${intern.id}) - Coordinator Requirements:`, coordinatorRequirements.length);
+            console.log(`📋 Student ${intern.student_id} (intern ${intern.id}) - Coordinator Submissions:`, coordinatorSubmissions.length);
             
             // Create a map of all requirements (both assigned and submitted)
             const allRequirements = new Map();
             
-            // Add assigned requirements
-            requirements.forEach((req: any) => {
-              allRequirements.set(req.id, {
-                ...req,
+            // Add assigned requirements (only from this coordinator)
+            coordinatorRequirements.forEach((req: any) => {
+              const reqId = String(req.requirement_id || req.id || '');
+              allRequirements.set(reqId, {
+                id: reqId,
+                requirement_id: reqId,
+                name: req.requirement_name || req.name,
+                description: req.requirement_description || req.description,
+                isRequired: req.is_required || req.isRequired,
+                dueDate: req.due_date || req.dueDate,
+                fileUrl: req.file_url || req.fileUrl,
+                fileName: req.file_name || req.fileName,
                 submissionStatus: undefined,
                 submittedAt: undefined,
                 coordinatorFeedback: undefined,
@@ -188,12 +293,13 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               });
             });
             
-            // Add submitted requirements (these might not be in assigned requirements)
-            submissions.forEach((sub: any) => {
-              const existingReq = allRequirements.get(sub.requirement_id);
+            // Add submitted requirements (only from this coordinator)
+            coordinatorSubmissions.forEach((sub: any) => {
+              const subId = String(sub.requirement_id || '');
+              const existingReq = allRequirements.get(subId);
               if (existingReq) {
                 // Update existing requirement with submission data
-                allRequirements.set(sub.requirement_id, {
+                allRequirements.set(subId, {
                   ...existingReq,
                   submissionStatus: sub.status,
                   submittedAt: sub.submitted_at,
@@ -202,8 +308,9 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 });
               } else {
                 // Add new requirement from submission
-                allRequirements.set(sub.requirement_id, {
-                  id: sub.requirement_id,
+                allRequirements.set(subId, {
+                  id: subId,
+                  requirement_id: subId,
                   name: sub.requirement_name,
                   description: sub.requirement_description,
                   isRequired: sub.is_required,
@@ -231,9 +338,10 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           phoneNumber: intern.phone_number || 'N/A',
           profilePicture: intern.profile_picture || intern.profilePicture,
           studentId: intern.id_number,
+          userId: intern.user_id, // Store user_id for fetching applications (from backend response)
           academicYear: intern.year,
           major: intern.major,
-          university: intern.university || 'University of Technology',
+          university: intern.university || 'Davao Oriental State University',
           gpa: intern.gpa || 'N/A',
           schoolYear: intern.school_year,
           status: intern.status || 'active',
@@ -311,34 +419,85 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 
 
   const handleDeleteIntern = (intern: Intern) => {
-    Alert.alert(
-      'Delete Intern',
-      `Are you sure you want to delete ${intern.firstName} ${intern.lastName}? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Call API to delete intern from database
-              const response = await apiService.deleteIntern(intern.id);
-              
-              if (response.success) {
-                // Remove from local state
-                setInterns(interns.filter(i => i.id !== intern.id));
-                Alert.alert('Success', 'Intern deleted successfully');
-              } else {
-                Alert.alert('Error', response.message || 'Failed to delete intern');
-              }
-            } catch (error) {
-              console.error('Error deleting intern:', error);
-              Alert.alert('Error', 'Failed to delete intern. Please try again.');
-            }
+    console.log('🗑️ Delete intern called for:', intern.id, intern.firstName, intern.lastName);
+    setInternToDelete(intern);
+    setShowDeleteConfirmModal(true);
+  };
+
+  const confirmDeleteIntern = async () => {
+    if (!internToDelete) return;
+    
+    try {
+      setDeletingIntern(true);
+      console.log('🗑️ Calling delete API for intern:', internToDelete.id);
+      // Call API to delete intern from database
+      const response = await apiService.deleteIntern(internToDelete.id);
+      
+      console.log('🗑️ Delete API response:', response);
+      
+      if (response.success) {
+        console.log('🗑️ Delete successful, updating state...');
+        
+        // If the deleted intern was selected, clear the selection first
+        setSelectedIntern(prev => {
+          if (prev && prev.id === internToDelete.id) {
+            console.log('🗑️ Clearing selected intern');
+            return null;
           }
-        },
-      ]
-    );
+          return prev;
+        });
+        
+        setSelectedInternDetails(prev => {
+          if (prev && prev.id === internToDelete.id) {
+            console.log('🗑️ Clearing selected intern details and closing modal');
+            setShowDetailsModal(false);
+            return null;
+          }
+          return prev;
+        });
+        
+        // Collapse the card if it was expanded
+        setExpandedCard(prev => {
+          if (prev === internToDelete.id) {
+            console.log('🗑️ Collapsing expanded card');
+            return null;
+          }
+          return prev;
+        });
+        
+        // Remove from local state using functional updates to avoid stale closures
+        setInterns(prevInterns => {
+          const updated = prevInterns.filter(i => i.id !== internToDelete.id);
+          console.log('🗑️ Updated interns list:', updated.length, 'remaining');
+          return updated;
+        });
+        
+        // Also remove from filteredInterns to update UI immediately
+        setFilteredInterns(prevFiltered => {
+          const updated = prevFiltered.filter(i => i.id !== internToDelete.id);
+          console.log('🗑️ Updated filtered interns list:', updated.length, 'remaining');
+          return updated;
+        });
+        
+        console.log('🗑️ Delete complete');
+        setShowDeleteConfirmModal(false);
+        setInternToDelete(null);
+        Alert.alert('Success', 'Intern deleted successfully');
+      } else {
+        console.log('🗑️ Delete failed:', response.message);
+        Alert.alert('Error', response.message || 'Failed to delete intern');
+      }
+    } catch (error) {
+      console.error('🗑️ Error deleting intern:', error);
+      Alert.alert('Error', 'Failed to delete intern. Please try again.');
+    } finally {
+      setDeletingIntern(false);
+    }
+  };
+
+  const cancelDeleteIntern = () => {
+    setShowDeleteConfirmModal(false);
+    setInternToDelete(null);
   };
 
   const handleRequirements = (intern: Intern) => {
@@ -347,20 +506,55 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   };
 
   const refreshInternRequirements = async () => {
-    if (selectedIntern) {
+    if (selectedIntern && currentUser) {
+      // First, fetch the coordinator's requirements to filter by
+      const coordinatorRequirementsResponse = await apiService.getCoordinatorRequirements(currentUser.id);
+      const coordinatorRequirementIds = new Set<string>();
+      
+      if (coordinatorRequirementsResponse.success && coordinatorRequirementsResponse.requirements) {
+        coordinatorRequirementsResponse.requirements.forEach((req: any) => {
+          // Ensure requirement_id is stored as string for consistent comparison
+          const reqId = String(req.requirement_id || '');
+          if (reqId) {
+            coordinatorRequirementIds.add(reqId);
+          }
+        });
+      }
+      
       // Refresh the specific intern's requirements
       const [requirements, submissions] = await Promise.all([
         fetchStudentRequirements(selectedIntern.studentId),
         fetchStudentSubmissions(selectedIntern.studentId)
       ]);
       
+      // Filter requirements to only include those from this coordinator
+      // Ensure both sides are strings for comparison
+      const coordinatorRequirements = requirements.filter((req: any) => {
+        const reqId = String(req.requirement_id || req.id || '');
+        return coordinatorRequirementIds.has(reqId);
+      });
+      
+      // Filter submissions to only include those from this coordinator
+      const coordinatorSubmissions = submissions.filter((sub: any) => {
+        const subId = String(sub.requirement_id || '');
+        return coordinatorRequirementIds.has(subId);
+      });
+      
       // Create a map of all requirements (both assigned and submitted)
       const allRequirements = new Map();
       
-      // Add assigned requirements
-      requirements.forEach((req: any) => {
-        allRequirements.set(req.id, {
-          ...req,
+      // Add assigned requirements (only from this coordinator)
+      coordinatorRequirements.forEach((req: any) => {
+        const reqId = String(req.requirement_id || req.id || '');
+        allRequirements.set(reqId, {
+          id: reqId,
+          requirement_id: reqId,
+          name: req.requirement_name || req.name,
+          description: req.requirement_description || req.description,
+          isRequired: req.is_required || req.isRequired,
+          dueDate: req.due_date || req.dueDate,
+          fileUrl: req.file_url || req.fileUrl,
+          fileName: req.file_name || req.fileName,
           submissionStatus: undefined,
           submittedAt: undefined,
           coordinatorFeedback: undefined,
@@ -368,12 +562,13 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         });
       });
       
-      // Add submitted requirements (these might not be in assigned requirements)
-      submissions.forEach((sub: any) => {
-        const existingReq = allRequirements.get(sub.requirement_id);
+      // Add submitted requirements (only from this coordinator)
+      coordinatorSubmissions.forEach((sub: any) => {
+        const subId = String(sub.requirement_id || '');
+        const existingReq = allRequirements.get(subId);
         if (existingReq) {
           // Update existing requirement with submission data
-          allRequirements.set(sub.requirement_id, {
+          allRequirements.set(subId, {
             ...existingReq,
             submissionStatus: sub.status,
             submittedAt: sub.submitted_at,
@@ -382,8 +577,9 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           });
         } else {
           // Add new requirement from submission
-          allRequirements.set(sub.requirement_id, {
-            id: sub.requirement_id,
+          allRequirements.set(subId, {
+            id: subId,
+            requirement_id: subId,
             name: sub.requirement_name,
             description: sub.requirement_description,
             isRequired: sub.is_required,
@@ -437,6 +633,12 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     if (requirements.length === 0) return 0;
     const completed = requirements.filter(req => req.completed).length;
     return Math.round((completed / requirements.length) * 100);
+  };
+
+  const getRequirementsProgressText = (requirements: Requirement[]) => {
+    if (requirements.length === 0) return '0/0';
+    const completed = requirements.filter(req => req.completed).length;
+    return `${completed}/${requirements.length}`;
   };
 
   const validateStudentId = (studentId: string) => {
@@ -507,8 +709,15 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       });
 
       if (response.success) {
-        // Show success notification
-        setSuccessMessage(`Student "${studentFound.first_name} ${studentFound.last_name}" added as intern successfully!`);
+        // Show success notification with enrollment count if available
+        const autoEnrolledClasses = (response as any).autoEnrolledClasses || 0;
+        
+        let successMsg = `Student "${studentFound.first_name} ${studentFound.last_name}" added as intern successfully!`;
+        if (autoEnrolledClasses > 0) {
+          successMsg = `Student "${studentFound.first_name} ${studentFound.last_name}" added as intern successfully! ${autoEnrolledClasses} class${autoEnrolledClasses !== 1 ? 'es' : ''} automatically enrolled.`;
+        }
+        
+        setSuccessMessage(successMsg);
         setShowSuccessModal(true);
         
         setShowAddInternModal(false);
@@ -548,6 +757,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       dueDate: '',
       fileUrl: '',
       fileName: '',
+      schoolYear: selectedSchoolYear, // Set to currently selected school year
     });
     setShowRequirementsModal(true);
   };
@@ -561,6 +771,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       dueDate: requirement.dueDate || '',
       fileUrl: requirement.fileUrl || '',
       fileName: requirement.fileName || '',
+      schoolYear: selectedSchoolYear, // Keep current school year for editing
     });
     setShowRequirementsModal(true);
   };
@@ -576,12 +787,22 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       return;
     }
 
-    // Check if coordinator has assigned interns
-    if (interns.length === 0) {
-      console.log('❌ No interns assigned to this coordinator');
+    if (!editingRequirement && !newRequirement.schoolYear) {
+      console.log('❌ No school year selected');
+      Alert.alert('Error', 'Please select a class (school year)');
+      return;
+    }
+
+    // Check if coordinator has assigned interns in the selected class
+    const internsInClass = !editingRequirement 
+      ? interns.filter(i => i.schoolYear === newRequirement.schoolYear)
+      : interns;
+    
+    if (internsInClass.length === 0) {
+      console.log('❌ No interns assigned to this coordinator for the selected class');
       Alert.alert(
-        'No Students Assigned', 
-        'You need to assign students to your coordinator account before creating requirements. Please add students first.',
+        'No Students in Class', 
+        `No students found in Class ${newRequirement.schoolYear}. Please select a different class or add students to this class first.`,
         [{ text: 'OK' }]
       );
       return;
@@ -644,6 +865,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         fileUrl: finalFileUrl || undefined,
         fileName: finalFileName || undefined,
         coordinatorId: currentUser?.id || '',
+        schoolYear: !editingRequirement ? newRequirement.schoolYear : undefined, // Only send school year for new requirements
       };
 
       console.log('📝 Saving requirement with data:', requirementData);
@@ -699,6 +921,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 dueDate: '',
                 fileUrl: '',
                 fileName: '',
+                schoolYear: selectedSchoolYear, // Reset to current selected school year
               });
               setEditingRequirement(null);
               setSelectedFile(null);
@@ -792,6 +1015,10 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 
   const handleYearSelect = (year: string) => {
     setSelectedSchoolYear(year);
+    // If requirement modal is open, update the requirement's school year
+    if (showRequirementsModal && !editingRequirement) {
+      setNewRequirement(prev => ({ ...prev, schoolYear: year }));
+    }
     setShowYearSelector(false);
   };
 
@@ -799,8 +1026,407 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     setShowYearSelector(false);
   };
 
+  const handleAddInternYearSelect = (year: string) => {
+    setAddInternSchoolYear(year);
+    setShowAddInternYearSelector(false);
+  };
+
+  const closeAddInternYearSelector = () => {
+    setShowAddInternYearSelector(false);
+  };
+
+  // Create Class functionality
+  const generateSchoolYearOptions = () => {
+    const startYear = 2023;
+    const options = [];
+    for (let i = 0; i < 6; i++) {
+      const year = startYear + i;
+      options.push(`${year}-${year + 1}`);
+    }
+    return options;
+  };
+
+  const schoolYearOptions = generateSchoolYearOptions();
+
+  // Generate 6-character random code
+  const generateClassCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setClassCode(code);
+    return code;
+  };
+
+  const handleOpenCreateClassModal = () => {
+    setShowCreateClassModal(true);
+    setClassName('');
+    setSelectedClassSchoolYear('');
+    setClassCode('');
+    setShowClassYearDropdown(false);
+  };
+
+  const handleCloseCreateClassModal = () => {
+    setShowCreateClassModal(false);
+    setClassName('');
+    setSelectedClassSchoolYear('');
+    setClassCode('');
+    setShowClassYearDropdown(false);
+  };
+
+  const handleCreateClass = async () => {
+    if (!className.trim()) {
+      Alert.alert('Error', 'Please enter a class name');
+      return;
+    }
+    if (!selectedClassSchoolYear) {
+      Alert.alert('Error', 'Please select a school year');
+      return;
+    }
+    if (!classCode) {
+      Alert.alert('Error', 'Please generate a class code');
+      return;
+    }
+    if (!currentUser || !currentUser.id) {
+      Alert.alert('Error', 'User information not available');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const response = await apiService.createClass(
+        className.trim(),
+        selectedClassSchoolYear,
+        classCode,
+        currentUser.id
+      );
+      
+      if (response.success) {
+        handleCloseCreateClassModal();
+        
+        // Show success message with enrollment count if available
+        const autoEnrolled = (response as any).autoEnrolled || 0;
+        const totalMatching = (response as any).totalMatchingInterns || 0;
+        
+        let successMsg = 'Class created successfully!';
+        if (autoEnrolled > 0) {
+          successMsg = `Class created successfully! ${autoEnrolled} intern${autoEnrolled !== 1 ? 's' : ''} automatically enrolled.`;
+        } else if (totalMatching === 0) {
+          successMsg = 'Class created successfully! No matching interns found for this school year.';
+        }
+        
+        setSuccessMessage(successMsg);
+        setShowSuccessModal(true);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to create class');
+      }
+    } catch (error: any) {
+      console.error('Error creating class:', error);
+      Alert.alert('Error', error.message || 'Failed to create class. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleCardExpansion = (internId: string) => {
     setExpandedCard(expandedCard === internId ? null : internId);
+  };
+
+  const downloadInternsExcel = async () => {
+    try {
+      // Show loading alert
+      Alert.alert('Processing', 'Preparing Excel file...');
+      
+      // Fetch assigned companies for all interns
+      const internsWithCompanies = await Promise.all(
+        filteredInterns.map(async (intern) => {
+          let assignedCompanies: Company[] = [];
+          
+          if (intern.userId) {
+            try {
+              const response = await apiService.getStudentApplications(intern.userId.toString());
+              if (response.success && response.applications) {
+                const approvedApplications = response.applications.filter(
+                  (app: any) => app.status === 'approved'
+                );
+                assignedCompanies = approvedApplications.map((app: any) => ({
+                  id: app.company_id?.toString() || '',
+                  company_name: app.company_name || 'Unknown Company',
+                  industry: app.industry || 'N/A',
+                  company_address: app.company_address || 'N/A',
+                  company_profile_picture: app.company_profile_picture,
+                  status: app.status || 'approved',
+                  application_date: app.created_at || app.submitted_at,
+                }));
+              }
+            } catch (error) {
+              console.error(`Error fetching companies for intern ${intern.id}:`, error);
+            }
+          }
+          
+          return {
+            intern,
+            companies: assignedCompanies
+          };
+        })
+      );
+      
+      // Determine maximum number of companies (limit to 2)
+      const maxCompanies = Math.min(
+        2,
+        Math.max(...internsWithCompanies.map(item => item.companies.length), 0)
+      );
+      
+      // Prepare data for Excel
+      const excelData = internsWithCompanies.map((item, index) => {
+        const { intern, companies } = item;
+        const baseData: any = {
+          'No.': index + 1,
+          'Student ID': intern.studentId,
+          'First Name': intern.firstName,
+          'Last Name': intern.lastName,
+          'Email': intern.email,
+          'Phone Number': intern.phoneNumber,
+          'Major': intern.major,
+          'University': intern.university,
+          'Academic Year': intern.academicYear,
+          'School Year': intern.schoolYear,
+          'Requirements Progress': getRequirementsProgressText(intern.requirements),
+          'Total Requirements': intern.requirements.length,
+          'Completed Requirements': intern.requirements.filter(r => r.completed).length,
+        };
+        
+        // Add company columns dynamically (up to maxCompanies)
+        for (let i = 0; i < maxCompanies; i++) {
+          if (i < companies.length) {
+            baseData[`Company ${i + 1}`] = companies[i].company_name;
+          } else {
+            baseData[`Company ${i + 1}`] = 'N/A';
+          }
+        }
+        
+        return baseData;
+      });
+
+      // Create a new workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Interns');
+
+      // Generate Excel file
+      const excelBuffer = XLSX.write(workbook, { 
+        bookType: 'xlsx', 
+        type: 'array' 
+      });
+
+      // Create blob and download
+      if (Platform.OS === 'web') {
+        const blob = new Blob([excelBuffer], { 
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Interns_List_${selectedSchoolYear}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        Alert.alert('Success', 'Interns list downloaded successfully!');
+      } else {
+        // For mobile, you might want to use a file system library
+        // For now, we'll show an alert
+        Alert.alert('Info', 'Excel download is currently only available on web. Please use the web version to download the list.');
+      }
+    } catch (error) {
+      console.error('Error downloading Excel file:', error);
+      Alert.alert('Error', 'Failed to download Excel file. Please try again.');
+    }
+  };
+
+  // Responsive styles helper
+  const getResponsiveStyles = () => {
+    const isMobileNow = dimensions.width < 768;
+    const isTabletNow = dimensions.width >= 768 && dimensions.width < 1024;
+    
+    return {
+      searchSectionPadding: isMobileNow ? 12 : isTabletNow ? 16 : 20,
+      searchSectionMargin: isMobileNow ? 10 : isTabletNow ? 15 : 20,
+      searchInputFontSize: isMobileNow ? 14 : isTabletNow ? 15 : 16,
+      filterLabelFontSize: isMobileNow ? 14 : isTabletNow ? 15 : 16,
+      buttonTextSize: isMobileNow ? 12 : isTabletNow ? 13 : 14,
+      buttonIconSize: isMobileNow ? 16 : isTabletNow ? 18 : 20,
+      statsPadding: isMobileNow ? 12 : isTabletNow ? 16 : 20,
+      statsGap: isMobileNow ? 4 : isTabletNow ? 12 : 16,
+      statNumberSize: isMobileNow ? 18 : isTabletNow ? 20 : 24,
+      statLabelSize: isMobileNow ? 10 : isTabletNow ? 11 : 12,
+      cardPadding: isMobileNow ? 12 : isTabletNow ? 16 : 20,
+      cardMargin: isMobileNow ? 10 : isTabletNow ? 12 : 15,
+      profileImageSize: isMobileNow ? 50 : isTabletNow ? 55 : 60,
+      internNameSize: isMobileNow ? 16 : isTabletNow ? 17 : 18,
+      studentIdSize: isMobileNow ? 12 : isTabletNow ? 13 : 14,
+      majorSize: isMobileNow ? 12 : isTabletNow ? 13 : 14,
+      academicYearSize: isMobileNow ? 10 : isTabletNow ? 11 : 12,
+      contactTextSize: isMobileNow ? 12 : isTabletNow ? 13 : 14,
+      actionButtonTextSize: isMobileNow ? 11 : isTabletNow ? 12 : 14,
+      actionButtonIconSize: isMobileNow ? 14 : isTabletNow ? 15 : 16,
+    };
+  };
+
+  const responsiveStyles = getResponsiveStyles();
+
+  const fetchInternCompanies = async (intern: Intern): Promise<Company[]> => {
+    try {
+      const studentUserId = intern.userId;
+      
+      if (!studentUserId) {
+        console.error('❌ No userId found for intern:', intern.id);
+        return [];
+      }
+      
+      const response = await apiService.getStudentApplications(studentUserId.toString());
+      
+      if (response.success && response.applications) {
+        const approvedApplications = response.applications.filter(
+          (app: any) => app.status === 'approved'
+        );
+        
+        if (approvedApplications.length > 0) {
+          return approvedApplications.map((app: any) => ({
+            id: app.company_id?.toString() || '',
+            company_name: app.company_name || 'Unknown Company',
+            industry: app.industry || 'N/A',
+            company_address: app.company_address || 'N/A',
+            company_profile_picture: app.company_profile_picture,
+            status: app.status || 'approved',
+            application_date: app.created_at || app.submitted_at,
+          }));
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ Error fetching assigned companies:', error);
+      return [];
+    }
+  };
+
+  const handleViewAssignedCompany = async (intern: Intern) => {
+    // If callback is provided, navigate to the new page
+    if (onViewAssignedCompanies) {
+      onViewAssignedCompanies(intern);
+      return;
+    }
+
+    // Otherwise, use the modal (fallback for backward compatibility)
+    try {
+      setLoadingCompany(true);
+      setShowAssignedCompanyModal(true);
+      setAssignedCompanies([]);
+
+      const companies = await fetchInternCompanies(intern);
+      setAssignedCompanies(companies);
+    } catch (error) {
+      console.error('❌ Error fetching assigned companies:', error);
+      setAssignedCompanies([]);
+    } finally {
+      setLoadingCompany(false);
+    }
+  };
+
+  const handleAttendanceHistory = async (intern: Intern) => {
+    try {
+      setSelectedInternForAttendance(intern);
+      const companies = await fetchInternCompanies(intern);
+      
+      if (companies.length === 0) {
+        Alert.alert('No Company', 'This intern has no assigned companies yet.');
+        return;
+      }
+      
+      if (companies.length === 1) {
+        // If only one company, show attendance directly
+        setSelectedCompanyForAttendance(companies[0]);
+        await fetchAttendanceRecords(intern, companies[0]);
+        setShowAttendanceHistoryModal(true);
+      } else {
+        // If multiple companies, show selector
+        setAssignedCompanies(companies);
+        setShowCompanySelectorModal(true);
+      }
+    } catch (error) {
+      console.error('❌ Error handling attendance history:', error);
+      Alert.alert('Error', 'Failed to load attendance history. Please try again.');
+    }
+  };
+
+  const handleSelectCompanyForAttendance = async (company: Company) => {
+    if (!selectedInternForAttendance) return;
+    
+    setSelectedCompanyForAttendance(company);
+    setShowCompanySelectorModal(false);
+    await fetchAttendanceRecords(selectedInternForAttendance, company);
+    setShowAttendanceHistoryModal(true);
+  };
+
+  const fetchAttendanceRecords = async (intern: Intern, company: Company) => {
+    if (!intern.userId || !company.id) {
+      console.error('❌ Missing userId or companyId');
+      setAttendanceRecords([]);
+      return;
+    }
+
+    setLoadingAttendance(true);
+    try {
+      const response = await apiService.getAttendanceRecords(company.id, intern.userId.toString(), {
+        internId: intern.userId.toString(),
+      });
+
+      if (response.success && response.data) {
+        // Transform the data to match AttendanceRecordEntry interface
+        const transformedRecords: AttendanceRecordEntry[] = response.data.map((record: any) => ({
+          id: record.id?.toString() || '',
+          companyId: company.id,
+          companyName: company.company_name,
+          date: record.attendance_date || record.date || '',
+          status: record.status || 'not_marked',
+          amIn: record.am_time_in || record.amIn || '--:--',
+          amOut: record.am_time_out || record.amOut || '--:--',
+          pmIn: record.pm_time_in || record.pmIn || '--:--',
+          pmOut: record.pm_time_out || record.pmOut || '--:--',
+          totalHours: record.total_hours || record.totalHours || 0,
+          notes: record.notes || null,
+          verification_status: record.verification_status || 'pending',
+          verified_by: record.verified_by,
+          verified_at: record.verified_at,
+          verification_remarks: record.verification_remarks,
+        }));
+
+        // Sort by date descending (most recent first)
+        transformedRecords.sort((a, b) => {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          return dateB - dateA;
+        });
+
+        setAttendanceRecords(transformedRecords);
+      } else {
+        setAttendanceRecords([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching attendance records:', error);
+      setAttendanceRecords([]);
+    } finally {
+      setLoadingAttendance(false);
+    }
+  };
+
+  const handleAttendanceRecordUpdated = async () => {
+    if (selectedInternForAttendance && selectedCompanyForAttendance) {
+      await fetchAttendanceRecords(selectedInternForAttendance, selectedCompanyForAttendance);
+    }
   };
 
   // Enhanced Progress Bar Component
@@ -882,7 +1508,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   };
 
   const InternCard = ({ intern }: { intern: Intern }) => {
-    const requirementsProgress = getRequirementsProgress(intern.requirements);
+    const requirementsProgressText = getRequirementsProgressText(intern.requirements);
     const isExpanded = expandedCard === intern.id;
     
     console.log('🖼️ InternCard profile picture:', {
@@ -891,10 +1517,16 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
       profilePicture: intern.profilePicture
     });
     
+    const isMobileNow = dimensions.width < 768;
+    
     return (
       <View style={[
         styles.internCard,
-        isExpanded && styles.expandedInternCard
+        isExpanded && styles.expandedInternCard,
+        {
+          padding: responsiveStyles.cardPadding,
+          marginBottom: responsiveStyles.cardMargin,
+        }
       ]}>
         <TouchableOpacity 
           onPress={() => toggleCardExpansion(intern.id)}
@@ -905,7 +1537,14 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               {intern.profilePicture ? (
                 <Image 
                   source={{ uri: intern.profilePicture }} 
-                  style={styles.profileImage}
+                  style={[
+                    styles.profileImage,
+                    {
+                      width: responsiveStyles.profileImageSize,
+                      height: responsiveStyles.profileImageSize,
+                      borderRadius: responsiveStyles.profileImageSize / 2,
+                    }
+                  ]}
                   onError={(error) => {
                     console.log('❌ Image load error for intern:', intern.id, error.nativeEvent.error);
                   }}
@@ -914,51 +1553,51 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                   }}
                 />
               ) : (
-                <View style={styles.profilePlaceholder}>
-                  <Text style={styles.profileText}>
+                <View style={[
+                  styles.profilePlaceholder,
+                  {
+                    width: responsiveStyles.profileImageSize,
+                    height: responsiveStyles.profileImageSize,
+                    borderRadius: responsiveStyles.profileImageSize / 2,
+                  }
+                ]}>
+                  <Text style={[
+                    styles.profileText,
+                    { fontSize: isMobileNow ? 18 : isTablet ? 20 : 24 }
+                  ]}>
                     {intern.firstName.charAt(0)}{intern.lastName.charAt(0)}
                   </Text>
                 </View>
               )}
             </View>
             <View style={styles.internInfo}>
-              <Text style={styles.internName}>
+              <Text style={[styles.internName, { fontSize: responsiveStyles.internNameSize }]}>
                 {intern.firstName} {intern.lastName}
               </Text>
-              <Text style={styles.studentId}>{intern.studentId}</Text>
-              <Text style={styles.major}>{intern.major}</Text>
-              <Text style={styles.academicYear}>{intern.academicYear}</Text>
+              <Text style={[styles.studentId, { fontSize: responsiveStyles.studentIdSize }]}>
+                {intern.studentId}
+              </Text>
+              <Text style={[styles.major, { fontSize: responsiveStyles.majorSize }]}>
+                {intern.major}
+              </Text>
+              <Text style={[styles.academicYear, { fontSize: responsiveStyles.academicYearSize }]}>
+                {intern.academicYear}
+              </Text>
             </View>
             <View style={styles.statusContainer}>
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
-                <Text style={styles.statusText}>{getStatusText(intern.status)}</Text>
+                <Text style={[
+                  styles.statusText,
+                  { fontSize: isMobileNow ? 8 : isTablet ? 9 : 10 }
+                ]}>
+                  {getStatusText(intern.status)}
+                </Text>
               </View>
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
-                size={24} 
+                size={isMobileNow ? 20 : isTablet ? 22 : 24} 
                 color="#F56E0F" 
                 style={styles.expandIcon}
-              />
-            </View>
-          </View>
-
-          <View style={styles.internDetails}>
-            <View style={styles.contactInfo}>
-              <View style={styles.contactItem}>
-                <MaterialIcons name="email" size={16} color="#F56E0F" />
-                <Text style={styles.contactText}>{intern.email}</Text>
-              </View>
-              <View style={styles.contactItem}>
-                <MaterialIcons name="phone" size={16} color="#F56E0F" />
-                <Text style={styles.contactText}>{intern.phoneNumber}</Text>
-              </View>
-            </View>
-
-            <View style={styles.requirementsContainer}>
-              <Text style={styles.requirementsLabel}>Requirements Progress:</Text>
-              <ProgressBar 
-                progress={requirementsProgress} 
-                color={requirementsProgress === 100 ? '#34a853' : '#F56E0F'} 
               />
             </View>
           </View>
@@ -966,39 +1605,149 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 
         {isExpanded && (
           <View style={styles.expandedContent}>
+            <View style={styles.internDetails}>
+              <View style={styles.contactInfo}>
+                <View style={styles.contactItem}>
+                  <MaterialIcons 
+                    name="email" 
+                    size={isMobileNow ? 14 : isTablet ? 15 : 16} 
+                    color="#F56E0F" 
+                  />
+                  <Text style={[styles.contactText, { fontSize: responsiveStyles.contactTextSize }]}>
+                    {intern.email}
+                  </Text>
+                </View>
+                <View style={styles.contactItem}>
+                  <MaterialIcons 
+                    name="phone" 
+                    size={isMobileNow ? 14 : isTablet ? 15 : 16} 
+                    color="#F56E0F" 
+                  />
+                  <Text style={[styles.contactText, { fontSize: responsiveStyles.contactTextSize }]}>
+                    {intern.phoneNumber}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.requirementsContainer}>
+                <Text style={[
+                  styles.requirementsLabel,
+                  { fontSize: isMobileNow ? 11 : isTablet ? 11.5 : 12 }
+                ]}>
+                  Requirements Progress: {requirementsProgressText}
+                </Text>
+              </View>
+            </View>
             {intern.internshipCompany && (
               <View style={styles.internshipInfo}>
-                <Text style={styles.internshipLabel}>Current Internship:</Text>
-                <Text style={styles.internshipCompany}>{intern.internshipCompany}</Text>
-                <Text style={styles.internshipDates}>
+                <Text style={[
+                  styles.internshipLabel,
+                  { fontSize: isMobileNow ? 11 : isTablet ? 11.5 : 12 }
+                ]}>
+                  Current Internship:
+                </Text>
+                <Text style={[
+                  styles.internshipCompany,
+                  { fontSize: isMobileNow ? 12 : isTablet ? 13 : 14 }
+                ]}>
+                  {intern.internshipCompany}
+                </Text>
+                <Text style={[
+                  styles.internshipDates,
+                  { fontSize: isMobileNow ? 10 : isTablet ? 11 : 12 }
+                ]}>
                   {intern.internshipStartDate} - {intern.internshipEndDate}
                 </Text>
               </View>
             )}
 
-            <View style={styles.expandedActionButtons}>
+            <View style={[
+              styles.expandedActionButtons,
+              isMobileNow && { flexDirection: 'column', gap: 8 }
+            ]}>
               <TouchableOpacity 
                 style={[styles.actionButton, styles.viewButton]} 
                 onPress={() => handleViewDetails(intern)}
               >
-                <MaterialIcons name="visibility" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>View Details</Text>
+                <MaterialIcons 
+                  name="visibility" 
+                  size={responsiveStyles.actionButtonIconSize} 
+                  color="#fff" 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  { fontSize: responsiveStyles.actionButtonTextSize }
+                ]}>
+                  {isMobileNow ? 'Details' : 'View Details'}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={[styles.actionButton, styles.requirementsButton]} 
                 onPress={() => handleRequirements(intern)}
               >
-                <MaterialIcons name="assignment" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>Requirements</Text>
+                <MaterialIcons 
+                  name="assignment" 
+                  size={responsiveStyles.actionButtonIconSize} 
+                  color="#fff" 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  { fontSize: responsiveStyles.actionButtonTextSize }
+                ]}>
+                  {isMobileNow ? 'Reqs' : 'Requirements'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.companyButton]} 
+                onPress={() => handleViewAssignedCompany(intern)}
+              >
+                <MaterialIcons 
+                  name="business" 
+                  size={responsiveStyles.actionButtonIconSize} 
+                  color="#fff" 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  { fontSize: responsiveStyles.actionButtonTextSize }
+                ]}>
+                  {isMobileNow ? 'Company' : 'Assigned Company'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.attendanceButton]} 
+                onPress={() => handleAttendanceHistory(intern)}
+              >
+                <MaterialIcons 
+                  name="history" 
+                  size={responsiveStyles.actionButtonIconSize} 
+                  color="#fff" 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  { fontSize: responsiveStyles.actionButtonTextSize }
+                ]}>
+                  {isMobileNow ? 'Attendance' : 'Attendance History'}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={[styles.actionButton, styles.deleteButton]} 
                 onPress={() => handleDeleteIntern(intern)}
               >
-                <MaterialIcons name="delete" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>Delete</Text>
+                <MaterialIcons 
+                  name="delete" 
+                  size={responsiveStyles.actionButtonIconSize} 
+                  color="#fff" 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  { fontSize: responsiveStyles.actionButtonTextSize }
+                ]}>
+                  Delete
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1095,12 +1844,24 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   return (
     <View style={styles.container}>
       {/* Search and Filter Section */}
-      <View style={styles.searchSection}>
+      <View style={[
+        styles.searchSection,
+        {
+          padding: responsiveStyles.searchSectionPadding,
+          marginBottom: responsiveStyles.searchSectionMargin,
+          marginHorizontal: dimensions.width < 768 ? 10 : 20,
+        }
+      ]}>
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
-            <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
+            <MaterialIcons 
+              name="search" 
+              size={dimensions.width < 768 ? 18 : dimensions.width < 1024 ? 19 : 20} 
+              color="#F56E0F" 
+              style={styles.searchIcon} 
+            />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { fontSize: responsiveStyles.searchInputFontSize }]}
               placeholder="Search interns..."
               placeholderTextColor="#878787"
               value={searchQuery}
@@ -1109,45 +1870,128 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           </View>
         </View>
         
-        <View style={styles.filterContainer}>
-          <Text style={styles.filterLabel}>School Year:</Text>
-          <TouchableOpacity 
-            style={styles.yearSelector}
-            onPress={() => setShowYearSelector(true)}
-          >
-            <Text style={styles.yearText}>{selectedSchoolYear}</Text>
-            <MaterialIcons name="arrow-drop-down" size={20} color="#F56E0F" />
-          </TouchableOpacity>
+        <View style={[
+          styles.filterContainer,
+          dimensions.width < 768 && { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }
+        ]}>
+          <View style={[
+            dimensions.width < 768 && { flexDirection: 'row', alignItems: 'center', width: '100%' }
+          ]}>
+            <Text style={[styles.filterLabel, { fontSize: responsiveStyles.filterLabelFontSize }]}>
+              School Year: 
+            </Text>
+            <TouchableOpacity 
+              style={styles.yearSelector}
+              onPress={() => setShowYearSelector(true)}
+            >
+              <Text style={[styles.yearText, { fontSize: dimensions.width < 768 ? 12 : 14 }]}>
+                {selectedSchoolYear}
+              </Text>
+              <MaterialIcons 
+                name="arrow-drop-down" 
+                size={dimensions.width < 768 ? 18 : 20} 
+                color="#F56E0F" 
+              />
+            </TouchableOpacity>
+          </View>
           
-          <View style={styles.buttonContainer}>
-          <TouchableOpacity 
+          <View style={[
+            styles.buttonContainer,
+            dimensions.width < 768 && { flexDirection: 'column', width: '100%', gap: 8 }
+          ]}>
+            <TouchableOpacity 
+              style={[styles.addButton, styles.createClassButton]}
+              onPress={handleOpenCreateClassModal}
+            >
+              <MaterialIcons 
+                name="class" 
+                size={responsiveStyles.buttonIconSize} 
+                color="#fff" 
+              />
+              <Text style={[styles.addButtonText, { fontSize: responsiveStyles.buttonTextSize }]}>
+                {dimensions.width < 768 ? 'Create Class' : 'Create Class'}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
               style={[styles.addButton, styles.requirementsButton]}
               onPress={handleAddRequirement}
             >
-              <MaterialIcons name="assignment" size={20} color="#fff" />
-              <Text style={styles.addButtonText}>Add Requirements</Text>
+              <MaterialIcons 
+                name="assignment" 
+                size={responsiveStyles.buttonIconSize} 
+                color="#fff" 
+              />
+              <Text style={[styles.addButtonText, { fontSize: responsiveStyles.buttonTextSize }]}>
+                {dimensions.width < 768 ? 'Add Req.' : 'Add Requirements'}
+              </Text>
             </TouchableOpacity>
-            
             
             <TouchableOpacity 
               style={[styles.addButton, styles.internButton]}
-            onPress={() => setShowAddInternModal(true)}
-          >
-            <MaterialIcons name="add" size={20} color="#fff" />
-            <Text style={styles.addButtonText}>Add Intern</Text>
-          </TouchableOpacity>
+              onPress={() => setShowAddInternModal(true)}
+            >
+              <MaterialIcons 
+                name="add" 
+                size={responsiveStyles.buttonIconSize} 
+                color="#fff" 
+              />
+              <Text style={[styles.addButtonText, { fontSize: responsiveStyles.buttonTextSize }]}>
+                Add Intern
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.addButton, styles.downloadButton]}
+              onPress={downloadInternsExcel}
+            >
+              <MaterialIcons 
+                name="download" 
+                size={responsiveStyles.buttonIconSize} 
+                color="#fff" 
+              />
+              <Text style={[styles.addButtonText, { fontSize: responsiveStyles.buttonTextSize }]}>
+                {dimensions.width < 768 ? 'Excel' : 'Download Excel'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
 
       {/* Stats */}
-      <View style={styles.statsContainer}>
+      <View style={[
+        styles.statsContainer,
+        {
+          paddingHorizontal: dimensions.width < 768 ? 10 : 20,
+          marginBottom: dimensions.width < 768 ? 15 : 20,
+          gap: responsiveStyles.statsGap,
+          flexWrap: dimensions.width < 768 ? 'wrap' : 'nowrap',
+          justifyContent: dimensions.width < 768 ? 'space-between' : 'flex-start',
+          width: '100%',
+          alignSelf: 'stretch',
+        }
+      ]}>
         {loading ? (
           // Show skeleton stats
           (() => {
             console.log('📊 Showing skeleton stats, loading state:', loading);
-            return Array.from({ length: 4 }).map((_, index) => (
-              <View key={`skeleton-stat-${index}`} style={styles.skeletonStatItem}>
+            return Array.from({ length: 2 }).map((_, index) => (
+              <View 
+                key={`skeleton-stat-${index}`} 
+                style={[
+                  styles.skeletonStatItem,
+                  dimensions.width < 768 
+                    ? { 
+                        flex: 0,
+                        flexBasis: '48%',
+                        width: '48%',
+                        maxWidth: '48%',
+                        padding: 24,
+                        minHeight: 120,
+                      }
+                    : { flex: 1 }
+                ]}
+              >
                 <View style={styles.skeletonStatNumber} />
                 <View style={styles.skeletonStatLabel} />
               </View>
@@ -1155,34 +1999,63 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           })()
         ) : (
           <>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{filteredInterns.length}</Text>
-              <Text style={styles.statLabel}>Total Interns</Text>
+            <View style={[
+              styles.statItem,
+              dimensions.width < 768 
+                ? { 
+                    flex: 0,
+                    flexBasis: '48%',
+                    width: '48%',
+                    maxWidth: '48%',
+                    padding: 24,
+                    minHeight: 120,
+                    justifyContent: 'center',
+                  }
+                : { flex: 1 }
+            ]}>
+              <Text style={[styles.statNumber, { fontSize: responsiveStyles.statNumberSize }]}>
+                {filteredInterns.length}
+              </Text>
+              <Text style={[styles.statLabel, { fontSize: responsiveStyles.statLabelSize }]}>
+                Total Interns
+              </Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: '#34a853' }]}>
+            <View style={[
+              styles.statItem,
+              dimensions.width < 768 
+                ? { 
+                    flex: 0,
+                    flexBasis: '48%',
+                    width: '48%',
+                    maxWidth: '48%',
+                    padding: 24,
+                    minHeight: 120,
+                    justifyContent: 'center',
+                  }
+                : { flex: 1 }
+            ]}>
+              <Text style={[
+                styles.statNumber, 
+                { color: '#34a853', fontSize: responsiveStyles.statNumberSize }
+              ]}>
                 {filteredInterns.filter(i => i.status === 'active').length}
               </Text>
-              <Text style={styles.statLabel}>Active</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: '#4285f4' }]}>
-                {filteredInterns.filter(i => i.status === 'graduated').length}
+              <Text style={[styles.statLabel, { fontSize: responsiveStyles.statLabelSize }]}>
+                Active
               </Text>
-              <Text style={styles.statLabel}>Graduated</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
-                {filteredInterns.filter(i => getRequirementsProgress(i.requirements) < 100).length}
-              </Text>
-              <Text style={styles.statLabel}>Incomplete</Text>
             </View>
           </>
         )}
       </View>
 
       {/* Interns List */}
-      <ScrollView style={styles.internsList} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={[
+          styles.internsList,
+          { padding: dimensions.width < 768 ? 10 : 20 }
+        ]} 
+        showsVerticalScrollIndicator={false}
+      >
         {loading ? (
           // Show skeleton loading
           (() => {
@@ -1303,10 +2176,13 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>School Year</Text>
-                <View style={styles.pickerContainer}>
+                <TouchableOpacity
+                  style={styles.pickerContainer}
+                  onPress={() => setShowAddInternYearSelector(true)}
+                >
                   <Text style={styles.pickerText}>{addInternSchoolYear}</Text>
                   <MaterialIcons name="arrow-drop-down" size={24} color="#666" />
-                </View>
+                </TouchableOpacity>
               </View>
 
               {searchError ? (
@@ -1398,7 +2274,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               </Text>
               {!editingRequirement && (
                 <Text style={styles.requirementScopeText}>
-                  Will be assigned to {interns.length} student{interns.length !== 1 ? 's' : ''}
+                  Will be assigned to Class {newRequirement.schoolYear} - {interns.filter(i => i.schoolYear === newRequirement.schoolYear).length} student{interns.filter(i => i.schoolYear === newRequirement.schoolYear).length !== 1 ? 's' : ''}
                 </Text>
               )}
               <TouchableOpacity
@@ -1431,6 +2307,21 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                   numberOfLines={3}
                 />
               </View>
+
+              {!editingRequirement && (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Class (School Year) *</Text>
+                  <TouchableOpacity
+                    style={styles.datePickerButton}
+                    onPress={() => setShowYearSelector(true)}
+                  >
+                    <Text style={styles.datePickerText}>
+                      {newRequirement.schoolYear || 'Select school year'}
+                    </Text>
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
+              )}
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Due Date</Text>
@@ -1735,8 +2626,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                   <View style={styles.detailsRow}>
                     <Text style={styles.detailsLabel}>Requirements Progress:</Text>
                     <Text style={styles.detailsValue}>
-                      {getRequirementsProgress(selectedInternDetails.requirements)}% 
-                      ({selectedInternDetails.requirements.filter(req => req.completed).length}/{selectedInternDetails.requirements.length})
+                      {getRequirementsProgressText(selectedInternDetails.requirements)}
                     </Text>
                   </View>
                 </View>
@@ -1811,6 +2701,377 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                   )}
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Intern Year Selector Modal */}
+      <Modal
+        visible={showAddInternYearSelector}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeAddInternYearSelector}
+      >
+        <View style={styles.yearModalOverlay}>
+          <View style={styles.yearModalContent}>
+            <View style={styles.yearModalHeader}>
+              <Text style={styles.yearModalTitle}>Select School Year</Text>
+              <TouchableOpacity onPress={closeAddInternYearSelector}>
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.yearModalBody}>
+              {schoolYears.map((year) => (
+                <TouchableOpacity
+                  key={year}
+                  style={[
+                    styles.yearOption,
+                    addInternSchoolYear === year && styles.yearOptionSelected
+                  ]}
+                  onPress={() => handleAddInternYearSelect(year)}
+                >
+                  <Text style={[
+                    styles.yearOptionText,
+                    addInternSchoolYear === year && styles.yearOptionTextSelected
+                  ]}>
+                    {year}
+                  </Text>
+                  {addInternSchoolYear === year && (
+                    <MaterialIcons name="check" size={20} color="#1E3A5F" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirmModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={cancelDeleteIntern}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <MaterialIcons name="warning" size={32} color="#F44336" />
+              <Text style={styles.deleteModalTitle}>Delete Intern</Text>
+            </View>
+            
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete {internToDelete ? `${internToDelete.firstName} ${internToDelete.lastName}` : 'this intern'}? This action cannot be undone.
+            </Text>
+            
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalCancelButton]}
+                onPress={cancelDeleteIntern}
+                disabled={deletingIntern}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalConfirmButton]}
+                onPress={confirmDeleteIntern}
+                disabled={deletingIntern}
+              >
+                {deletingIntern ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="delete" size={20} color="#fff" />
+                    <Text style={styles.deleteModalConfirmText}>Delete</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create Class Modal */}
+      <Modal
+        visible={showCreateClassModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseCreateClassModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.createClassModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create New Class</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={handleCloseCreateClassModal}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {/* Class Name Input */}
+              <View style={styles.formGroup}>
+                <Text style={styles.createClassFormLabel}>Class Name</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Enter class name"
+                  placeholderTextColor="#999"
+                  value={className}
+                  onChangeText={setClassName}
+                />
+              </View>
+
+              {/* School Year Dropdown */}
+              <View style={styles.formGroup}>
+                <Text style={styles.createClassFormLabel}>School Year</Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setShowClassYearDropdown(!showClassYearDropdown)}
+                >
+                  <Text style={[styles.dropdownButtonText, !selectedClassSchoolYear && styles.dropdownPlaceholder]}>
+                    {selectedClassSchoolYear || 'Select school year'}
+                  </Text>
+                  <MaterialIcons 
+                    name={showClassYearDropdown ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
+                    size={24} 
+                    color="#F56E0F" 
+                  />
+                </TouchableOpacity>
+                
+                {showClassYearDropdown && (
+                  <View style={styles.dropdownList}>
+                    {schoolYearOptions.map((year) => (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          styles.dropdownItem,
+                          selectedClassSchoolYear === year && styles.dropdownItemSelected
+                        ]}
+                        onPress={() => {
+                          setSelectedClassSchoolYear(year);
+                          setShowClassYearDropdown(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.dropdownItemText,
+                          selectedClassSchoolYear === year && styles.dropdownItemTextSelected
+                        ]}>
+                          {year}
+                        </Text>
+                        {selectedClassSchoolYear === year && (
+                          <MaterialIcons name="check" size={20} color="#F56E0F" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Class Code */}
+              <View style={styles.formGroup}>
+                <Text style={styles.createClassFormLabel}>Class Code</Text>
+                <View style={styles.codeContainer}>
+                  <View style={styles.codeDisplay}>
+                    <Text style={styles.codeText}>{classCode || '------'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.generateCodeButton}
+                    onPress={generateClassCode}
+                  >
+                    <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
+                    <Text style={styles.generateCodeButtonText}>Generate</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.createClassCancelButton]}
+                onPress={handleCloseCreateClassModal}
+              >
+                <Text style={styles.createClassCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.createButton]}
+                onPress={handleCreateClass}
+              >
+                <Text style={styles.createButtonText}>Create Class</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Attendance History Modal */}
+      {selectedInternForAttendance && selectedCompanyForAttendance && (
+        <AttendanceHistoryPanel
+          visible={showAttendanceHistoryModal}
+          onClose={() => {
+            setShowAttendanceHistoryModal(false);
+            setSelectedInternForAttendance(null);
+            setSelectedCompanyForAttendance(null);
+            setAttendanceRecords([]);
+          }}
+          companyName={selectedCompanyForAttendance.company_name}
+          companyId={selectedCompanyForAttendance.id}
+          userId={selectedInternForAttendance.userId || selectedInternForAttendance.id}
+          records={attendanceRecords}
+          loading={loadingAttendance}
+          onRecordUpdated={handleAttendanceRecordUpdated}
+        />
+      )}
+
+      {/* Company Selector Modal for Attendance */}
+      <Modal
+        visible={showCompanySelectorModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCompanySelectorModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Company</Text>
+              <Text style={styles.requirementScopeText}>
+                Choose a company to view attendance history
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowCompanySelectorModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.companyModalContent} showsVerticalScrollIndicator={true}>
+              {assignedCompanies.length > 0 ? (
+                assignedCompanies.map((company, index) => (
+                  <TouchableOpacity
+                    key={company.id || index}
+                    style={styles.companySelectorItem}
+                    onPress={() => handleSelectCompanyForAttendance(company)}
+                  >
+                    <View style={styles.companySelectorItemContent}>
+                      {company.company_profile_picture ? (
+                        <Image 
+                          source={{ uri: company.company_profile_picture }} 
+                          style={styles.companySelectorImage}
+                        />
+                      ) : (
+                        <View style={styles.companySelectorImagePlaceholder}>
+                          <MaterialIcons name="business" size={24} color="#F56E0F" />
+                        </View>
+                      )}
+                      <View style={styles.companySelectorInfo}>
+                        <Text style={styles.companySelectorName}>{company.company_name}</Text>
+                        <Text style={styles.companySelectorIndustry}>{company.industry}</Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={24} color="#F56E0F" />
+                    </View>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptyCompanyContainer}>
+                  <MaterialIcons name="business" size={64} color="#ccc" />
+                  <Text style={styles.emptyCompanyTitle}>No Company Assigned</Text>
+                  <Text style={styles.emptyCompanyText}>
+                    This student has not been assigned to any company yet.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Assigned Company Modal */}
+      <Modal
+        visible={showAssignedCompanyModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAssignedCompanyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Assigned Companies ({assignedCompanies.length})
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAssignedCompanyModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.companyModalContent} showsVerticalScrollIndicator={true}>
+              {loadingCompany ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#F56E0F" />
+                  <Text style={styles.loadingText}>Loading company information...</Text>
+                </View>
+              ) : assignedCompanies.length > 0 ? (
+                <View style={styles.tableContainer}>
+                  {/* Table Header */}
+                  <View style={styles.tableHeader}>
+                    <View style={[styles.tableHeaderCell, styles.tableCellNo]}>
+                      <Text style={styles.tableHeaderText}>#</Text>
+                    </View>
+                    <View style={[styles.tableHeaderCell, styles.tableCellCompany]}>
+                      <Text style={styles.tableHeaderText}>Company Name</Text>
+                    </View>
+                    <View style={[styles.tableHeaderCell, styles.tableCellIndustry, styles.tableCellLast]}>
+                      <Text style={styles.tableHeaderText}>INDU</Text>
+                    </View>
+                  </View>
+
+                  {/* Table Rows */}
+                  {assignedCompanies.map((company, index) => (
+                    <View key={company.id || index} style={styles.tableRow}>
+                      <View style={[styles.tableCell, styles.tableCellNo]}>
+                        <Text style={styles.tableCellText}>{index + 1}</Text>
+                      </View>
+                      <View style={[styles.tableCell, styles.tableCellCompany]}>
+                        <View style={styles.companyNameCell}>
+                          {company.company_profile_picture ? (
+                            <Image 
+                              source={{ uri: company.company_profile_picture }} 
+                              style={styles.tableCompanyImage}
+                            />
+                          ) : (
+                            <View style={styles.tableCompanyImagePlaceholder}>
+                              <MaterialIcons name="business" size={16} color="#F56E0F" />
+                            </View>
+                          )}
+                          <Text style={styles.tableCellText} numberOfLines={2}>
+                            {company.company_name}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.tableCell, styles.tableCellIndustry, styles.tableCellLast]}>
+                        <Text style={styles.tableCellText} numberOfLines={2}>
+                          {company.industry}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyCompanyContainer}>
+                  <MaterialIcons name="business" size={64} color="#ccc" />
+                  <Text style={styles.emptyCompanyTitle}>No Company Assigned</Text>
+                  <Text style={styles.emptyCompanyText}>
+                    This student has not been assigned to any company yet.
+                  </Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1905,9 +3166,6 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 16,
   },
   statItem: {
     flex: 1,
@@ -1924,20 +3182,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   statNumber: {
-    fontSize: 24,
     fontWeight: 'bold',
     color: '#FBFBFB', // Light text
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
     color: '#FBFBFB', // Light text
     textAlign: 'center',
     fontWeight: '600',
   },
   internsList: {
     flex: 1,
-    padding: 20,
   },
   internCard: {
     backgroundColor: '#1B1B1E', // Dark secondary background
@@ -1983,9 +3238,7 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    // Size is set dynamically based on screen size
   },
   detailsProfileImage: {
     width: 120,
@@ -1993,15 +3246,12 @@ const styles = StyleSheet.create({
     borderRadius: 60,
   },
   profilePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 35,
     backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
+    // Size is set dynamically based on screen size
   },
   profileText: {
-    fontSize: 24,
     fontWeight: 'bold',
     color: '#FBFBFB', // Light text
   },
@@ -2009,25 +3259,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   internName: {
-    fontSize: 18,
     fontWeight: 'bold',
     color: '#FBFBFB', // Light text
     marginBottom: 6,
   },
   studentId: {
-    fontSize: 14,
     color: '#F56E0F', // Primary orange
     marginBottom: 4,
     fontWeight: '500',
   },
   major: {
-    fontSize: 14,
     color: '#FBFBFB', // Light text
     marginBottom: 4,
     opacity: 0.9,
   },
   academicYear: {
-    fontSize: 12,
     color: '#FBFBFB', // Light text
     opacity: 0.8,
   },
@@ -2057,7 +3303,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   contactText: {
-    fontSize: 14,
     color: '#FBFBFB', // Light text
     marginLeft: 8,
     opacity: 0.9,
@@ -2140,12 +3385,17 @@ const styles = StyleSheet.create({
   requirementsButton: {
     backgroundColor: '#F56E0F', // Primary orange
   },
+  companyButton: {
+    backgroundColor: '#4285f4', // Blue for company
+  },
+  attendanceButton: {
+    backgroundColor: '#9c27b0', // Purple for attendance
+  },
   deleteButton: {
     backgroundColor: '#ea4335',
   },
   actionButtonText: {
     color: '#FBFBFB', // Light text
-    fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
   },
@@ -2251,6 +3501,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#F56E0F', // Primary orange
     elevation: 3,
     shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  downloadButton: {
+    backgroundColor: '#34a853', // Green for download
+    elevation: 3,
+    shadowColor: '#34a853',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  createClassButton: {
+    backgroundColor: '#9c27b0',
+    elevation: 3,
+    shadowColor: '#9c27b0',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -3152,5 +4418,400 @@ const styles = StyleSheet.create({
   yearOptionTextSelected: {
     color: '#F56E0F', // Primary orange
     fontWeight: '700',
+  },
+  // Delete Confirmation Modal Styles
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deleteModalContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 10,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+  },
+  deleteModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  deleteModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    letterSpacing: -0.5,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: '#FBFBFB',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+    opacity: 0.9,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  deleteModalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  deleteModalCancelButton: {
+    backgroundColor: '#2A2A2E',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+  },
+  deleteModalConfirmButton: {
+    backgroundColor: '#F44336',
+  },
+  deleteModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+  },
+  deleteModalConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+  },
+  // Assigned Company Modal Styles - Data Table
+  companyModalContent: {
+    padding: 0,
+    maxHeight: 500,
+  },
+  tableContainer: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1B1B1E',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#2A2A2E',
+    borderBottomWidth: 2,
+    borderBottomColor: '#F56E0F',
+  },
+  tableHeaderCell: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(245, 110, 15, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F56E0F',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#1B1B1E',
+  },
+  tableRowEven: {
+    backgroundColor: 'rgba(245, 110, 15, 0.05)',
+  },
+  tableCell: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    minHeight: 60,
+  },
+  tableCellText: {
+    fontSize: 13,
+    color: '#FBFBFB',
+    fontWeight: '500',
+  },
+  // Table Cell Widths
+  tableCellNo: {
+    width: 100,
+    alignItems: 'center',
+  },
+  tableCellCompany: {
+    flex: 4,
+    minWidth: 400,
+  },
+  tableCellIndustry: {
+    flex: 3,
+    minWidth: 300,
+  },
+  tableCellLast: {
+    borderRightWidth: 0,
+  },
+  companyNameCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tableCompanyImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  tableCompanyImagePlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(52, 168, 83, 0.2)',
+    borderWidth: 1,
+    borderColor: '#34a853',
+  },
+  tableStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#34a853',
+  },
+  emptyCompanyContainer: {
+    alignItems: 'center',
+    padding: 60,
+    justifyContent: 'center',
+  },
+  emptyCompanyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FBFBFB', // Light text
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyCompanyText: {
+    fontSize: 14,
+    color: '#878787', // Muted gray
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Company Selector for Attendance Styles
+  companySelectorItem: {
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+  },
+  companySelectorItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  companySelectorImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  companySelectorImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  companySelectorInfo: {
+    flex: 1,
+  },
+  companySelectorName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginBottom: 4,
+  },
+  companySelectorIndustry: {
+    fontSize: 14,
+    color: '#878787',
+  },
+  // Create Class Modal Styles
+  createClassModalContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  createClassFormLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginBottom: 8,
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#FBFBFB',
+    backgroundColor: '#2A2A2E',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#2A2A2E',
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: '#FBFBFB',
+    fontWeight: '500',
+  },
+  dropdownPlaceholder: {
+    color: '#878787',
+  },
+  dropdownList: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    borderRadius: 8,
+    backgroundColor: '#1B1B1E',
+    maxHeight: 200,
+    overflow: 'hidden',
+    borderTopWidth: 2,
+    borderTopColor: '#F56E0F',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dropdownItemSelected: {
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: '#FBFBFB',
+    fontWeight: '500',
+  },
+  dropdownItemTextSelected: {
+    color: '#F56E0F',
+    fontWeight: '700',
+  },
+  codeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  codeDisplay: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#2A2A2E',
+    alignItems: 'center',
+  },
+  codeText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#F56E0F',
+    letterSpacing: 4,
+    fontFamily: 'monospace',
+  },
+  generateCodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F56E0F',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  generateCodeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  createClassCancelButton: {
+    backgroundColor: '#2A2A2E',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+  },
+  createClassCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+  },
+  createButton: {
+    backgroundColor: '#F56E0F',
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  modalBody: {
+    padding: 20,
+    maxHeight: 400,
   },
 });

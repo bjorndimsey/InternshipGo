@@ -166,6 +166,12 @@ class ApiService {
             continue;
           }
           
+          // For 403 (Forbidden) and 401 (Unauthorized), return the response data instead of throwing
+          // This allows the caller to check for disabled accounts
+          if (response.status === 403 || response.status === 401) {
+            return data;
+          }
+          
           throw new Error(data.message || data || `HTTP error! status: ${response.status}`);
         }
 
@@ -220,6 +226,13 @@ class ApiService {
   // Update user profile
   async updateProfile(userId: string, profileData: any): Promise<ApiResponse> {
     return this.makeRequest(`/auth/profile/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  async updateStudentProfile(userId: string, profileData: any): Promise<ApiResponse> {
+    return this.makeRequest(`/students/profile/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(profileData),
     });
@@ -280,18 +293,59 @@ class ApiService {
     });
   }
 
+  // Update coordinator account status (enable/disable)
+  async updateCoordinatorStatus(coordinatorId: string, isActive: boolean): Promise<ApiResponse> {
+    console.log('📊 API SERVICE - updateCoordinatorStatus called', { coordinatorId, isActive });
+    
+    const result = await this.makeRequest(`/coordinators/${coordinatorId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    
+    console.log('📊 API SERVICE - updateCoordinatorStatus result:', result);
+    return result;
+  }
+
   // Admin Coordinator Profile
   async getAdminCoordinatorProfile(userId: string): Promise<ApiResponse> {
     return this.makeRequest(`/coordinators/admin-profile/${userId}`);
   }
 
   // Companies
-  async getCompanies(): Promise<ApiResponse> {
-    return this.makeRequest('/companies');
+  async getCompanies(coordinatorUserId?: string): Promise<ApiResponse> {
+    const url = coordinatorUserId 
+      ? `/companies?coordinatorUserId=${coordinatorUserId}`
+      : '/companies';
+    return this.makeRequest(url);
   }
 
   async getAllCompanies(): Promise<ApiResponse> {
     return this.makeRequest('/companies');
+  }
+
+  // Update company account status (enable/disable)
+  async updateCompanyStatus(companyId: string, isActive: boolean): Promise<ApiResponse> {
+    console.log('📊 API SERVICE - updateCompanyStatus called', { companyId, isActive });
+    
+    const result = await this.makeRequest(`/companies/${companyId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    
+    console.log('📊 API SERVICE - updateCompanyStatus result:', result);
+    return result;
+  }
+
+  // Delete company
+  async deleteCompany(companyId: string): Promise<ApiResponse> {
+    console.log('🗑️ API SERVICE - deleteCompany called', { companyId });
+    
+    const result = await this.makeRequest(`/companies/${companyId}`, {
+      method: 'DELETE',
+    });
+    
+    console.log('🗑️ API SERVICE - deleteCompany result:', result);
+    return result;
   }
 
   // Student search and intern management
@@ -338,6 +392,17 @@ class ApiService {
         approvedBy
       }),
     });
+  }
+
+  async removePartnership(companyId: string): Promise<ApiResponse> {
+    console.log('🗑️ API SERVICE - removePartnership called', { companyId });
+    
+    const result = await this.makeRequest(`/companies/${companyId}/remove-partnership`, {
+      method: 'PUT',
+    });
+    
+    console.log('🗑️ API SERVICE - removePartnership result:', result);
+    return result;
   }
 
   // Application methods
@@ -388,6 +453,31 @@ class ApiService {
 
   async getApprovedApplications(companyId: string): Promise<ApiResponse> {
     return this.makeRequest(`/applications/company/${companyId}/approved`);
+  }
+
+  async startInternship(applicationId: string, studentId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/applications/${applicationId}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ studentId }),
+    });
+  }
+
+  async finishInternship(applicationId: string, companyId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/applications/${applicationId}/finish`, {
+      method: 'POST',
+      body: JSON.stringify({ companyId }),
+    });
+  }
+
+  async getHTEInformation(studentId: string, companyId: string): Promise<ApiResponse> {
+    return this.makeRequest(`/hte?studentId=${studentId}&companyId=${companyId}`);
+  }
+
+  async saveHTEInformation(studentId: string, companyId: string, hteData: any): Promise<ApiResponse> {
+    return this.makeRequest(`/hte/save`, {
+      method: 'POST',
+      body: JSON.stringify({ studentId, companyId, hteData }),
+    });
   }
 
   async updateCoordinatorPartnershipStatus(id: string, status: string, approvedBy: string, companyId?: string): Promise<ApiResponse> {
@@ -519,6 +609,7 @@ class ApiService {
     coordinatorId: string;
     fileUrl?: string;
     fileName?: string;
+    schoolYear?: string;
   }): Promise<ApiResponse> {
     console.log('🔍 API SERVICE - createRequirement called with:', requirementData);
     const result = await this.makeRequest('/requirements', {
@@ -1139,6 +1230,27 @@ class ApiService {
     return result;
   }
 
+  async verifyAttendanceRecord(companyId: string, userId: string, verificationData: {
+    attendanceId: number;
+    verificationStatus: 'accepted' | 'denied';
+    remarks?: string;
+  }): Promise<ApiResponse> {
+    console.log('✅ API SERVICE - verifyAttendanceRecord called');
+    console.log('  - Company ID:', companyId);
+    console.log('  - User ID:', userId);
+    console.log('  - Verification Data:', verificationData);
+    
+    const url = `/attendance/${companyId}/verify?userId=${userId}`;
+    
+    const result = await this.makeRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(verificationData),
+    });
+    
+    console.log('✅ API SERVICE - verifyAttendanceRecord result:', result);
+    return result;
+  }
+
   // Evidence submission methods
   async submitEvidence(evidenceData: {
     title: string;
@@ -1278,6 +1390,77 @@ class ApiService {
     return result;
   }
 
+  // Get all students
+  async getAllStudents(): Promise<ApiResponse> {
+    console.log('📊 API SERVICE - getAllStudents called');
+    
+    const result = await this.makeRequest('/students');
+    
+    console.log('📊 API SERVICE - getAllStudents result:', result);
+    return result;
+  }
+
+  // Update student account status (enable/disable)
+  async updateStudentStatus(studentId: string, isActive: boolean): Promise<ApiResponse> {
+    console.log('📊 API SERVICE - updateStudentStatus called', { studentId, isActive });
+    
+    const result = await this.makeRequest(`/students/${studentId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    
+    console.log('📊 API SERVICE - updateStudentStatus result:', result);
+    return result;
+  }
+
+  // Delete student
+  async deleteStudent(studentId: string): Promise<ApiResponse> {
+    console.log('🗑️ API SERVICE - deleteStudent called', { studentId });
+    
+    const result = await this.makeRequest(`/students/${studentId}`, {
+      method: 'DELETE',
+    });
+    
+    console.log('🗑️ API SERVICE - deleteStudent result:', result);
+    return result;
+  }
+
+  // Send account appeal
+  async sendAccountAppeal(email: string, message: string): Promise<ApiResponse> {
+    console.log('📧 API SERVICE - sendAccountAppeal called', { email });
+    
+    const result = await this.makeRequest('/auth/account-appeal', {
+      method: 'POST',
+      body: JSON.stringify({ email, message }),
+    });
+    
+    console.log('📧 API SERVICE - sendAccountAppeal result:', result);
+    return result;
+  }
+
+  // Get all appeals
+  async getAllAppeals(): Promise<ApiResponse> {
+    console.log('📧 API SERVICE - getAllAppeals called');
+    
+    const result = await this.makeRequest('/auth/appeals');
+    
+    console.log('📧 API SERVICE - getAllAppeals result:', result);
+    return result;
+  }
+
+  // Update appeal status
+  async updateAppealStatus(appealId: number, status: 'approved' | 'rejected'): Promise<ApiResponse> {
+    console.log('📧 API SERVICE - updateAppealStatus called', { appealId, status });
+    
+    const result = await this.makeRequest(`/auth/appeals/${appealId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+    
+    console.log('📧 API SERVICE - updateAppealStatus result:', result);
+    return result;
+  }
+
   // Companies Landing Page
   async getCompaniesLandingPage(): Promise<ApiResponse> {
     console.log('🏢 API SERVICE - getCompaniesLandingPage called');
@@ -1285,6 +1468,537 @@ class ApiService {
     const result = await this.makeRequest('/landing/companies');
     
     console.log('🏢 API SERVICE - getCompaniesLandingPage result:', result);
+    return result;
+  }
+
+  // Classes
+  async createClass(className: string, schoolYear: string, classCode: string, coordinatorId: string, description?: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - createClass called', { className, schoolYear, classCode, coordinatorId });
+    
+    const result = await this.makeRequest('/classes', {
+      method: 'POST',
+      body: JSON.stringify({ className, schoolYear, classCode, coordinatorId, description }),
+    });
+    
+    console.log('📚 API SERVICE - createClass result:', result);
+    return result;
+  }
+
+  async getAllClasses(): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - getAllClasses called');
+    
+    const result = await this.makeRequest('/classes');
+    
+    console.log('📚 API SERVICE - getAllClasses result:', result);
+    return result;
+  }
+
+  async getCoordinatorClasses(coordinatorId: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - getCoordinatorClasses called', { coordinatorId });
+    
+    const result = await this.makeRequest(`/classes/coordinator/${coordinatorId}`);
+    
+    console.log('📚 API SERVICE - getCoordinatorClasses result:', result);
+    return result;
+  }
+
+  async getClassByCode(classCode: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - getClassByCode called', { classCode });
+    
+    const result = await this.makeRequest(`/classes/code/${classCode}`);
+    
+    console.log('📚 API SERVICE - getClassByCode result:', result);
+    return result;
+  }
+
+  async enrollStudent(classCode: string, studentId: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - enrollStudent called', { classCode, studentId });
+    
+    const result = await this.makeRequest('/classes/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ classCode, studentId }),
+    });
+    
+    console.log('📚 API SERVICE - enrollStudent result:', result);
+    return result;
+  }
+
+  async getClassStudents(classId: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - getClassStudents called', { classId });
+    
+    const result = await this.makeRequest(`/classes/${classId}/students`);
+    
+    console.log('📚 API SERVICE - getClassStudents result:', result);
+    return result;
+  }
+
+  async getAllEnrolledStudents(): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - getAllEnrolledStudents called');
+    
+    const result = await this.makeRequest(`/classes/enrolled-students/all`, {
+      method: 'GET',
+    });
+    
+    console.log('📚 API SERVICE - getAllEnrolledStudents result:', result);
+    return result;
+  }
+
+  async getStudentClasses(studentId: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - getStudentClasses called', { studentId });
+    
+    const result = await this.makeRequest(`/classes/student/${studentId}`);
+    
+    console.log('📚 API SERVICE - getStudentClasses result:', result);
+    return result;
+  }
+
+  async updateClassStatus(classId: string, status: 'active' | 'inactive' | 'archived'): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - updateClassStatus called', { classId, status });
+    
+    const result = await this.makeRequest(`/classes/${classId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+    
+    console.log('📚 API SERVICE - updateClassStatus result:', result);
+    return result;
+  }
+
+  async deleteClass(classId: string): Promise<ApiResponse> {
+    console.log('📚 API SERVICE - deleteClass called', { classId });
+    
+    const result = await this.makeRequest(`/classes/${classId}`, {
+      method: 'DELETE',
+    });
+    
+    console.log('📚 API SERVICE - deleteClass result:', result);
+    return result;
+  }
+
+  // Certificate methods
+  async getCompletedInterns(companyId: string): Promise<ApiResponse> {
+    console.log('📜 API SERVICE - getCompletedInterns called', { companyId });
+    
+    const result = await this.makeRequest(`/certificates/company/${companyId}/completed-interns`, {
+      method: 'GET',
+    });
+    
+    console.log('📜 API SERVICE - getCompletedInterns result:', result);
+    return result;
+  }
+
+  async generateCertificates(data: {
+    companyId: string;
+    internIds: string[];
+    templateId: string;
+    contactPersonTitle?: string;
+  }): Promise<ApiResponse> {
+    console.log('🎨 API SERVICE - generateCertificates called', data);
+    
+    const result = await this.makeRequest('/certificates/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    
+    console.log('🎨 API SERVICE - generateCertificates result:', result);
+    return result;
+  }
+
+  async saveCertificates(certificates: Array<{
+    companyId: string;
+    studentId: string;
+    applicationId: string;
+    certificateUrl: string;
+    certificatePublicId: string;
+    templateId: string;
+    totalHours: number;
+    startDate: string;
+    endDate: string;
+    contactPersonTitle?: string;
+  }>): Promise<ApiResponse> {
+    console.log('💾 API SERVICE - saveCertificates called', { count: certificates.length });
+    
+    // Get userId from first certificate's companyId (which is the user_id)
+    const userId = certificates.length > 0 ? certificates[0].companyId : null;
+    
+    const result = await this.makeRequest('/certificates/save', {
+      method: 'POST',
+      body: JSON.stringify({ certificates, userId }),
+    });
+    
+    console.log('💾 API SERVICE - saveCertificates result:', result);
+    return result;
+  }
+
+  async getCompanyCertificates(companyId: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - getCompanyCertificates called', { companyId });
+    
+    const result = await this.makeRequest(`/certificates/company/${companyId}`, {
+      method: 'GET',
+    });
+    
+    console.log('📋 API SERVICE - getCompanyCertificates result:', result);
+    return result;
+  }
+
+  async getCustomTemplates(companyId: string): Promise<ApiResponse> {
+    console.log('🎨 API SERVICE - getCustomTemplates called', { companyId });
+    
+    const result = await this.makeRequest(`/certificates/templates/${companyId}`, {
+      method: 'GET',
+    });
+    
+    console.log('🎨 API SERVICE - getCustomTemplates result:', result);
+    return result;
+  }
+
+  async createCustomTemplate(data: {
+    companyId: string;
+    templateName?: string;
+    templateImageUrl: string;
+  }): Promise<ApiResponse> {
+    console.log('🎨 API SERVICE - createCustomTemplate called', data);
+    
+    // Include userId in body for auth middleware (companyId is the user_id)
+    const result = await this.makeRequest('/certificates/templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        userId: data.companyId,
+      }),
+    });
+    
+    console.log('🎨 API SERVICE - createCustomTemplate result:', result);
+    return result;
+  }
+
+  async deleteCustomTemplate(templateId: string, companyId: string): Promise<ApiResponse> {
+    console.log('🗑️ API SERVICE - deleteCustomTemplate called', { templateId, companyId });
+    
+    // Include userId in query for auth middleware (companyId is the user_id)
+    const result = await this.makeRequest(`/certificates/templates/${templateId}?companyId=${companyId}&userId=${companyId}`, {
+      method: 'DELETE',
+    });
+    
+    console.log('🗑️ API SERVICE - deleteCustomTemplate result:', result);
+    return result;
+  }
+
+  async downloadCertificate(certificateId: string): Promise<void> {
+    try {
+      // Get token from localStorage if available
+      const token = typeof window !== 'undefined' && window.localStorage 
+        ? window.localStorage.getItem('token') || window.localStorage.getItem('authToken')
+        : null;
+      
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(
+        `${this.baseURL}/certificates/${certificateId}/download`,
+        {
+          method: 'GET',
+          headers,
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to download certificate');
+      }
+      
+      // Get blob from response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate-${certificateId}.png`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading certificate:', error);
+      throw error;
+    }
+  }
+
+  // Training Schedule Methods
+  async getTrainingSchedules(studentId: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - getTrainingSchedules called', { studentId });
+    
+    const result = await this.makeRequest(`/training-schedules/${studentId}`, {
+      method: 'GET',
+    });
+    
+    console.log('📋 API SERVICE - getTrainingSchedules result:', result);
+    return result;
+  }
+
+  async createTrainingSchedule(data: {
+    studentId: string;
+    taskClassification: string;
+    toolsDeviceSoftwareUsed: string;
+    totalHours: number;
+  }): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - createTrainingSchedule called', data);
+    
+    // Add userId to request body for authentication
+    const result = await this.makeRequest('/training-schedules', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        userId: data.studentId, // Use studentId as userId for authentication
+      }),
+    });
+    
+    console.log('📋 API SERVICE - createTrainingSchedule result:', result);
+    return result;
+  }
+
+  async updateTrainingSchedule(scheduleId: string, data: {
+    taskClassification: string;
+    toolsDeviceSoftwareUsed: string;
+    totalHours: number;
+  }, studentId?: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - updateTrainingSchedule called', { scheduleId, data });
+    
+    // Add userId to request body for authentication if provided
+    const requestBody: any = { ...data };
+    if (studentId) {
+      requestBody.userId = studentId;
+    }
+    
+    const result = await this.makeRequest(`/training-schedules/${scheduleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(requestBody),
+    });
+    
+    console.log('📋 API SERVICE - updateTrainingSchedule result:', result);
+    return result;
+  }
+
+  async deleteTrainingSchedule(scheduleId: string, studentId?: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - deleteTrainingSchedule called', { scheduleId });
+    
+    // Add userId to request body for authentication if provided
+    const requestBody: any = {};
+    if (studentId) {
+      requestBody.userId = studentId;
+    }
+    
+    const result = await this.makeRequest(`/training-schedules/${scheduleId}`, {
+      method: 'DELETE',
+      body: Object.keys(requestBody).length > 0 ? JSON.stringify(requestBody) : undefined,
+    });
+    
+    console.log('📋 API SERVICE - deleteTrainingSchedule result:', result);
+    return result;
+  }
+
+  // Intern Feedback Form Methods
+  async getFeedbackForm(studentId: string, companyId: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - getFeedbackForm called', { studentId, companyId });
+    
+    const result = await this.makeRequest(`/intern-feedback-forms/${studentId}/${companyId}`, {
+      method: 'GET',
+    });
+    
+    console.log('📋 API SERVICE - getFeedbackForm result:', result);
+    return result;
+  }
+
+  async createFeedbackForm(data: {
+    studentId: string;
+    companyId: string;
+    question1: string;
+    question2: string;
+    question3: string;
+    question4: string;
+    question5: string;
+    question6: string;
+    question7: string;
+    problemsMet: string;
+    otherConcerns: string;
+    formDate?: string;
+  }): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - createFeedbackForm called', data);
+    
+    // Add userId to request body for authentication
+    const result = await this.makeRequest('/intern-feedback-forms', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        userId: data.studentId, // Use studentId as userId for authentication
+      }),
+    });
+    
+    console.log('📋 API SERVICE - createFeedbackForm result:', result);
+    return result;
+  }
+
+  async updateFeedbackForm(feedbackFormId: string, data: {
+    question1: string;
+    question2: string;
+    question3: string;
+    question4: string;
+    question5: string;
+    question6: string;
+    question7: string;
+    problemsMet: string;
+    otherConcerns: string;
+    formDate?: string;
+  }, studentId?: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - updateFeedbackForm called', { feedbackFormId, data });
+    
+    // Add userId to request body for authentication if provided
+    const requestBody: any = { ...data };
+    if (studentId) {
+      requestBody.userId = studentId;
+    }
+    
+    const result = await this.makeRequest(`/intern-feedback-forms/${feedbackFormId}`, {
+      method: 'PUT',
+      body: JSON.stringify(requestBody),
+    });
+    
+    console.log('📋 API SERVICE - updateFeedbackForm result:', result);
+    return result;
+  }
+
+  // Supervisor Evaluation Form methods
+  async getSupervisorEvaluation(studentId: string, companyId: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - getSupervisorEvaluation called', { studentId, companyId });
+    const result = await this.makeRequest(`/supervisor-evaluations/${studentId}/${companyId}`);
+    console.log('📋 API SERVICE - getSupervisorEvaluation result:', result);
+    return result;
+  }
+
+  async createSupervisorEvaluation(data: {
+    studentId: string;
+    companyId: string;
+    applicationId?: string;
+    organizationCompanyName: string;
+    address: string;
+    city: string;
+    zip: string;
+    supervisorPosition: string;
+    supervisorPhone?: string;
+    supervisorEmail?: string;
+    startDate: string;
+    endDate: string;
+    totalHours: number;
+    descriptionOfDuties: string;
+    question1Performance: 'Outstanding' | 'Good' | 'Average' | 'Poor';
+    question2SkillsCareer: boolean;
+    question2Elaboration?: string;
+    question3FulltimeCandidate: boolean;
+    question4InterestOtherTrainees: boolean;
+    question4Elaboration?: string;
+    workPerformance1?: number;
+    workPerformance2?: number;
+    workPerformance3?: number;
+    workPerformance4?: number;
+    workPerformance5?: number;
+    workPerformance6?: number;
+    communication1?: number;
+    communication2?: number;
+    professionalConduct1?: number;
+    professionalConduct2?: number;
+    professionalConduct3?: number;
+    punctuality1?: number;
+    punctuality2?: number;
+    punctuality3?: number;
+    flexibility1?: number;
+    flexibility2?: number;
+    attitude1?: number;
+    attitude2?: number;
+    attitude3?: number;
+    attitude4?: number;
+    attitude5?: number;
+    reliability1?: number;
+    reliability2?: number;
+    reliability3?: number;
+    reliability4?: number;
+    supervisorName?: string;
+    supervisorSignatureUrl?: string;
+    evaluationDate: string;
+  }, userId?: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - createSupervisorEvaluation called', { data });
+    const requestBody: any = { ...data };
+    if (userId) {
+      requestBody.userId = userId;
+    }
+    const result = await this.makeRequest('/supervisor-evaluations', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+    console.log('📋 API SERVICE - createSupervisorEvaluation result:', result);
+    return result;
+  }
+
+  async updateSupervisorEvaluation(evaluationId: string, data: {
+    organizationCompanyName?: string;
+    address?: string;
+    city?: string;
+    zip?: string;
+    supervisorPosition?: string;
+    supervisorPhone?: string;
+    supervisorEmail?: string;
+    startDate?: string;
+    endDate?: string;
+    totalHours?: number;
+    descriptionOfDuties?: string;
+    question1Performance?: 'Outstanding' | 'Good' | 'Average' | 'Poor';
+    question2SkillsCareer?: boolean;
+    question2Elaboration?: string;
+    question3FulltimeCandidate?: boolean;
+    question4InterestOtherTrainees?: boolean;
+    question4Elaboration?: string;
+    workPerformance1?: number;
+    workPerformance2?: number;
+    workPerformance3?: number;
+    workPerformance4?: number;
+    workPerformance5?: number;
+    workPerformance6?: number;
+    communication1?: number;
+    communication2?: number;
+    professionalConduct1?: number;
+    professionalConduct2?: number;
+    professionalConduct3?: number;
+    punctuality1?: number;
+    punctuality2?: number;
+    punctuality3?: number;
+    flexibility1?: number;
+    flexibility2?: number;
+    attitude1?: number;
+    attitude2?: number;
+    attitude3?: number;
+    attitude4?: number;
+    attitude5?: number;
+    reliability1?: number;
+    reliability2?: number;
+    reliability3?: number;
+    reliability4?: number;
+    supervisorName?: string;
+    supervisorSignatureUrl?: string;
+    evaluationDate?: string;
+  }, userId?: string): Promise<ApiResponse> {
+    console.log('📋 API SERVICE - updateSupervisorEvaluation called', { evaluationId, data });
+    const requestBody: any = { ...data };
+    if (userId) {
+      requestBody.userId = userId;
+    }
+    const result = await this.makeRequest(`/supervisor-evaluations/${evaluationId}`, {
+      method: 'PUT',
+      body: JSON.stringify(requestBody),
+    });
+    console.log('📋 API SERVICE - updateSupervisorEvaluation result:', result);
     return result;
   }
 }

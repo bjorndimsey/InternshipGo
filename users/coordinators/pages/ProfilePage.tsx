@@ -14,10 +14,14 @@ import {
   Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { apiService } from '../../../lib/api';
 import LocationPicker from '../../../components/LocationPicker';
 import LocationPictures from '../../../components/LocationPictures';
 import CloudinaryService from '../../../lib/cloudinaryService';
+import { EmailService } from '../../../lib/emailService';
+import OTPVerificationScreen from '../../../screens/OTPVerificationScreen';
+import NewPasswordScreen from '../../../screens/NewPasswordScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -57,18 +61,35 @@ interface UserInfo {
   email: string;
   picture?: string;
   id: string;
+  user_type?: string;
+  google_id?: string;
 }
 
 interface ProfilePageProps {
   currentUser: UserInfo | null;
+  autoOpenLocationPicker?: boolean;
+  onLocationPickerOpened?: () => void;
 }
 
-export default function ProfilePage({ currentUser }: ProfilePageProps) {
+export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLocationPickerOpened }: ProfilePageProps) {
   const [profile, setProfile] = useState<CoordinatorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  // Auto-open location picker if requested
+  useEffect(() => {
+    if (autoOpenLocationPicker && !showLocationPicker && profile) {
+      // Small delay to ensure profile is loaded
+      setTimeout(() => {
+        setShowLocationPicker(true);
+        if (onLocationPickerOpened) {
+          onLocationPickerOpened();
+        }
+      }, 500);
+    }
+  }, [autoOpenLocationPicker, profile, onLocationPickerOpened]);
   const [showLocationPictures, setShowLocationPictures] = useState(false);
   const [editForm, setEditForm] = useState<Partial<CoordinatorProfile>>({});
   const [editingSection, setEditingSection] = useState<string | null>(null);
@@ -79,6 +100,10 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   const [successMessage, setSuccessMessage] = useState('');
   const [modalTitle, setModalTitle] = useState('');
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordChangeStep, setPasswordChangeStep] = useState<'otp' | 'password'>('otp');
+  const [isLoadingOTP, setIsLoadingOTP] = useState(false);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -435,12 +460,129 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
     setSuccessMessage('');
   };
 
-  const handleChangePassword = () => {
-    Alert.alert(
-      'Change Password',
-      'Password change functionality will be implemented soon.',
-      [{ text: 'OK' }]
-    );
+  const handleChangePassword = async () => {
+    if (!currentUser?.email) {
+      Alert.alert('Error', 'Unable to get your email address. Please try again.');
+      return;
+    }
+
+    // Check if user is a Google user
+    const isGoogleOAuthUser = currentUser.google_id ? true : false;
+    setIsGoogleUser(isGoogleOAuthUser);
+
+    setIsLoadingOTP(true);
+    try {
+      // Request OTP from backend
+      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Send OTP via EmailJS
+        const emailResult = await EmailService.sendOTPEmail(
+          currentUser.email,
+          data.otp,
+          currentUser.name || 'User'
+        );
+
+        if (emailResult.success) {
+          Toast.show({
+            type: 'success',
+            text1: 'OTP Sent! 📧',
+            text2: 'Check your email for the verification code',
+            position: 'top',
+            visibilityTime: 5000,
+          });
+
+          setPasswordChangeStep('otp');
+          setShowChangePasswordModal(true);
+        } else {
+          Alert.alert(
+            'Email Failed',
+            emailResult.error || 'Failed to send OTP email. Please try again.'
+          );
+        }
+      } else {
+        Alert.alert('Request Failed', data.message || 'Failed to request OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('OTP request error:', error);
+      Alert.alert('Error', 'Unable to send OTP. Please try again.');
+    } finally {
+      setIsLoadingOTP(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!currentUser?.email) {
+      throw new Error('Unable to get your email address');
+    }
+
+    try {
+      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const emailResult = await EmailService.sendOTPEmail(
+          currentUser.email,
+          data.otp,
+          currentUser.name || 'User'
+        );
+
+        if (emailResult.success) {
+          return Promise.resolve();
+        } else {
+          throw new Error(emailResult.error || 'Failed to send OTP email');
+        }
+      } else {
+        throw new Error(data.message || 'Failed to request OTP');
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const handleOTPVerified = () => {
+    setPasswordChangeStep('password');
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    Toast.show({
+      type: 'success',
+      text1: 'Password Changed! 🎉',
+      text2: 'Your password has been updated successfully',
+      position: 'top',
+      visibilityTime: 5000,
+    });
+
+    setTimeout(() => {
+      setShowChangePasswordModal(false);
+      setPasswordChangeStep('otp');
+      setSuccessMessage('Password changed successfully!');
+      setShowSuccessModal(true);
+    }, 2000);
+  };
+
+  const handleBackToOTP = () => {
+    setPasswordChangeStep('otp');
+  };
+
+  const handleCloseChangePasswordModal = () => {
+    setShowChangePasswordModal(false);
+    setPasswordChangeStep('otp');
   };
 
   const handleLocationPicker = () => {
@@ -1033,6 +1175,35 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           </View>
         </View>
       </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={handleCloseChangePasswordModal}
+      >
+        {passwordChangeStep === 'otp' && currentUser && (
+          <OTPVerificationScreen
+            email={currentUser.email}
+            onVerifySuccess={handleOTPVerified}
+            onBack={handleCloseChangePasswordModal}
+            onResendOTP={handleResendOTP}
+          />
+        )}
+
+        {passwordChangeStep === 'password' && currentUser && (
+          <NewPasswordScreen
+            email={currentUser.email}
+            onPasswordResetSuccess={handlePasswordChangeSuccess}
+            onBack={handleBackToOTP}
+            isGoogleUser={isGoogleUser}
+          />
+        )}
+      </Modal>
+
+      {/* Toast Component */}
+      <Toast />
     </Animated.ScrollView>
   );
 }

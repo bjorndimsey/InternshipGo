@@ -20,12 +20,16 @@ import DatePicker from '@react-native-community/datetimepicker';
 import { apiService } from '../../../lib/api';
 import TimelineView from './TimelineView';
 import AttendanceDetailsPanel from '../components/AttendanceDetailsPanel';
+import AttendanceVerificationPanel from '../components/AttendanceVerificationPanel';
+import SupervisorEvaluationPanel from '../components/SupervisorEvaluationPanel';
 
 const { width, height } = Dimensions.get('window');
 
 interface Intern {
   id: string;
   student_id: string;
+  applicationId?: number; // Application ID for finishing internship
+  finishedAt?: string | null; // Timestamp when internship was finished
   first_name: string;
   last_name: string;
   student_email: string;
@@ -36,6 +40,8 @@ interface Intern {
   department?: string;
   expected_start_date?: string;
   expected_end_date?: string;
+  started_at?: string; // Actual start date from applications table
+  finished_at?: string; // Actual finish date from applications table
   applied_at: string;
   status: 'active' | 'inactive' | 'completed' | 'terminated';
   // Location data
@@ -78,6 +84,12 @@ interface Intern {
   totalDailyHours?: number;
   remainingHours?: number;
   remainingDays?: number;
+  // Verification fields
+  attendanceRecordId?: number;
+  verification_status?: 'pending' | 'accepted' | 'denied';
+  verified_by?: number;
+  verified_at?: string;
+  verification_remarks?: string;
   // Daily attendance records
   dailyAttendance?: {
     [date: string]: {
@@ -145,6 +157,15 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'timeline'>('list');
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [selectedInternDetail, setSelectedInternDetail] = useState<Intern | null>(null);
+  const [showVerificationPanel, setShowVerificationPanel] = useState(false);
+  const [selectedAttendanceRecord, setSelectedAttendanceRecord] = useState<any | null>(null);
+  const [allAttendanceRecords, setAllAttendanceRecords] = useState<any[]>([]);
+  const [selectedInternForVerification, setSelectedInternForVerification] = useState<Intern | null>(null);
+  const [verificationPanelSlideAnim] = useState(new Animated.Value(width));
+  const [showEvaluationPanel, setShowEvaluationPanel] = useState(false);
+  const [selectedInternForEvaluation, setSelectedInternForEvaluation] = useState<Intern | null>(null);
+  const [evaluationPanelSlideAnim] = useState(new Animated.Value(width));
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [showWorkingTimeModal, setShowWorkingTimeModal] = useState(false);
   const [showDisabledAlert, setShowDisabledAlert] = useState(false);
   const [disabledReason, setDisabledReason] = useState('');
@@ -159,6 +180,16 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     });
   }, [showSuccessModal, successMessage]);
   const [companyId, setCompanyId] = useState<string>('');
+  
+  // Finish internship states
+  const [selectedInternIds, setSelectedInternIds] = useState<Set<string>>(new Set());
+  const [isFinishingInternships, setIsFinishingInternships] = useState(false);
+  const [showFinishValidationModal, setShowFinishValidationModal] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{
+    unverifiedAttendance: Array<{ name: string; issues: string[] }>;
+    incompleteHours: Array<{ name: string; remainingHours: number }>;
+  }>({ unverifiedAttendance: [], incompleteHours: [] });
+  const [showFinishConfirmModal, setShowFinishConfirmModal] = useState(false);
   const [detailPanelSlideAnim] = useState(new Animated.Value(width));
   const [detailDateRange, setDetailDateRange] = useState({
     start: new Date(),
@@ -188,24 +219,34 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     }
   }, [companyId]);
 
-  // Load today's attendance when both companyId and interns are available
+  // Load today's attendance and calculate remaining hours when both companyId and interns are available
   useEffect(() => {
     console.log('🔄🔄🔄 Attendance loading effect triggered:', {
       companyId: !!companyId,
       companyIdValue: companyId,
       internsLength: interns.length,
+      selectedDate: selectedDate.toISOString(),
+      isToday: isSelectedDateToday(),
       shouldLoad: companyId && interns.length > 0,
       timestamp: new Date().toISOString()
     });
     
     if (companyId && interns.length > 0) {
-      console.log('🔄🔄🔄 Calling loadTodayAttendance from useEffect');
+      // Only load today's attendance if selected date is today
+      // Otherwise, load attendance for the selected date
+      if (isSelectedDateToday()) {
+        console.log('🔄🔄🔄 Calling loadTodayAttendance from useEffect (selected date is today)');
       loadTodayAttendance();
+      } else {
+        console.log('🔄🔄🔄 Calling loadAttendanceForDate from useEffect (selected date is not today)');
+        loadAttendanceForDate(selectedDate);
+      }
+      calculateRemainingHours(); // Calculate remaining hours from all attendance records
       checkAvailableDates(); // Check what dates are available
     } else {
-      console.log('🔄🔄🔄 NOT calling loadTodayAttendance - conditions not met');
+      console.log('🔄🔄🔄 NOT calling load attendance - conditions not met');
     }
-  }, [companyId, interns.length]);
+  }, [companyId, interns.length, selectedDate]);
 
 
 
@@ -281,6 +322,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     if (companyId) {
       console.log('🔄 Refreshing data after success modal close');
       await loadTodayAttendance();
+      await calculateRemainingHours(); // Recalculate remaining hours after attendance update
     }
   };
 
@@ -379,11 +421,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 }
               });
               
-              // Calculate remaining hours as: Total Internship Hours - Total Daily Hours
-              const totalInternshipHours = intern.totalHours || 0;
+              // totalDailyHours is for today only, not cumulative
               const totalDailyHours = attendanceRecord.total_hours || 0;
-              const remainingHours = Math.max(0, totalInternshipHours - totalDailyHours);
-              const remainingDays = Math.ceil(remainingHours / 8);
 
               const updatedIntern = {
                 ...intern,
@@ -392,12 +431,17 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 pmTimeIn: attendanceRecord.pm_time_in || '',
                 pmTimeOut: attendanceRecord.pm_time_out || '',
                 totalDailyHours: totalDailyHours,
-                remainingHours: remainingHours,
-                remainingDays: remainingDays,
+                // remainingHours and remainingDays are calculated separately in calculateRemainingHours()
                 currentAttendanceStatus: attendanceRecord.status || 'not_marked',
                 // Use the session-specific statuses from the database
                 amStatus: attendanceRecord.am_status || 'not_marked',
-                pmStatus: attendanceRecord.pm_status || 'not_marked'
+                pmStatus: attendanceRecord.pm_status || 'not_marked',
+                // Verification fields
+                attendanceRecordId: attendanceRecord.id,
+                verification_status: attendanceRecord.verification_status || 'pending',
+                verified_by: attendanceRecord.verified_by || undefined,
+                verified_at: attendanceRecord.verified_at || undefined,
+                verification_remarks: attendanceRecord.verification_remarks || undefined
               };
               
               console.log('📊 Updated intern data:', {
@@ -437,6 +481,69 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       }
     } catch (error) {
       console.error('Error loading today\'s attendance:', error);
+    }
+  };
+
+  // Calculate remaining hours for all interns based on cumulative attendance
+  const calculateRemainingHours = async () => {
+    if (!companyId || interns.length === 0) {
+      console.log('⏳ Company ID or interns not available, skipping remaining hours calculation');
+      return;
+    }
+    
+    try {
+      console.log('📊 Calculating remaining hours for all interns...');
+      
+      // Calculate remaining hours for each intern
+      const updatedInterns = await Promise.all(
+        interns.map(async (intern) => {
+          try {
+            // Get ALL attendance records for this intern (not just today)
+            const attendanceResponse = await apiService.getAttendanceRecords(
+              companyId,
+              currentUser.id,
+              { internId: intern.student_id }
+            );
+
+            if (attendanceResponse.success && Array.isArray(attendanceResponse.data)) {
+              // Calculate total accumulated hours from ALL attendance records
+              const totalAccumulatedHours = attendanceResponse.data.reduce((sum: number, record: any) => {
+                return sum + (parseFloat(record.total_hours) || 0);
+              }, 0);
+
+              // Get total required hours from intern's totalHours (already parsed from hours_of_internship)
+              const totalRequiredHours = intern.totalHours || 0;
+
+              // Calculate remaining hours
+              const remainingHours = Math.max(0, totalRequiredHours - totalAccumulatedHours);
+              const remainingDays = Math.ceil(remainingHours / 8);
+
+              console.log(`📊 Intern ${intern.first_name} ${intern.last_name}:`, {
+                totalRequiredHours,
+                totalAccumulatedHours,
+                remainingHours,
+                remainingDays
+              });
+
+              return {
+                ...intern,
+                remainingHours: totalRequiredHours > 0 ? remainingHours : undefined,
+                remainingDays: totalRequiredHours > 0 ? remainingDays : undefined
+              };
+            }
+
+            return intern;
+          } catch (error) {
+            console.error(`⚠️ Error calculating hours for intern ${intern.id}:`, error);
+            return intern;
+          }
+        })
+      );
+
+      setInterns(updatedInterns);
+      console.log('✅ Remaining hours calculated for all interns');
+    } catch (error) {
+      console.error('⚠️ Error calculating remaining hours:', error);
     }
   };
 
@@ -518,17 +625,23 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 }
               });
               
-              const updatedIntern = {
+              const updatedIntern: Intern = {
                 ...intern,
                 amTimeIn: attendanceRecord.am_time_in || '',
                 amTimeOut: attendanceRecord.am_time_out || '',
                 pmTimeIn: attendanceRecord.pm_time_in || '',
                 pmTimeOut: attendanceRecord.pm_time_out || '',
                 totalDailyHours: attendanceRecord.total_hours || 0,
-                currentAttendanceStatus: attendanceRecord.status || 'not_marked',
+                currentAttendanceStatus: (attendanceRecord.status || 'not_marked') as 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked',
                 // Use the session-specific statuses from the database
-                amStatus: attendanceRecord.am_status || 'not_marked',
-                pmStatus: attendanceRecord.pm_status || 'not_marked'
+                amStatus: (attendanceRecord.am_status || 'not_marked') as 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked',
+                pmStatus: (attendanceRecord.pm_status || 'not_marked') as 'present' | 'absent' | 'late' | 'leave' | 'sick' | 'not_marked',
+                // Verification fields
+                attendanceRecordId: attendanceRecord.id,
+                verification_status: (attendanceRecord.verification_status || 'pending') as 'pending' | 'accepted' | 'denied',
+                verified_by: attendanceRecord.verified_by || undefined,
+                verified_at: attendanceRecord.verified_at || undefined,
+                verification_remarks: attendanceRecord.verification_remarks || undefined
               };
               
               return updatedIntern;
@@ -545,10 +658,10 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 amTimeOut: '',
                 pmTimeIn: '',
                 pmTimeOut: '',
-                amStatus: 'not_marked',
-                pmStatus: 'not_marked',
+                amStatus: 'not_marked' as const,
+                pmStatus: 'not_marked' as const,
                 totalDailyHours: 0,
-                currentAttendanceStatus: 'not_marked'
+                currentAttendanceStatus: 'not_marked' as const
               };
             }
           });
@@ -646,6 +759,328 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     });
   };
 
+  // Handle verification panel
+  const openVerificationPanel = async (intern: Intern) => {
+    console.log('🔍 openVerificationPanel called for intern:', intern.first_name, intern.last_name);
+    console.log('🔍 companyId:', companyId, 'currentUser.id:', currentUser.id);
+    
+    if (!companyId || !currentUser.id) {
+      console.log('❌ Missing companyId or currentUser.id');
+      Alert.alert('Error', 'Company information not available. Please refresh the page.');
+      return;
+    }
+
+    try {
+      // Fetch ALL attendance records for this intern (not just selected date)
+      console.log('🔍 Fetching ALL attendance records for internId:', intern.student_id);
+      
+      const response = await apiService.getAttendanceRecords(companyId, currentUser.id, {
+        internId: intern.student_id
+        // No date filter - get all records
+      });
+
+      console.log('🔍 Attendance response:', response);
+
+      if (response.success && response.data && response.data.length > 0) {
+        // Sort by date (most recent first)
+        const sortedRecords = response.data.sort((a: any, b: any) => {
+          const dateA = new Date(a.attendance_date).getTime();
+          const dateB = new Date(b.attendance_date).getTime();
+          return dateB - dateA; // Most recent first
+        });
+        
+        // Add intern info to each record
+        const recordsWithInternInfo = sortedRecords.map((record: any) => ({
+          ...record,
+          first_name: intern.first_name,
+          last_name: intern.last_name,
+          profile_picture: intern.student_profile_picture,
+        }));
+        
+        // Set all records and the first record (most recent) as selected by default
+        setAllAttendanceRecords(recordsWithInternInfo);
+        setSelectedAttendanceRecord(recordsWithInternInfo[0]);
+        setSelectedInternForVerification(intern);
+        setShowVerificationPanel(true);
+        Animated.timing(verificationPanelSlideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      } else {
+        console.log('ℹ️ No attendance records found');
+        Alert.alert('Info', 'No attendance records found for this intern.');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching attendance records:', error);
+      Alert.alert('Error', 'Failed to load attendance records. Please try again.');
+    }
+  };
+
+  const closeVerificationPanel = () => {
+    Animated.timing(verificationPanelSlideAnim, {
+      toValue: width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowVerificationPanel(false);
+      setSelectedAttendanceRecord(null);
+    });
+  };
+
+  // Evaluation Panel handlers
+  const openEvaluationPanel = async (intern: Intern) => {
+    if (!intern.finishedAt) {
+      Alert.alert('Cannot Evaluate', 'This intern has not completed their internship yet.');
+      return;
+    }
+
+    // Fetch company profile if not already loaded
+    if (!companyProfile) {
+      try {
+        const response = await apiService.getCompanyProfileByUserId(currentUser.id);
+        if (response.success && response.user) {
+          setCompanyProfile({
+            company_name: response.user.company_name,
+            address: response.user.address,
+            city: response.user.city || '',
+            zip: response.user.zip || '',
+            phone_number: response.user.phone_number,
+            contact_person: response.user.contact_person,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching company profile:', error);
+      }
+    }
+
+    setSelectedInternForEvaluation(intern);
+    setShowEvaluationPanel(true);
+    Animated.timing(evaluationPanelSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeEvaluationPanel = () => {
+    Animated.timing(evaluationPanelSlideAnim, {
+      toValue: width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowEvaluationPanel(false);
+      setSelectedInternForEvaluation(null);
+    });
+  };
+
+  const handleVerificationComplete = async () => {
+    // Refresh attendance data after verification
+    if (isSelectedDateToday()) {
+      await loadTodayAttendance();
+    } else {
+      await loadAttendanceForDate(selectedDate);
+    }
+    closeVerificationPanel();
+  };
+
+  // Checkbox selection handlers
+  const toggleInternSelection = (internId: string) => {
+    const intern = interns.find(i => i.id === internId);
+    // Don't allow selection of finished internships
+    if (intern?.finishedAt) {
+      return;
+    }
+    
+    setSelectedInternIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(internId)) {
+        newSet.delete(internId);
+      } else {
+        newSet.add(internId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const filtered = getFilteredInternsByDate();
+    // Filter out finished internships from selection
+    const unfinishedInterns = filtered.filter(intern => !intern.finishedAt);
+    const allSelected = unfinishedInterns.length > 0 && unfinishedInterns.every(intern => selectedInternIds.has(intern.id));
+    
+    if (allSelected) {
+      // Deselect all
+      setSelectedInternIds(new Set());
+    } else {
+      // Select all unfinished interns
+      setSelectedInternIds(new Set(unfinishedInterns.map(intern => intern.id)));
+    }
+  };
+
+  // Validate interns before finishing
+  const validateInternsForFinishing = async (internIds: string[]): Promise<{
+    isValid: boolean;
+    unverifiedAttendance: Array<{ name: string; issues: string[] }>;
+    incompleteHours: Array<{ name: string; remainingHours: number }>;
+  }> => {
+    const unverifiedAttendance: Array<{ name: string; issues: string[] }> = [];
+    const incompleteHours: Array<{ name: string; remainingHours: number }> = [];
+
+    for (const internId of internIds) {
+      const intern = interns.find(i => i.id === internId);
+      if (!intern) continue;
+
+      // Skip if already finished
+      if (intern.finishedAt) {
+        continue;
+      }
+
+      const internName = `${intern.first_name} ${intern.last_name}`;
+      const issues: string[] = [];
+
+      // Check if hours are complete
+      if (intern.remainingHours !== undefined && intern.remainingHours > 0) {
+        incompleteHours.push({
+          name: internName,
+          remainingHours: intern.remainingHours
+        });
+      }
+
+      // Check all attendance records are accepted
+      try {
+        const attendanceResponse = await apiService.getAttendanceRecords(
+          companyId,
+          currentUser.id,
+          { internId: intern.student_id }
+        );
+
+        if (attendanceResponse.success && Array.isArray(attendanceResponse.data)) {
+          const records = attendanceResponse.data;
+          const pendingRecords = records.filter((r: any) => r.verification_status === 'pending');
+          const deniedRecords = records.filter((r: any) => r.verification_status === 'denied');
+
+          if (pendingRecords.length > 0) {
+            issues.push(`${pendingRecords.length} pending attendance record(s)`);
+          }
+          if (deniedRecords.length > 0) {
+            issues.push(`${deniedRecords.length} denied attendance record(s)`);
+          }
+
+          if (issues.length > 0) {
+            unverifiedAttendance.push({ name: internName, issues });
+          }
+        }
+      } catch (error) {
+        console.error(`Error validating intern ${internId}:`, error);
+        issues.push('Error checking attendance records');
+        unverifiedAttendance.push({ name: internName, issues });
+      }
+    }
+
+    return {
+      isValid: unverifiedAttendance.length === 0 && incompleteHours.length === 0,
+      unverifiedAttendance,
+      incompleteHours
+    };
+  };
+
+  // Handle finish internships
+  const handleFinishInternships = async () => {
+    const selectedIds = Array.from(selectedInternIds);
+    
+    if (selectedIds.length === 0) {
+      Alert.alert('No Selection', 'Please select at least one intern to finish their internship.');
+      return;
+    }
+
+    // Validate interns
+    setIsFinishingInternships(true);
+    const validation = await validateInternsForFinishing(selectedIds);
+    setIsFinishingInternships(false);
+
+    if (!validation.isValid) {
+      setValidationErrors(validation);
+      setShowFinishValidationModal(true);
+      return;
+    }
+
+    // Show confirmation modal
+    setShowFinishConfirmModal(true);
+  };
+
+  const handleConfirmFinishInternships = async () => {
+    const selectedIds = Array.from(selectedInternIds);
+    setShowFinishConfirmModal(false);
+    setIsFinishingInternships(true);
+
+    try {
+      const finishPromises = selectedIds.map(async (internId) => {
+        const intern = interns.find(i => i.id === internId);
+        if (!intern || !intern.applicationId) {
+          throw new Error(`Intern ${internId} not found or missing application ID`);
+        }
+
+        const response = await apiService.finishInternship(
+          intern.applicationId.toString(),
+          companyId
+        );
+
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to finish internship');
+        }
+
+        return { internId, success: true, internName: `${intern.first_name} ${intern.last_name}` };
+      });
+
+      const results = await Promise.allSettled(finishPromises);
+      const successful: string[] = [];
+      const failed: Array<{ name: string; error: string }> = [];
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          successful.push(result.value.internName);
+        } else {
+          const intern = interns.find(i => i.id === selectedIds[index]);
+          failed.push({
+            name: intern ? `${intern.first_name} ${intern.last_name}` : 'Unknown',
+            error: result.status === 'rejected' ? result.reason?.message || 'Unknown error' : 'Failed'
+          });
+        }
+      });
+
+      // Clear selection
+      setSelectedInternIds(new Set());
+
+      // Refresh interns list
+      await fetchInterns();
+      await loadTodayAttendance();
+      await calculateRemainingHours();
+
+      // Show success/error message
+      if (successful.length > 0 && failed.length === 0) {
+        setSuccessMessage(`Successfully finished internships for ${successful.length} intern(s): ${successful.join(', ')}`);
+        setShowSuccessModal(true);
+      } else if (successful.length > 0 && failed.length > 0) {
+        setSuccessMessage(
+          `Finished ${successful.length} internship(s) successfully. ` +
+          `Failed for ${failed.length} intern(s): ${failed.map(f => f.name).join(', ')}`
+        );
+        setShowSuccessModal(true);
+      } else {
+        Alert.alert(
+          'Error',
+          `Failed to finish internships: ${failed.map(f => `${f.name} - ${f.error}`).join(', ')}`
+        );
+      }
+    } catch (error: any) {
+      console.error('Error finishing internships:', error);
+      Alert.alert('Error', error.message || 'Failed to finish internships. Please try again.');
+    } finally {
+      setIsFinishingInternships(false);
+    }
+  };
+
   const toggleSearch = () => {
     setShowSearch(!showSearch);
     if (!showSearch) {
@@ -680,6 +1115,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         const transformedInterns: Intern[] = response.applications.map((app: any) => ({
           id: app.id.toString(),
           student_id: app.student_id.toString(),
+          applicationId: app.id, // Store application ID for finishing internship
+          finishedAt: app.finished_at || null, // Store finished_at timestamp
           first_name: app.first_name || 'Unknown',
           last_name: app.last_name || 'Student',
           student_email: app.student_email || 'N/A',
@@ -690,6 +1127,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
           department: app.department || 'N/A',
           expected_start_date: app.expected_start_date,
           expected_end_date: app.expected_end_date,
+          started_at: app.started_at, // Actual start date from applications table
+          finished_at: app.finished_at, // Actual finish date from applications table
           applied_at: app.applied_at,
           status: 'active' as const,
           // Location data
@@ -719,15 +1158,20 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             insurance: false,
           },
           // New attendance fields
-          totalHours: parseInt(app.hours_of_internship) || 0,
+          // Parse hours_of_internship (e.g., "136 hours" -> 136)
+          totalHours: (() => {
+            if (!app.hours_of_internship) return 0;
+            const match = app.hours_of_internship.match(/(\d+(?:\.\d+)?)/);
+            return match ? parseFloat(match[1]) || 0 : 0;
+          })(),
           currentAttendanceStatus: 'not_marked' as const,
           amTimeIn: '',
           amTimeOut: '',
           pmTimeIn: '',
           pmTimeOut: '',
           totalDailyHours: 0,
-          remainingHours: parseInt(app.hours_of_internship) || 0,
-          remainingDays: Math.ceil((parseInt(app.hours_of_internship) || 0) / 8), // Assuming 8 hours per day
+          remainingHours: undefined, // Will be calculated after fetching attendance records
+          remainingDays: undefined, // Will be calculated after fetching attendance records
         }));
         
         // Preserve existing attendance data when updating interns
@@ -789,20 +1233,20 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         let aValue = a[sortConfig.key as keyof Intern];
         let bValue = b[sortConfig.key as keyof Intern];
         
-        // Handle undefined values
-        if (aValue === undefined && bValue === undefined) return 0;
-        if (aValue === undefined) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (bValue === undefined) return sortConfig.direction === 'asc' ? 1 : -1;
+        // Handle undefined and null values
+        if ((aValue === undefined || aValue === null) && (bValue === undefined || bValue === null)) return 0;
+        if (aValue === undefined || aValue === null) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (bValue === undefined || bValue === null) return sortConfig.direction === 'asc' ? 1 : -1;
         
         if (typeof aValue === 'string' && typeof bValue === 'string') {
           aValue = aValue.toLowerCase();
           bValue = bValue.toLowerCase();
         }
         
-        if (aValue < bValue) {
+        if (aValue! < bValue!) {
           return sortConfig.direction === 'asc' ? -1 : 1;
         }
-        if (aValue > bValue) {
+        if (aValue! > bValue!) {
           return sortConfig.direction === 'asc' ? 1 : -1;
         }
         return 0;
@@ -820,168 +1264,10 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     setSortConfig({ key, direction });
   };
 
-  const handleAttendanceToggle = async (internId: string, status: 'present' | 'absent' | 'late' | 'leave' | 'sick') => {
-    const currentTime = new Date().toLocaleTimeString('en-US', { 
-      timeZone: 'Asia/Manila',
-      hour12: true, 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-    const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    
-    console.log('📊 Attendance action:', { internId, status, currentTime, currentDate });
-    
-    setInterns(prevInterns => 
-      prevInterns.map(intern => {
-        if (intern.id === internId) {
-          // Determine if this is AM or PM session based on working hours
-          const isAMSession = isWithinAMWorkingHours();
-          const isPMSession = isWithinPMWorkingHours();
-          
-          // Calculate hours based on status
-          let hoursToDeduct = 0;
-          if (status === 'present' || status === 'late') {
-            // For present/late, we'll calculate hours when they check out
-            hoursToDeduct = 0;
-          } else if (status === 'leave' || status === 'sick') {
-            // For leave/sick, deduct 4 hours (half day for the session)
-            hoursToDeduct = 4;
-          } else if (status === 'absent') {
-            // For absent, deduct 4 hours (half day for the session)
-            hoursToDeduct = 4;
-          }
+  // Removed handleAttendanceToggle - students now submit their own attendance
 
-          const newIntern = { 
-            ...intern, 
-            currentAttendanceStatus: status,
-            // Set AM or PM time in based on current session
-            amTimeIn: (status === 'present' || status === 'late') && isAMSession ? currentTime : intern.amTimeIn,
-            pmTimeIn: (status === 'present' || status === 'late') && isPMSession ? currentTime : intern.pmTimeIn,
-            // Reset time out for new session
-            amTimeOut: (status === 'present' || status === 'late') && isAMSession ? '' : intern.amTimeOut,
-            pmTimeOut: (status === 'present' || status === 'late') && isPMSession ? '' : intern.pmTimeOut,
-            // Set session-specific status
-            amStatus: isAMSession ? status : intern.amStatus,
-            pmStatus: isPMSession ? status : intern.pmStatus,
-            // Calculate remaining hours as: Total Internship Hours - Total Daily Hours
-            totalDailyHours: (intern.totalDailyHours || 0) + hoursToDeduct,
-            remainingHours: Math.max(0, (intern.totalHours || 0) - ((intern.totalDailyHours || 0) + hoursToDeduct)),
-            remainingDays: Math.ceil(Math.max(0, (intern.totalHours || 0) - ((intern.totalDailyHours || 0) + hoursToDeduct)) / 8),
-            attendance: {
-              ...intern.attendance!,
-              [status]: (intern.attendance?.[status] || 0) + 1,
-              totalDays: (intern.attendance?.totalDays || 0) + 1,
-            },
-            dailyAttendance: {
-              ...intern.dailyAttendance,
-              [currentDate]: {
-                status,
-                amTimeIn: (status === 'present' || status === 'late') && isAMSession ? currentTime : intern.amTimeIn,
-                amTimeOut: intern.amTimeOut,
-                pmTimeIn: (status === 'present' || status === 'late') && isPMSession ? currentTime : intern.pmTimeIn,
-                pmTimeOut: intern.pmTimeOut,
-                amStatus: isAMSession ? status : intern.amStatus,
-                pmStatus: isPMSession ? status : intern.pmStatus,
-                totalHours: hoursToDeduct
-              }
-            }
-          };
-          
-          return newIntern;
-        }
-        return intern;
-      })
-    );
-
-    // Save to backend
-    try {
-      if (companyId) {
-        // Get the current intern data before the update
-        const currentIntern = interns.find(i => i.id === internId);
-        if (currentIntern) {
-          // Determine if this is AM or PM session based on working hours
-          const isAMSession = isWithinAMWorkingHours();
-          const isPMSession = isWithinPMWorkingHours();
-          
-          // Calculate the correct time in values based on the action
-          const amTimeIn = (status === 'present' || status === 'late') && isAMSession ? currentTime : currentIntern.amTimeIn;
-          const pmTimeIn = (status === 'present' || status === 'late') && isPMSession ? currentTime : currentIntern.pmTimeIn;
-          
-          const attendanceData = {
-            internId: currentIntern.student_id, // Use student_id for backend
-            attendanceDate: currentDate,
-            status: status as 'present' | 'absent' | 'late' | 'leave' | 'sick',
-            amTimeIn: amTimeIn || undefined,
-            amTimeOut: currentIntern.amTimeOut || undefined,
-            pmTimeIn: pmTimeIn || undefined,
-            pmTimeOut: currentIntern.pmTimeOut || undefined,
-            amStatus: isAMSession ? status : (currentIntern.amStatus || 'not_marked'),
-            pmStatus: isPMSession ? status : (currentIntern.pmStatus || 'not_marked'),
-            totalHours: currentIntern.totalDailyHours || 0,
-            notes: undefined
-          };
-
-          console.log('📊 Saving attendance record:', attendanceData);
-          console.log('📊 Current intern data:', {
-            id: currentIntern.id,
-            student_id: currentIntern.student_id,
-            student_id_type: typeof currentIntern.student_id,
-            first_name: currentIntern.first_name,
-            last_name: currentIntern.last_name
-          });
-          console.log('📊 API call parameters:', {
-            companyId: companyId,
-            companyIdType: typeof companyId,
-            currentUserId: currentUser.id,
-            currentUserIdType: typeof currentUser.id
-          });
-          
-          const response = await apiService.saveAttendanceRecord(companyId, currentUser.id, attendanceData);
-          
-          if (response.success) {
-            console.log('📊 Attendance record saved successfully');
-            
-            // Refresh data to ensure UI shows latest backend data
-            setTimeout(async () => {
-              if (companyId) {
-                console.log('🔄 Refreshing data after successful attendance save');
-                await loadTodayAttendance();
-              }
-            }, 100);
-          } else {
-            console.error('📊 Failed to save attendance record:', {
-              response: response,
-              message: response.message,
-              error: response.error,
-              success: response.success
-            });
-          }
-        }
-      } else {
-        console.log('📊 Company ID not available, skipping backend save');
-      }
-    } catch (error) {
-      console.error('📊 Error saving attendance record:', {
-        error: error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-    }
-
-    // Show success feedback
-    const statusMessages = {
-      present: 'Marked as Present',
-      late: 'Marked as Late',
-      absent: 'Marked as Absent',
-      leave: 'Marked as Leave',
-      sick: 'Marked as Sick'
-    };
-    
-    setSuccessMessage(`${statusMessages[status]} at ${currentTime}`);
-    setShowSuccessModal(true);
-  };
-
-  const handleTimeOut = async (internId: string) => {
+  // Removed handleTimeOut - students now submit their own attendance times
+  const handleTimeOut_removed = async (internId: string) => {
     console.log('🕐 ===== TIMEOUT FUNCTION STARTED =====');
     console.log('🕐 Time Out button clicked for intern:', internId);
     
@@ -1304,6 +1590,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 
                 // Refresh attendance data to ensure UI shows latest backend data
                 await refreshAttendanceData();
+                await calculateRemainingHours(); // Recalculate remaining hours after attendance update
               } else {
                 console.log('❌ ===== BACKEND SAVE FAILED =====');
                 console.log('❌ Response indicates failure:', response);
@@ -1715,8 +2002,25 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     );
   }
 
-  const renderTableHeader = () => (
+  const renderTableHeader = () => {
+    const filtered = getFilteredInternsByDate();
+    // Only consider unfinished interns for "select all"
+    const unfinishedInterns = filtered.filter(intern => !intern.finishedAt);
+    const allSelected = unfinishedInterns.length > 0 && unfinishedInterns.every(intern => selectedInternIds.has(intern.id));
+    
+    return (
     <View style={styles.tableHeader}>
+        {/* Checkbox Column */}
+        <View style={[styles.headerCell, { flex: 0.5 }]}>
+          <TouchableOpacity onPress={toggleSelectAll} style={styles.checkboxContainer}>
+            <MaterialIcons 
+              name={allSelected ? 'check-box' : 'check-box-outline-blank'} 
+              size={isDesktop ? 24 : 20} 
+              color="#fff" 
+            />
+          </TouchableOpacity>
+        </View>
+        
       <View style={[styles.headerCell, { flex: 0.6 }]}>
         <Text style={[styles.headerText, isDesktop && styles.desktopHeaderText]}>#</Text>
       </View>
@@ -1765,6 +2069,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       </View>
     </View>
   );
+  };
 
 
   const renderMobileCard = (intern: Intern, index: number) => {
@@ -1870,10 +2175,32 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       return `${h}h ${m}m`;
     };
 
+    const isSelected = selectedInternIds.has(intern.id);
+    const isFinished = !!intern.finishedAt;
+
     return (
-      <View style={styles.mobileCardContent}>
+      <View style={[styles.mobileCardContent, isFinished && styles.finishedInternCard]}>
         {/* Header with Profile and Status */}
         <View style={styles.mobileCardHeader}>
+          {/* Checkbox */}
+          {isFinished ? (
+            <View style={styles.mobileCheckboxContainer}>
+              <MaterialIcons 
+                name="check-box" 
+                size={20} 
+                color="#9E9E9E" 
+              />
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => toggleInternSelection(intern.id)} style={styles.mobileCheckboxContainer}>
+              <MaterialIcons 
+                name={isSelected ? 'check-box' : 'check-box-outline-blank'} 
+                size={20} 
+                color={isSelected ? '#4CAF50' : '#666'} 
+              />
+            </TouchableOpacity>
+          )}
+          
           <View style={styles.mobileProfileSection}>
             <View style={styles.mobileProfileContainer}>
               {intern.student_profile_picture ? (
@@ -1890,9 +2217,17 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               )}
             </View>
             <View style={styles.mobileProfileInfo}>
+              <View style={styles.mobileInternNameRow}>
               <Text style={styles.mobileInternName}>
                 {intern.first_name} {intern.last_name}
               </Text>
+                {isFinished && (
+                  <View style={styles.finishedBadge}>
+                    <MaterialIcons name="check-circle" size={14} color="#fff" />
+                    <Text style={styles.finishedBadgeText}>Completed</Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.mobileInternId}>Intern #{index + 1}</Text>
             </View>
           </View>
@@ -1907,8 +2242,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             <View style={styles.mobileTimeContent}>
               <Text style={styles.mobileTimeLabel}>AM Shift</Text>
               <Text style={styles.mobileTimeValue}>
-                {intern.amTimeIn && intern.amTimeOut 
-                  ? `${intern.amTimeIn.split(' ')[0]} → ${intern.amTimeOut.split(' ')[0]}`
+                {intern.amTimeIn 
+                  ? `${intern.amTimeIn.split(' ')[0]} → ${intern.amTimeOut ? intern.amTimeOut.split(' ')[0] : '--:--'}`
                   : '--:-- → --:--'
                 }
               </Text>
@@ -1921,8 +2256,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             <View style={styles.mobileTimeContent}>
               <Text style={styles.mobileTimeLabel}>PM Shift</Text>
               <Text style={styles.mobileTimeValue}>
-                {intern.pmTimeIn && intern.pmTimeOut 
-                  ? `${intern.pmTimeIn.split(' ')[0]} → ${intern.pmTimeOut.split(' ')[0]}`
+                {intern.pmTimeIn 
+                  ? `${intern.pmTimeIn.split(' ')[0]} → ${intern.pmTimeOut ? intern.pmTimeOut.split(' ')[0] : '--:--'}`
                   : '--:-- → --:--'
                 }
               </Text>
@@ -1943,95 +2278,36 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
         </View>
       
       
-        {/* Action Buttons - Modern Mobile Layout */}
-        {!isFullyCompleted && isSelectedDateToday() && (
-          <View style={styles.mobileActionsSection}>
-            <View style={styles.mobileButtonsGrid}>
-              <TouchableOpacity
-                style={[
-                  styles.mobileActionButton, 
-                  styles.presentActionButton,
-                  isButtonDisabled(intern, 'present') && styles.disabledButton
-                ]}
-                onPress={() => {
-                  if (isButtonDisabled(intern, 'present')) {
-                    handleDisabledButtonPress(intern, 'present');
-                  } else {
-                    handleAttendanceToggle(intern.id, 'present');
-                  }
-                }}
-              >
-                <MaterialIcons name="check" size={14} color="#fff" />
-                <Text style={styles.presentButtonText}>Present</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.mobileActionButton, 
-                  styles.lateActionButton,
-                  isButtonDisabled(intern, 'late') && styles.disabledButton
-                ]}
-                onPress={() => {
-                  if (isButtonDisabled(intern, 'late')) {
-                    handleDisabledButtonPress(intern, 'late');
-                  } else {
-                    handleAttendanceToggle(intern.id, 'late');
-                  }
-                }}
-              >
-                <MaterialIcons name="schedule" size={14} color="#fff" />
-                <Text style={styles.lateButtonText}>Late</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.mobileActionButton, 
-                  styles.absentActionButton,
-                  isButtonDisabled(intern, 'absent') && styles.disabledButton
-                ]}
-                onPress={() => {
-                  if (isButtonDisabled(intern, 'absent')) {
-                    handleDisabledButtonPress(intern, 'absent');
-                  } else {
-                    handleAttendanceToggle(intern.id, 'absent');
-                  }
-                }}
-              >
-                <MaterialIcons name="close" size={14} color="#fff" />
-                <Text style={styles.absentButtonText}>Absent</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.mobileActionButton, 
-                  styles.leaveActionButton,
-                  isButtonDisabled(intern, 'leave') && styles.disabledButton
-                ]}
-                onPress={() => {
-                  if (isButtonDisabled(intern, 'leave')) {
-                    handleDisabledButtonPress(intern, 'leave');
-                  } else {
-                    handleAttendanceToggle(intern.id, 'leave');
-                  }
-                }}
-              >
-                <MaterialIcons name="event-busy" size={14} color="#fff" />
-                <Text style={styles.leaveButtonText}>Leave</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* Action Buttons Removed - Students now submit their own attendance */}
 
-        {/* Show View Only message when selected date is not today */}
-        {!isSelectedDateToday() && (
-          <View style={styles.mobileActionsSection}>
-            <View style={styles.dateRestrictionContainer}>
-              <View style={styles.dateRestrictionBadge}>
-                <Text style={styles.dateRestrictionText}>View Only</Text>
-              </View>
-            </View>
-          </View>
-        )}
 
-        {/* Detail Arrow Button */}
+        {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
+          {/* Verify Attendance Button */}
+          <TouchableOpacity
+            style={styles.verifyButton}
+            onPress={() => {
+              console.log('🔍 Verify button clicked for intern:', intern.first_name, intern.last_name);
+              openVerificationPanel(intern);
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialIcons name="verified-user" size={18} color="#F56E0F" />
+          </TouchableOpacity>
+          
+          {/* Evaluation Button - Always visible, disabled if intern hasn't finished */}
+          <TouchableOpacity
+            style={[styles.evaluationButton, !isFinished && styles.disabledButton]}
+            onPress={() => openEvaluationPanel(intern)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={!isFinished}
+          >
+            <MaterialIcons name="assessment" size={18} color={isFinished ? "#4CAF50" : "#9E9E9E"} />
+          </TouchableOpacity>
+          
+          {/* Detail Arrow Button */}
           <TouchableOpacity
             style={styles.detailArrowButton}
             onPress={() => openDetailPanel(intern)}
@@ -2040,18 +2316,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
           </TouchableOpacity>
         </View>
 
-        {/* Time Out Button - Show if there's a time in but no time out and work not completed */}
-        {hasAnyTimeIn && !isFullyCompleted && !isPMAbsent && !isAMAbsent && (
-          <View style={styles.mobileActionsSection}>
-            <TouchableOpacity
-              style={[styles.mobileActionButton, styles.timeOutActionButton]}
-              onPress={() => handleTimeOut(intern.id)}
-            >
-              <MaterialIcons name="logout" size={14} color="#fff" />
-              <Text style={styles.timeOutButtonText}>Time Out</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Time Out Button Removed - Students now submit their own attendance */}
 
         {/* Work Completed Message - Show if work is completed */}
         {isFullyCompleted && (
@@ -2067,6 +2332,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
   };
 
   const renderTabletCard = (intern: Intern, index: number) => {
+    const isSelected = selectedInternIds.has(intern.id);
+    const isFinished = !!intern.finishedAt;
     const hasAMTimeIn = intern.amTimeIn && intern.amTimeIn !== '--:--' && (!intern.amTimeOut || intern.amTimeOut === '' || intern.amTimeOut === '--:--');
     const hasPMTimeIn = intern.pmTimeIn && intern.pmTimeIn !== '--:--' && (!intern.pmTimeOut || intern.pmTimeOut === '' || intern.pmTimeOut === '--:--');
     const hasAnyTimeIn = intern.amTimeIn || intern.pmTimeIn;
@@ -2170,9 +2437,28 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     };
 
     return (
-      <View style={styles.tabletCardContent}>
+      <View style={[styles.tabletCardContent, isFinished && styles.finishedInternCard]}>
         {/* Header with Profile and Arrow */}
         <View style={styles.tabletCardHeader}>
+          {/* Checkbox */}
+          {isFinished ? (
+            <View style={styles.tabletCheckboxContainer}>
+              <MaterialIcons 
+                name="check-box" 
+                size={22} 
+                color="#9E9E9E" 
+              />
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => toggleInternSelection(intern.id)} style={styles.tabletCheckboxContainer}>
+              <MaterialIcons 
+                name={isSelected ? 'check-box' : 'check-box-outline-blank'} 
+                size={22} 
+                color={isSelected ? '#4CAF50' : '#666'} 
+              />
+            </TouchableOpacity>
+          )}
+          
           <View style={styles.tabletProfileSection}>
             <View style={styles.tabletProfileContainer}>
               {intern.student_profile_picture ? (
@@ -2189,9 +2475,17 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               )}
             </View>
             <View style={styles.tabletProfileInfo}>
+              <View style={styles.tabletInternNameRow}>
               <Text style={styles.tabletInternName}>
                 {intern.first_name} {intern.last_name}
               </Text>
+                {isFinished && (
+                  <View style={styles.finishedBadge}>
+                    <MaterialIcons name="check-circle" size={13} color="#FFD700" />
+                    <Text style={styles.finishedBadgeText}>Completed</Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.tabletInternId}>Intern #{index + 1}</Text>
             </View>
           </View>
@@ -2207,8 +2501,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               <View style={styles.tabletTimeContent}>
                 <Text style={styles.tabletTimeLabel}>AM Shift</Text>
                 <Text style={styles.tabletTimeValue}>
-                  {intern.amTimeIn && intern.amTimeOut 
-                    ? `${intern.amTimeIn.split(' ')[0]} → ${intern.amTimeOut.split(' ')[0]}`
+                  {intern.amTimeIn 
+                    ? `${intern.amTimeIn.split(' ')[0]} → ${intern.amTimeOut ? intern.amTimeOut.split(' ')[0] : '--:--'}`
                     : '--:-- → --:--'
                   }
                 </Text>
@@ -2221,8 +2515,8 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               <View style={styles.tabletTimeContent}>
                 <Text style={styles.tabletTimeLabel}>PM Shift</Text>
                 <Text style={styles.tabletTimeValue}>
-                  {intern.pmTimeIn && intern.pmTimeOut 
-                    ? `${intern.pmTimeIn.split(' ')[0]} → ${intern.pmTimeOut.split(' ')[0]}`
+                  {intern.pmTimeIn 
+                    ? `${intern.pmTimeIn.split(' ')[0]} → ${intern.pmTimeOut ? intern.pmTimeOut.split(' ')[0] : '--:--'}`
                     : '--:-- → --:--'
                   }
                 </Text>
@@ -2246,96 +2540,7 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
 
         {/* Action Buttons - Modern Layout */}
         <View style={styles.tabletActionsSection}>
-          {!isFullyCompleted && isSelectedDateToday() ? (
-            <View style={styles.tabletButtonsGrid}>
-              <View style={styles.tabletButtonRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.tabletActionButton, 
-                    styles.presentActionButton,
-                    isButtonDisabled(intern, 'present') && styles.disabledButton
-                  ]}
-                  onPress={() => {
-                    if (isButtonDisabled(intern, 'present')) {
-                      handleDisabledButtonPress(intern, 'present');
-                    } else {
-                      handleAttendanceToggle(intern.id, 'present');
-                    }
-                  }}
-                >
-                  <MaterialIcons name="check" size={16} color="#fff" />
-                  <Text style={styles.presentButtonText}>Present</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tabletActionButton, 
-                    styles.lateActionButton,
-                    isButtonDisabled(intern, 'late') && styles.disabledButton
-                  ]}
-                  onPress={() => {
-                    if (isButtonDisabled(intern, 'late')) {
-                      handleDisabledButtonPress(intern, 'late');
-                    } else {
-                      handleAttendanceToggle(intern.id, 'late');
-                    }
-                  }}
-                >
-                  <MaterialIcons name="schedule" size={16} color="#fff" />
-                  <Text style={styles.lateButtonText}>Late</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.tabletButtonRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.tabletActionButton, 
-                    styles.absentActionButton,
-                    isButtonDisabled(intern, 'absent') && styles.disabledButton
-                  ]}
-                  onPress={() => {
-                    if (isButtonDisabled(intern, 'absent')) {
-                      handleDisabledButtonPress(intern, 'absent');
-                    } else {
-                      handleAttendanceToggle(intern.id, 'absent');
-                    }
-                  }}
-                >
-                  <MaterialIcons name="close" size={16} color="#fff" />
-                  <Text style={styles.absentButtonText}>Absent</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tabletActionButton, 
-                    styles.leaveActionButton,
-                    isButtonDisabled(intern, 'leave') && styles.disabledButton
-                  ]}
-                  onPress={() => {
-                    if (isButtonDisabled(intern, 'leave')) {
-                      handleDisabledButtonPress(intern, 'leave');
-                    } else {
-                      handleAttendanceToggle(intern.id, 'leave');
-                    }
-                  }}
-                >
-                  <MaterialIcons name="event-busy" size={16} color="#fff" />
-                  <Text style={styles.leaveButtonText}>Leave</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : hasAnyTimeIn && !isFullyCompleted && !isPMAbsent && !isAMAbsent ? (
-            <TouchableOpacity
-              style={[styles.tabletActionButton, styles.timeOutActionButton]}
-              onPress={() => handleTimeOut(intern.id)}
-            >
-              <MaterialIcons name="logout" size={16} color="#fff" />
-              <Text style={styles.timeOutButtonText}>Time Out</Text>
-            </TouchableOpacity>
-          ) : !isSelectedDateToday() ? (
-            <View style={styles.dateRestrictionContainer}>
-              <View style={styles.dateRestrictionBadge}>
-                <Text style={styles.dateRestrictionText}>View Only</Text>
-              </View>
-            </View>
-          ) : isFullyCompleted ? (
+          {isFullyCompleted ? (
             <View style={styles.workCompletedCard}>
               <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
               <Text style={styles.workCompletedTextSmall}>Work Done! 🎉</Text>
@@ -2363,8 +2568,33 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
           )}
         </View>
 
-        {/* Detail Arrow Button */}
+        {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
+          {/* Verify Attendance Button */}
+          <TouchableOpacity
+            style={styles.verifyButton}
+            onPress={() => {
+              console.log('🔍 Verify button clicked for intern:', intern.first_name, intern.last_name);
+              openVerificationPanel(intern);
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialIcons name="verified-user" size={18} color="#F56E0F" />
+          </TouchableOpacity>
+          
+          {/* Evaluation Button - Always visible, disabled if intern hasn't finished */}
+          <TouchableOpacity
+            style={[styles.evaluationButton, !isFinished && styles.disabledButton]}
+            onPress={() => openEvaluationPanel(intern)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={!isFinished}
+          >
+            <MaterialIcons name="assessment" size={18} color={isFinished ? "#4CAF50" : "#9E9E9E"} />
+          </TouchableOpacity>
+          
+          {/* Detail Arrow Button */}
           <TouchableOpacity
             style={styles.detailArrowButton}
             onPress={() => openDetailPanel(intern)}
@@ -2479,8 +2709,32 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
       return `${h}h ${m}m`;
     };
 
+    const isSelected = selectedInternIds.has(intern.id);
+    const isFinished = !!intern.finishedAt;
+
     return (
-      <View style={[styles.tableRow, isDesktop && styles.desktopTableRow]}>
+      <View style={[styles.tableRow, isDesktop && styles.desktopTableRow, isFinished && styles.finishedInternRow]}>
+        {/* Checkbox Column */}
+        <View style={[styles.cell, { flex: 0.5 }]}>
+          {isFinished ? (
+            <View style={styles.checkboxContainer}>
+              <MaterialIcons 
+                name="check-box" 
+                size={isDesktop ? 24 : 20} 
+                color="#9E9E9E" 
+              />
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => toggleInternSelection(intern.id)} style={styles.checkboxContainer}>
+              <MaterialIcons 
+                name={isSelected ? 'check-box' : 'check-box-outline-blank'} 
+                size={isDesktop ? 24 : 20} 
+                color={isSelected ? '#4CAF50' : '#666'} 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+        
         {/* Row Number Column */}
         <View style={[styles.cell, { flex: 0.6 }]}>
           <Text style={[styles.rowNumber, isDesktop && styles.desktopRowNumber]}>{index + 1}</Text>
@@ -2504,9 +2758,17 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               )}
             </View>
             <View style={styles.internDetails}>
+              <View style={styles.internNameRow}>
               <Text style={[styles.internName, isDesktop && styles.desktopInternName]}>
                 {intern.first_name} {intern.last_name}
               </Text>
+                {isFinished && (
+                  <View style={styles.finishedBadge}>
+                    <MaterialIcons name="check-circle" size={14} color="#FFD700" />
+                    <Text style={styles.finishedBadgeText}>Completed</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -2551,152 +2813,73 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
           <Text style={[styles.remainingText, isDesktop && styles.desktopRemainingText]}>
             {formatHours(intern.remainingHours || 0)}
           </Text>
+          {/* Verification Status Badge */}
+          {intern.verification_status && (
+            <View style={[
+              styles.verificationBadge,
+              intern.verification_status === 'accepted' && styles.verificationBadgeAccepted,
+              intern.verification_status === 'denied' && styles.verificationBadgeDenied,
+              intern.verification_status === 'pending' && styles.verificationBadgePending
+            ]}>
+              <MaterialIcons 
+                name={
+                  intern.verification_status === 'accepted' ? 'check-circle' :
+                  intern.verification_status === 'denied' ? 'cancel' : 'schedule'
+                } 
+                size={12} 
+                color={
+                  intern.verification_status === 'accepted' ? '#4CAF50' :
+                  intern.verification_status === 'denied' ? '#EA4335' : '#F56E0F'
+                } 
+              />
+              <Text style={[
+                styles.verificationBadgeText,
+                intern.verification_status === 'accepted' && styles.verificationBadgeTextAccepted,
+                intern.verification_status === 'denied' && styles.verificationBadgeTextDenied,
+                intern.verification_status === 'pending' && styles.verificationBadgeTextPending
+              ]}>
+                {intern.verification_status === 'accepted' ? 'Accepted' :
+                 intern.verification_status === 'denied' ? 'Denied' : 'Pending'}
+          </Text>
+            </View>
+          )}
         </View>
         
         {/* Actions Column */}
-        <View style={[styles.cell, { flex: 1.2 }]}>
-          <View style={styles.actionButtonsContainer}>
+        <View style={[styles.cell, { flex: 1.2 }]} pointerEvents="box-none">
+          <View style={styles.actionButtonsContainer} pointerEvents="box-none">
             
-            {/* Show Work Done status if both sessions are completed */}
-            {isFullyCompleted && (
-              <View style={styles.workDoneContainer}>
-                <View style={styles.workDoneBadge}>
-                  <Text style={styles.workDoneText}>Work Done</Text>
-                </View>
-              </View>
-            )}
+            {/* Verify Attendance Button - Always visible for verification */}
+            <TouchableOpacity
+              style={styles.verifyButton}
+              onPress={() => {
+                console.log('🔍 Verify button clicked for intern:', intern.first_name, intern.last_name);
+                openVerificationPanel(intern);
+              }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={false}
+            >
+              <MaterialIcons name="verified-user" size={18} color="#F56E0F" />
+            </TouchableOpacity>
             
-            {/* Show message when selected date is not today */}
-            {!isSelectedDateToday() && (
-              <View style={styles.dateRestrictionContainer}>
-                <View style={styles.dateRestrictionBadge}>
-                  <Text style={styles.dateRestrictionText}>View Only</Text>
-                </View>
-              </View>
-            )}
-            
-            {/* Show status buttons only if not fully completed and selected date is today */}
-            {!isFullyCompleted && isSelectedDateToday() && (
-              <View style={styles.buttonsGrid}>
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.attendanceActionButton, 
-                      styles.presentActionButton,
-                      isButtonDisabled(intern, 'present') && styles.disabledButton
-                    ]}
-                    onPress={() => {
-                      if (isButtonDisabled(intern, 'present')) {
-                        handleDisabledButtonPress(intern, 'present');
-                      } else {
-                        handleAttendanceToggle(intern.id, 'present');
-                      }
-                    }}
-                  >
-                    <Text style={styles.presentButtonText}>Present</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.attendanceActionButton, 
-                      styles.lateActionButton,
-                      isButtonDisabled(intern, 'late') && styles.disabledButton
-                    ]}
-                    onPress={() => {
-                      if (isButtonDisabled(intern, 'late')) {
-                        handleDisabledButtonPress(intern, 'late');
-                      } else {
-                        handleAttendanceToggle(intern.id, 'late');
-                      }
-                    }}
-                  >
-                    <Text style={styles.lateButtonText}>Late</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.attendanceActionButton, 
-                      styles.absentActionButton,
-                      isButtonDisabled(intern, 'absent') && styles.disabledButton
-                    ]}
-                    onPress={() => {
-                      if (isButtonDisabled(intern, 'absent')) {
-                        handleDisabledButtonPress(intern, 'absent');
-                      } else {
-                        handleAttendanceToggle(intern.id, 'absent');
-                      }
-                    }}
-                  >
-                    <Text style={styles.absentButtonText}>Absent</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.attendanceActionButton, 
-                      styles.leaveActionButton,
-                      isButtonDisabled(intern, 'leave') && styles.disabledButton
-                    ]}
-                    onPress={() => {
-                      if (isButtonDisabled(intern, 'leave')) {
-                        handleDisabledButtonPress(intern, 'leave');
-                      } else {
-                        handleAttendanceToggle(intern.id, 'leave');
-                      }
-                    }}
-                  >
-                    <Text style={styles.leaveButtonText}>Leave</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-            
-            {/* Show Time Out button if there's a time in but no time out and work not completed */}
-            {hasAnyTimeIn && !isFullyCompleted && !isPMAbsent && !isAMAbsent && (
-              <View style={styles.timeOutContainer}>
-                <TouchableOpacity
-                  style={[styles.attendanceActionButton, styles.timeOutActionButton]}
-                  onPress={() => handleTimeOut(intern.id)}
-                >
-                  <Text style={styles.timeOutButtonText}>Time Out</Text>
-                </TouchableOpacity>
-                
-                {/* Detail View Arrow - positioned below Time Out button */}
-                <TouchableOpacity
-                  style={styles.detailArrowButton}
-                  onPress={() => openDetailPanel(intern)}
-                >
-                  <MaterialIcons name="arrow-back" size={16} color="#F56E0F" />
-                </TouchableOpacity>
-              </View>
+            {/* Evaluation Button - Only visible if intern has finished */}
+            {isFinished && (
+              <TouchableOpacity
+                style={styles.evaluationButton}
+                onPress={() => openEvaluationPanel(intern)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="assessment" size={18} color="#4CAF50" />
+              </TouchableOpacity>
             )}
             
             {/* Show work completed message if work is done */}
             {isFullyCompleted && (
-              <View style={styles.workCompletedCard}>
+              <View style={styles.workCompletedCard} pointerEvents="none">
                 <MaterialIcons name="check-circle" size={14} color="#4CAF50" />
                 <Text style={styles.workCompletedTextSmall}>Work Done! 🎉</Text>
-              </View>
-            )}
-            
-            {/* Show final status if fully completed but work not marked as completed */}
-            {isFullyCompleted && (
-              <View style={[
-                styles.finalStatusBadge, 
-                { 
-                  backgroundColor: intern.currentAttendanceStatus === 'present' ? '#e8f5e8' : 
-                                 intern.currentAttendanceStatus === 'late' ? '#fff8e1' : '#f5f5f5',
-                  borderColor: intern.currentAttendanceStatus === 'present' ? '#34a853' : 
-                             intern.currentAttendanceStatus === 'late' ? '#fbbc04' : '#6c757d'
-                }
-              ]}>
-                <Text style={[
-                  styles.finalStatusText,
-                  {
-                    color: intern.currentAttendanceStatus === 'present' ? '#34a853' : 
-                           intern.currentAttendanceStatus === 'late' ? '#f57c00' : '#6c757d'
-                  }
-                ]}>
-                  {intern.currentAttendanceStatus === 'late' ? 'Late' : 'Present'}
-                </Text>
               </View>
             )}
             
@@ -2834,6 +3017,37 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
               >
                 <MaterialIcons name="search" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#F56E0F" />
               </TouchableOpacity>
+
+              {/* Finish Selected Internships Button */}
+              {selectedInternIds.size > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.finishSelectedButton,
+                    isSmallMobile && styles.smallMobileFinishSelectedButton,
+                    isTablet && styles.tabletFinishSelectedButton,
+                    isDesktop && styles.desktopFinishSelectedButton,
+                    isFinishingInternships && styles.disabledButton
+                  ]}
+                  onPress={handleFinishInternships}
+                  disabled={isFinishingInternships}
+                >
+                  {isFinishingInternships ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="check-circle" size={isSmallMobile ? 16 : isTablet ? 18 : isDesktop ? 20 : 20} color="#fff" />
+                      <Text style={[
+                        styles.finishSelectedButtonText,
+                        isSmallMobile && styles.smallMobileFinishSelectedButtonText,
+                        isTablet && styles.tabletFinishSelectedButtonText,
+                        isDesktop && styles.desktopFinishSelectedButtonText
+                      ]}>
+                        Finish ({selectedInternIds.size})
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
 
               {/* Animated Search Input */}
               <Animated.View
@@ -3173,89 +3387,11 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 {(selectedIntern.currentAttendanceStatus === 'present' || selectedIntern.currentAttendanceStatus === 'late') && (
                   <View style={styles.timeControlsSection}>
                     <Text style={styles.actionsTitle}>Time Controls</Text>
-                    <View style={styles.timeControlButtons}>
-                      {(selectedIntern.amTimeIn && !selectedIntern.amTimeOut) || (selectedIntern.pmTimeIn && !selectedIntern.pmTimeOut) ? (
-                        <TouchableOpacity
-                          style={[styles.timeControlButton, styles.timeOutControlButton]}
-                          onPress={() => {
-                            handleTimeOut(selectedIntern.id);
-                            setShowInternModal(false);
-                          }}
-                        >
-                          <MaterialIcons name="logout" size={20} color="#fff" />
-                          <Text style={styles.timeControlButtonText}>Check Out</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.timeControlButton, styles.timeInControlButton]}
-                          onPress={() => {
-                            handleAttendanceToggle(selectedIntern.id, 'present');
-                            setShowInternModal(false);
-                          }}
-                        >
-                          <MaterialIcons name="login" size={20} color="#fff" />
-                          <Text style={styles.timeControlButtonText}>Check In Again</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    {/* Time control buttons removed - Students now submit their own attendance */}
                   </View>
                 )}
 
-                <View style={styles.attendanceActions}>
-                  <Text style={styles.actionsTitle}>Mark Attendance</Text>
-                  <View style={styles.attendanceButtons}>
-                    <TouchableOpacity
-                      style={[styles.attendanceButton, styles.presentActionButton]}
-                      onPress={() => {
-                        handleAttendanceToggle(selectedIntern.id, 'present');
-                        setShowInternModal(false);
-                      }}
-                    >
-                      <MaterialIcons name="check" size={20} color="#fff" />
-                      <Text style={styles.attendanceButtonText}>Present</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.attendanceButton, styles.lateActionButton]}
-                      onPress={() => {
-                        handleAttendanceToggle(selectedIntern.id, 'late');
-                        setShowInternModal(false);
-                      }}
-                    >
-                      <MaterialIcons name="schedule" size={20} color="#fff" />
-                      <Text style={styles.attendanceButtonText}>Late</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.attendanceButton, styles.absentActionButton]}
-                      onPress={() => {
-                        handleAttendanceToggle(selectedIntern.id, 'absent');
-                        setShowInternModal(false);
-                      }}
-                    >
-                      <MaterialIcons name="close" size={20} color="#fff" />
-                      <Text style={styles.attendanceButtonText}>Absent</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.attendanceButton, styles.leaveActionButton]}
-                      onPress={() => {
-                        handleAttendanceToggle(selectedIntern.id, 'leave');
-                        setShowInternModal(false);
-                      }}
-                    >
-                      <MaterialIcons name="event-busy" size={20} color="#fff" />
-                      <Text style={styles.attendanceButtonText}>Leave</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.attendanceButton, styles.sickButton]}
-                      onPress={() => {
-                        handleAttendanceToggle(selectedIntern.id, 'sick');
-                        setShowInternModal(false);
-                      }}
-                    >
-                      <MaterialIcons name="sick" size={20} color="#fff" />
-                      <Text style={styles.attendanceButtonText}>Sick</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                {/* Attendance buttons removed - Students now submit their own attendance */}
               </ScrollView>
             )}
           </View>
@@ -3361,6 +3497,57 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
             isDesktop={isDesktop}
             companyId={companyId}
             currentUser={currentUser}
+          />
+        </Animated.View>
+      )}
+
+      {/* Attendance Verification Panel */}
+      {showVerificationPanel && selectedAttendanceRecord && (
+        <Animated.View 
+          style={[
+            styles.detailPanelContainer,
+            {
+              transform: [{ translateX: verificationPanelSlideAnim }]
+            }
+          ]}
+        >
+          <AttendanceVerificationPanel
+            attendanceRecord={selectedAttendanceRecord}
+            attendanceRecords={allAttendanceRecords}
+            internName={selectedInternForVerification 
+              ? `${selectedInternForVerification.first_name} ${selectedInternForVerification.last_name}`
+              : 'Unknown Intern'}
+            onClose={closeVerificationPanel}
+            onVerificationComplete={handleVerificationComplete}
+            isMobile={isMobile}
+            isTablet={isTablet}
+            isDesktop={isDesktop}
+            companyId={companyId}
+            currentUser={currentUser}
+          />
+        </Animated.View>
+      )}
+
+      {/* Supervisor Evaluation Panel */}
+      {showEvaluationPanel && selectedInternForEvaluation && (
+        <Animated.View 
+          style={[
+            styles.detailPanelContainer,
+            {
+              transform: [{ translateX: evaluationPanelSlideAnim }]
+            }
+          ]}
+        >
+          <SupervisorEvaluationPanel
+            selectedIntern={selectedInternForEvaluation}
+            onClose={closeEvaluationPanel}
+            isMobile={isMobile}
+            isTablet={isTablet}
+            isDesktop={isDesktop}
+            companyId={companyId}
+            currentUser={currentUser}
+            companyProfile={companyProfile}
+            slideAnim={evaluationPanelSlideAnim}
           />
         </Animated.View>
       )}
@@ -3637,6 +3824,117 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 onPress={handleSuccessModalClose}
               >
                 <Text style={styles.successModalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Finish Validation Modal */}
+      <Modal
+        visible={showFinishValidationModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowFinishValidationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.validationModal}>
+            <View style={styles.validationModalHeader}>
+              <MaterialIcons name="warning" size={32} color="#F56E0F" />
+              <Text style={styles.validationModalTitle}>Cannot Finish Internships</Text>
+            </View>
+            
+            <ScrollView style={styles.validationModalContent}>
+              <Text style={styles.validationModalMessage}>
+                Please verify all attendance records and ensure hours are complete before finishing internships.
+              </Text>
+              
+              {validationErrors.unverifiedAttendance.length > 0 && (
+                <View style={styles.validationSection}>
+                  <Text style={styles.validationSectionTitle}>
+                    Unverified Attendance Records:
+                  </Text>
+                  {validationErrors.unverifiedAttendance.map((item, index) => (
+                    <View key={index} style={styles.validationItem}>
+                      <Text style={styles.validationItemName}>• {item.name}</Text>
+                      {item.issues.map((issue, issueIndex) => (
+                        <Text key={issueIndex} style={styles.validationItemIssue}>
+                          {issue}
+                        </Text>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {validationErrors.incompleteHours.length > 0 && (
+                <View style={styles.validationSection}>
+                  <Text style={styles.validationSectionTitle}>
+                    Incomplete Hours:
+                  </Text>
+                  {validationErrors.incompleteHours.map((item, index) => (
+                    <View key={index} style={styles.validationItem}>
+                      <Text style={styles.validationItemName}>
+                        • {item.name}: {item.remainingHours.toFixed(1)} hours remaining
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+            
+            <View style={styles.validationModalActions}>
+              <TouchableOpacity
+                style={styles.validationModalButton}
+                onPress={() => setShowFinishValidationModal(false)}
+              >
+                <Text style={styles.validationModalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Finish Confirmation Modal */}
+      <Modal
+        visible={showFinishConfirmModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowFinishConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModal}>
+            <View style={styles.confirmModalHeader}>
+              <MaterialIcons name="check-circle" size={32} color="#4CAF50" />
+              <Text style={styles.confirmModalTitle}>Finish Internships</Text>
+            </View>
+            
+            <View style={styles.confirmModalContent}>
+              <Text style={styles.confirmModalMessage}>
+                Are you sure you want to finish internships for {selectedInternIds.size} selected intern(s)?
+              </Text>
+              <Text style={styles.confirmModalSubtext}>
+                This action will mark the internships as completed. Students will be notified.
+              </Text>
+            </View>
+            
+            <View style={styles.confirmModalActions}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmModalCancelButton]}
+                onPress={() => setShowFinishConfirmModal(false)}
+              >
+                <Text style={styles.confirmModalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmModalConfirmButton]}
+                onPress={handleConfirmFinishInternships}
+                disabled={isFinishingInternships}
+              >
+                {isFinishingInternships ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.confirmModalConfirmButtonText}>Confirm</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -4705,6 +5003,7 @@ const styles = StyleSheet.create({
   cell: {
     justifyContent: 'center',
     paddingHorizontal: 8,
+    overflow: 'visible',
   },
   internInfo: {
     flexDirection: 'row',
@@ -4864,6 +5163,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     minHeight: 40,
     zIndex: 5,
+    position: 'relative',
   },
   workDoneContainer: {
     flex: 1,
@@ -4888,9 +5188,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   dateRestrictionContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
   },
   dateRestrictionBadge: {
     backgroundColor: '#6c757d',
@@ -4938,6 +5238,73 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+  },
+  evaluationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  verifyButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#F56E0F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+    zIndex: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    position: 'relative',
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 4,
+    gap: 4,
+  },
+  verificationBadgeAccepted: {
+    backgroundColor: '#E8F5E8',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  verificationBadgeDenied: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#EA4335',
+  },
+  verificationBadgePending: {
+    backgroundColor: '#FFF3E0',
+    borderWidth: 1,
+    borderColor: '#F56E0F',
+  },
+  verificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  verificationBadgeTextAccepted: {
+    color: '#4CAF50',
+  },
+  verificationBadgeTextDenied: {
+    color: '#EA4335',
+  },
+  verificationBadgeTextPending: {
+    color: '#F56E0F',
   },
   attendanceActionButton: {
     paddingHorizontal: '2.5%',
@@ -5332,7 +5699,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: width,
     height: height,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'transparent', // Transparent so only the panel has background
     zIndex: 1000,
   },
   dayCard: {
@@ -5719,6 +6086,260 @@ const styles = StyleSheet.create({
   },
   desktopSelectedDateText: {
     fontSize: 14,
+  },
+  // Checkbox styles
+  checkboxContainer: {
+    padding: 4,
+  },
+  mobileCheckboxContainer: {
+    padding: 4,
+    marginRight: 8,
+  },
+  tabletCheckboxContainer: {
+    padding: 4,
+    marginRight: 10,
+  },
+  // Finish Selected Button styles
+  finishSelectedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  smallMobileFinishSelectedButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tabletFinishSelectedButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  desktopFinishSelectedButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  finishSelectedButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  smallMobileFinishSelectedButtonText: {
+    fontSize: 12,
+  },
+  tabletFinishSelectedButtonText: {
+    fontSize: 13,
+  },
+  desktopFinishSelectedButtonText: {
+    fontSize: 15,
+  },
+  // Validation Modal styles
+  validationModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    margin: 20,
+    maxWidth: 500,
+    maxHeight: '80%',
+    alignSelf: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  validationModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  validationModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#F56E0F',
+  },
+  validationModalContent: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  validationModalMessage: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  validationSection: {
+    marginBottom: 16,
+  },
+  validationSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E3A5F',
+    marginBottom: 8,
+  },
+  validationItem: {
+    marginBottom: 12,
+    paddingLeft: 8,
+  },
+  validationItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  validationItemIssue: {
+    fontSize: 13,
+    color: '#666',
+    paddingLeft: 12,
+    marginBottom: 2,
+  },
+  validationModalActions: {
+    padding: 20,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  validationModalButton: {
+    backgroundColor: '#F56E0F',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  validationModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Confirm Modal styles
+  confirmModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    margin: 20,
+    maxWidth: 400,
+    alignSelf: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  confirmModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  confirmModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  confirmModalContent: {
+    padding: 20,
+  },
+  confirmModalMessage: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  confirmModalSubtext: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    paddingTop: 10,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  confirmModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  confirmModalCancelButton: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  confirmModalCancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmModalConfirmButton: {
+    backgroundColor: '#4CAF50',
+  },
+  confirmModalConfirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Finished Internship Indicator Styles
+  finishedInternRow: {
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  finishedInternCard: {
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  finishedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#45a049',
+  },
+  finishedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.3,
+  },
+  internNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  mobileInternNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  tabletInternNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
 });
 

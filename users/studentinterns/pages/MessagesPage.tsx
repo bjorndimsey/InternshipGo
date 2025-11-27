@@ -98,20 +98,20 @@ const SearchInput = memo(({
 }) => {
   return (
     <View style={styles.searchInputContainer}>
-      <MaterialIcons name="search" size={20} color="#F4D03F" style={styles.searchIcon} />
+      <MaterialIcons name="search" size={20} color="#F56E0F" style={styles.searchIcon} />
       <TextInput
         style={styles.searchInput}
         placeholder={placeholder}
         value={value}
         onChangeText={onChangeText}
-        placeholderTextColor="#999"
+        placeholderTextColor="#878787"
         autoCorrect={false}
         autoCapitalize="none"
         returnKeyType="search"
-        selectionColor="#1E3A5F"
+        selectionColor="#4285f4"
       />
       {isLoading ? (
-        <ActivityIndicator size="small" color="#1E3A5F" style={styles.searchButton} />
+        <ActivityIndicator size="small" color="#4285f4" style={styles.searchButton} />
       ) : value.length > 0 ? (
         <TouchableOpacity onPress={onClear} style={styles.searchButton}>
           <MaterialIcons name="clear" size={20} color="#999" />
@@ -136,7 +136,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
   if (!currentUser) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading user data...</Text>
       </View>
     );
@@ -1325,7 +1325,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading messages...</Text>
       </View>
     );
@@ -1352,7 +1352,7 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
               style={styles.newGroupButton}
               onPress={() => setShowGroupModal(true)}
             >
-              <MaterialIcons name="group-add" size={24} color="#F4D03F" />
+              <MaterialIcons name="group-add" size={24} color="#FBFBFB" />
             </TouchableOpacity>
           </Animated.View>
 
@@ -2074,46 +2074,47 @@ export default function MessagesPage({ currentUser, onUnreadCountChange }: Messa
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.83)', // Semi-transparent white
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   conversationsContainer: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark secondary
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
   },
   headerGradient: {
-    position: 'relative',
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 8,
     fontFamily: 'System',
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   filterContainer: {
@@ -2147,19 +2148,21 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   conversationItem: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 6,
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   selectedConversation: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     elevation: 8,
     shadowOpacity: 0.2,
   },
@@ -2208,16 +2211,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1,
     fontFamily: 'System',
+    letterSpacing: -0.3,
   },
   priorityDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     marginLeft: 8,
+    backgroundColor: '#34a853',
   },
   lastMessage: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
     opacity: 0.9,
   },
@@ -2231,13 +2236,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   unreadBadge: {
-    backgroundColor: '#E8A598', // Soft coral
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 12,
     minWidth: 24,
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
+    elevation: 2,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   unreadCount: {
     fontSize: 12,
@@ -2246,18 +2256,18 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#151419', // Dark background
   },
   messagesHeader: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark background
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
   },
   backButton: {
     marginRight: 16,
@@ -2268,6 +2278,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     fontFamily: 'System',
+    letterSpacing: -0.3,
   },
   moreButton: {
     padding: 4,
@@ -2318,66 +2329,65 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   messageText: {
-    fontSize: 15,
-    color: '#02050a',
-    lineHeight: 22,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    fontWeight: '400',
+    fontSize: 14,
+    color: '#FBFBFB', // Light text
+    lineHeight: 20,
+    backgroundColor: '#2A2A2E', // Dark message background
+    padding: 12,
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   messageInputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: 20,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark background
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
   },
   messageInput: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    marginRight: 16,
+    marginRight: 12,
     maxHeight: 100,
     fontSize: 15,
-    color: '#02050a',
-    backgroundColor: '#fff',
+    color: '#FBFBFB', // Light text
+    backgroundColor: '#151419', // Dark input background
     fontWeight: '500',
   },
   sendButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: 24,
     width: 48,
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
   },
   sendButtonDisabled: {
     backgroundColor: '#ccc',
   },
   newGroupButton: {
-    padding: 16,
+    padding: 12,
     borderRadius: 24,
-    backgroundColor: '#2D5A3D', // Forest green
-    shadowColor: '#2D5A3D',
+    backgroundColor: '#F56E0F', // Primary orange
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
   },
   searchContainer: {
     position: 'relative',
@@ -2385,15 +2395,15 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E', // Dark input background
     borderRadius: 16,
     margin: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -2404,7 +2414,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '600',
   },
   searchButton: {
@@ -2412,12 +2422,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   searchResultsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderColor: '#F56E0F', // Primary orange
     elevation: 10,
-    shadowColor: '#F4D03F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2431,9 +2441,9 @@ const styles = StyleSheet.create({
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchResultAvatar: {
     width: 40,
@@ -2445,14 +2455,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchResultName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontFamily: 'System',
   },
   searchResultEmail: {
     fontSize: 15,
-    color: '#666',
+    color: '#878787', // Muted gray
     marginTop: 4,
     fontWeight: '500',
   },
@@ -2537,16 +2547,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow
+    borderWidth: 1,
+    borderColor: '#4285f4',
     borderRadius: 8,
     marginBottom: 16,
   },
   addMembersText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#1E3A5F', // Deep navy blue
-    fontWeight: '600',
+    color: '#4285f4',
+    fontWeight: '500',
   },
   selectedMembersContainer: {
     marginBottom: 20,
@@ -2602,7 +2612,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginLeft: 8,
     borderRadius: 8,
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#4285f4',
     alignItems: 'center',
   },
   createButtonDisabled: {
@@ -2862,16 +2872,18 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonConversationItem: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 6,
     borderRadius: 16,
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     opacity: 0.7,
   },
   skeletonConversationHeader: {
@@ -2885,7 +2897,7 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: 50,
     height: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 25,
   },
   skeletonConversationInfo: {
@@ -2894,14 +2906,14 @@ const styles = StyleSheet.create({
   skeletonParticipantName: {
     width: '60%',
     height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
     marginBottom: 8,
   },
   skeletonLastMessage: {
     width: '80%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
   },
   skeletonConversationMeta: {
@@ -2910,14 +2922,14 @@ const styles = StyleSheet.create({
   skeletonTimestamp: {
     width: 40,
     height: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
   },
   skeletonUnreadBadge: {
     width: 24,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
   },
 });

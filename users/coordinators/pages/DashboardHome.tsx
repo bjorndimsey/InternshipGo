@@ -66,11 +66,9 @@ interface Company {
 }
 
 interface InternStats {
-  activeInterns: number;
-  activeCompanies: number;
+  numberOfInterns: number;
+  totalPartnerCompanies: number;
   currentSchoolYear: string;
-  totalApplications: number;
-  pendingApprovals: number;
 }
 
 interface UserInfo {
@@ -88,11 +86,9 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
   const [stats, setStats] = useState<InternStats>({
-    activeInterns: 0,
-    activeCompanies: 0,
+    numberOfInterns: 0,
+    totalPartnerCompanies: 0,
     currentSchoolYear: '2024-2025',
-    totalApplications: 0,
-    pendingApprovals: 0,
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,12 +105,11 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   const [successMessage, setSuccessMessage] = useState('');
   const [showYearSelector, setShowYearSelector] = useState(false);
   const [animatedStats, setAnimatedStats] = useState({
-    activeInterns: 0,
-    activeCompanies: 0,
-    totalApplications: 0,
-    pendingApprovals: 0,
+    numberOfInterns: 0,
+    totalPartnerCompanies: 0,
   });
   const [statsAnimation] = useState(new Animated.Value(0));
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   // Available school years
   const schoolYears = [
@@ -235,47 +230,119 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       setLoading(true);
       
       console.log('🔍 Fetching pending companies from API...');
-      const response = await apiService.getCompanies();
       
-      if (response.success && response.companies && Array.isArray(response.companies)) {
-        console.log('✅ Companies fetched successfully:', response.companies.length);
-        console.log('📊 Sample company data:', response.companies[0]);
+      // Dashboard should show companies where current coordinator hasn't uploaded MOA yet
+      if (!currentUser) {
+        console.error('❌ No currentUser found');
+        setCompanies([]);
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch data in parallel: companies, interns, and partner companies
+      const [companiesResponse, internsResponse, partnerCompaniesResponse] = await Promise.all([
+        apiService.getAllCompanies(),
+        apiService.getCoordinatorInterns(currentUser.id),
+        apiService.getCompanies(currentUser.id) // Get companies where current coordinator uploaded MOA
+      ]);
+      
+      // Process companies for display
+      if (companiesResponse.success && companiesResponse.companies && Array.isArray(companiesResponse.companies)) {
+        console.log('✅ Companies fetched successfully:', companiesResponse.companies.length);
         
-        // Filter to only get pending companies (not approved)
-        const pendingCompanies = response.companies.filter(company => 
-          company.partnershipStatus === 'pending' || 
-          !company.partnershipStatus || // Include companies without partnership status set
-          company.partnershipStatus === 'rejected' // Include rejected companies for review
-        );
+        // Filter to show companies where current coordinator hasn't uploaded MOA yet
+        const companiesWithoutMOA = companiesResponse.companies.filter(company => {
+          const moaUploadedBy = company.moa_uploaded_by || company.moaUploadedBy;
+          const currentUserIdNum = parseInt(currentUser.id);
+          
+          const hasNoMOA = !moaUploadedBy;
+          const moaUploadedByOther = moaUploadedBy && moaUploadedBy !== currentUserIdNum;
+          
+          return hasNoMOA || moaUploadedByOther;
+        });
         
-        console.log('📋 Pending companies found:', pendingCompanies.length);
-        console.log('📊 Pending companies sample:', pendingCompanies[0]);
+        console.log('📋 Companies without MOA from current coordinator:', companiesWithoutMOA.length);
         
-        // Process pending companies with matching algorithm
-        const processedCompanies = await processCompaniesWithMatching(pendingCompanies);
+        // Process companies with matching algorithm
+        const processedCompanies = await processCompaniesWithMatching(companiesWithoutMOA);
+        
         setCompanies(processedCompanies);
         
-        // Calculate stats from real data - only count pending companies
-        const mockStats: InternStats = {
-          activeInterns: 0, // This would need to be calculated from internships table
-          activeCompanies: processedCompanies.length, // Shows pending companies count
+        // Get number of interns
+        let numberOfInterns = 0;
+        if (internsResponse.success && internsResponse.interns && Array.isArray(internsResponse.interns)) {
+          numberOfInterns = internsResponse.interns.length;
+          console.log('✅ Interns fetched successfully:', numberOfInterns);
+        } else {
+          console.log('⚠️ Failed to fetch interns or no interns found');
+        }
+        
+        // Get total partner companies (where both coordinator and company approved)
+        let totalPartnerCompanies = 0;
+        if (partnerCompaniesResponse.success && partnerCompaniesResponse.companies && Array.isArray(partnerCompaniesResponse.companies)) {
+          totalPartnerCompanies = partnerCompaniesResponse.companies.filter((company: any) => {
+            const coordinatorApproved = company.coordinator_approved === true || 
+                                        company.coordinator_approved === 1 || 
+                                        company.coordinator_approved === 'true' ||
+                                        company.coordinator_approved === '1';
+            const companyApproved = company.company_approved === true || 
+                                    company.company_approved === 1 || 
+                                    company.company_approved === 'true' ||
+                                    company.company_approved === '1';
+            return coordinatorApproved && companyApproved;
+          }).length;
+          console.log('✅ Partner companies count:', totalPartnerCompanies);
+        } else {
+          console.log('⚠️ Failed to fetch partner companies or no companies found');
+        }
+        
+        // Calculate stats
+        const newStats: InternStats = {
+          numberOfInterns,
+          totalPartnerCompanies,
           currentSchoolYear: '2024-2025',
-          totalApplications: 0, // This would need to be calculated from applications table
-          pendingApprovals: processedCompanies.length, // Shows pending approvals count
         };
-        setStats(mockStats);
+        setStats(newStats);
         
         // Animate stats counting
-        animateStats(mockStats);
+        animateStats(newStats);
       } else {
-        console.error('❌ Failed to fetch companies:', response.message);
-        setCompanies([]); // Set empty array as fallback
-        Alert.alert('Error', response.message || 'Failed to fetch companies');
+        console.error('❌ Failed to fetch companies:', companiesResponse.message);
+        setCompanies([]);
+        
+        // Still try to get stats even if companies fetch failed
+        let numberOfInterns = 0;
+        if (internsResponse.success && internsResponse.interns && Array.isArray(internsResponse.interns)) {
+          numberOfInterns = internsResponse.interns.length;
+        }
+        
+        let totalPartnerCompanies = 0;
+        if (partnerCompaniesResponse.success && partnerCompaniesResponse.companies && Array.isArray(partnerCompaniesResponse.companies)) {
+          totalPartnerCompanies = partnerCompaniesResponse.companies.filter((company: any) => {
+            const coordinatorApproved = company.coordinator_approved === true || 
+                                        company.coordinator_approved === 1 || 
+                                        company.coordinator_approved === 'true' ||
+                                        company.coordinator_approved === '1';
+            const companyApproved = company.company_approved === true || 
+                                    company.company_approved === 1 || 
+                                    company.company_approved === 'true' ||
+                                    company.company_approved === '1';
+            return coordinatorApproved && companyApproved;
+          }).length;
+        }
+        
+        const newStats: InternStats = {
+          numberOfInterns,
+          totalPartnerCompanies,
+          currentSchoolYear: '2024-2025',
+        };
+        setStats(newStats);
+        animateStats(newStats);
       }
     } catch (error) {
       console.error('❌ Error fetching data:', error);
-      setCompanies([]); // Set empty array as fallback
-      Alert.alert('Error', 'Failed to fetch companies. Please try again.');
+      setCompanies([]);
+      Alert.alert('Error', 'Failed to fetch data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -710,6 +777,18 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
     setShowYearSelector(false);
   };
 
+  const toggleCardExpansion = (companyId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  };
+
   const animateStats = (targetStats: InternStats) => {
     const duration = 2000; // 2 seconds
     const steps = 60; // 60 steps for smooth animation
@@ -722,10 +801,8 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
         const progress = currentStep / steps;
         
         setAnimatedStats({
-          activeInterns: Math.floor(targetStats.activeInterns * progress),
-          activeCompanies: Math.floor(targetStats.activeCompanies * progress),
-          totalApplications: Math.floor(targetStats.totalApplications * progress),
-          pendingApprovals: Math.floor(targetStats.pendingApprovals * progress),
+          numberOfInterns: Math.floor(targetStats.numberOfInterns * progress),
+          totalPartnerCompanies: Math.floor(targetStats.totalPartnerCompanies * progress),
         });
         
         currentStep++;
@@ -802,57 +879,59 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
     }
   };
 
-  const CompanyCard = ({ company }: { company: Company }) => (
-    <View style={styles.companyCard}>
-      <View style={styles.companyHeader}>
-        <View style={styles.profileContainer}>
-          {company.profilePicture ? (
-            <Image source={{ uri: company.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>{company.name.charAt(0)}</Text>
+  const CompanyCard = ({ company }: { company: Company }) => {
+    const isExpanded = expandedCards.has(company.id);
+    
+    return (
+      <View style={styles.companyCard}>
+        <View style={styles.companyHeader}>
+          <View style={styles.profileContainer}>
+            {company.profilePicture ? (
+              <Image source={{ uri: company.profilePicture }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.profilePlaceholder}>
+                <Text style={styles.profileText}>{company.name.charAt(0)}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.companyInfo}>
+            <Text style={styles.companyName}>{company.name}</Text>
+            <Text style={styles.companyIndustry}>{company.industry}</Text>
+            <View style={styles.slotsContainerHeader}>
+              <Text style={styles.slotLabelHeader}>Available Slots: </Text>
+              <Text style={styles.slotValueHeader}>{company.availableSlots}/{company.totalSlots}</Text>
             </View>
-          )}
-        </View>
-        <View style={styles.companyInfo}>
-          <Text style={styles.companyName}>{company.name}</Text>
-          <Text style={styles.companyIndustry}>{company.industry}</Text>
-          <Text style={styles.schoolYear}>School Year: {company.schoolYear}</Text>
-          {company.qualifications && (
-            <Text style={styles.qualificationsText}>Qualifications: {company.qualifications}</Text>
-          )}
-          {company.contactPerson && (
-            <Text style={styles.contactText}>Contact: {company.contactPerson}</Text>
-          )}
-        </View>
-        <View style={styles.statusContainer}>
-          <View style={[styles.partnerBadge, { backgroundColor: getPartnerStatusColor(company.partnerStatus) }]}>
-            <Text style={styles.partnerText}>{getPartnerStatusText(company.partnerStatus)}</Text>
+          </View>
+          <View style={styles.statusContainer}>
+            <View style={[styles.partnerBadge, { backgroundColor: getPartnerStatusColor(company.partnerStatus) }]}>
+              <Text style={styles.partnerText}>{getPartnerStatusText(company.partnerStatus)}</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Matching Score and Distance Display */}
+        {/* Matching Score and Distance Display - Always visible */}
       {(company.matchingScore !== undefined || company.distanceText) && (
         <View style={styles.matchingContainer}>
-          <View style={styles.matchingScoreContainer}>
+          {/* Top Level: Match and Distance side by side */}
+          <View style={styles.matchingTopRow}>
             {company.matchingScore !== undefined && (
-              <>
+              <View style={styles.matchingScoreContainer}>
                 <MaterialIcons name="trending-up" size={16} color="#34a853" />
                 <Text style={styles.matchingScoreText}>
                   {Math.round(company.matchingScore * 100)}% Match
                 </Text>
-              </>
+              </View>
             )}
             {company.distanceText && (
-              <>
-                <MaterialIcons name="location-on" size={16} color="#4285f4" style={{ marginLeft: 16 }} />
+              <View style={styles.distanceContainer}>
+                <MaterialIcons name="location-on" size={16} color="#4285f4" />
                 <Text style={styles.distanceText}>
                   {company.distanceText}
                 </Text>
-              </>
+              </View>
             )}
           </View>
+          {/* Below: Matching Reasons */}
           {company.matchingReasons && company.matchingReasons.length > 0 && (
             <View style={styles.matchingReasonsContainer}>
               {company.matchingReasons.slice(0, 2).map((reason, index) => (
@@ -865,64 +944,84 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
         </View>
       )}
 
-      <View style={styles.companyDetails}>
-        <View style={styles.locationContainer}>
-          <MaterialIcons name="location-on" size={16} color="#666" />
-          <Text style={styles.locationText}>{company.address}</Text>
-        </View>
-        
-        <View style={styles.slotsContainer}>
-          <View style={styles.slotInfo}>
-            <Text style={styles.slotLabel}>Available Slots</Text>
-            <Text style={styles.slotValue}>{company.availableSlots}/{company.totalSlots}</Text>
-          </View>
-          <View style={styles.slotBar}>
-            <View 
-              style={[
-                styles.slotFill, 
-                { 
-                  width: `${(company.availableSlots / company.totalSlots) * 100}%`,
-                  backgroundColor: company.availableSlots > 0 ? '#34a853' : '#ea4335'
-                }
-              ]} 
-            />
-          </View>
-        </View>
+        {/* Expanded Content */}
+        {isExpanded && (
+          <View style={styles.companyDetails}>
+            <View style={styles.locationContainer}>
+              <MaterialIcons name="location-on" size={16} color="#666" />
+              <Text style={styles.locationText}>{company.address}</Text>
+            </View>
 
-        <View style={styles.moaContainer}>
-          <Text style={styles.moaLabel}>MOA Status:</Text>
-          <View style={[styles.moaBadge, { backgroundColor: getMOAStatusColor(company.moaStatus) }]}>
-            <Text style={styles.moaText}>{getMOAStatusText(company.moaStatus)}</Text>
+            <View style={styles.moaContainer}>
+              <Text style={styles.moaText}>
+                MOA Status: <Text style={styles.moaValue}>{getMOAStatusText(company.moaStatus)}</Text>
+              </Text>
+              {company.moaExpiryDate && (
+                <Text style={styles.moaDate}>Expires: {company.moaExpiryDate}</Text>
+              )}
+            </View>
+
+            {company.schoolYear && (
+              <View style={styles.schoolYearContainer}>
+                <Text style={styles.schoolYearText}>School Year: {company.schoolYear}</Text>
+              </View>
+            )}
+
+            {company.qualifications && (
+              <View style={styles.qualificationsContainer}>
+                <Text style={styles.qualificationsLabel}>Qualifications:</Text>
+                <Text style={styles.qualificationsValue}>{company.qualifications}</Text>
+              </View>
+            )}
+
+            {company.contactPerson && (
+              <View style={styles.contactContainer}>
+                <Text style={styles.contactLabel}>Contact:</Text>
+                <Text style={styles.contactValue}>{company.contactPerson}</Text>
+              </View>
+            )}
+
+            <Text style={styles.description} numberOfLines={3}>
+              {company.description}
+            </Text>
           </View>
-          {company.moaExpiryDate && (
-            <Text style={styles.moaDate}>Expires: {company.moaExpiryDate}</Text>
-          )}
-        </View>
+        )}
 
-        <Text style={styles.description} numberOfLines={2}>
-          {company.description}
-        </Text>
-      </View>
+        {/* Action Buttons - Only visible when expanded */}
+        {isExpanded && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.viewButton]} 
+              onPress={() => handleViewDetails(company)}
+            >
+              <MaterialIcons name="visibility" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>View</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.partnerButton]} 
+              onPress={() => handlePartnerAction(company)}
+            >
+              <MaterialIcons name="handshake" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Partner</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      <View style={styles.actionButtons}>
+        {/* Expand/Collapse Button */}
         <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewDetails(company)}
+          style={styles.expandButton}
+          onPress={() => toggleCardExpansion(company.id)}
         >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.partnerButton]} 
-          onPress={() => handlePartnerAction(company)}
-        >
-          <MaterialIcons name="handshake" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Partner</Text>
+          <MaterialIcons 
+            name={isExpanded ? "expand-less" : "expand-more"} 
+            size={24} 
+            color="#F56E0F" 
+          />
         </TouchableOpacity>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -972,22 +1071,16 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       {/* Stats Section */}
       <View style={styles.statsSection}>
         <View style={styles.statCard}>
-          <MaterialIcons name="business-center" size={32} color="#F4D03F" />
-          <Text style={styles.statNumber}>{animatedStats.activeCompanies}</Text>
-          <Text style={styles.statLabel}>Pending Companies</Text>
+          <MaterialIcons name="people" size={32} color="#F4D03F" />
+          <Text style={styles.statNumber}>{animatedStats.numberOfInterns}</Text>
+          <Text style={styles.statLabel}>Number of Interns</Text>
           <Text style={styles.statSubLabel}>{stats.currentSchoolYear}</Text>
         </View>
         <View style={styles.statCard}>
-          <MaterialIcons name="work" size={32} color="#2D5A3D" />
-          <Text style={styles.statNumber}>{animatedStats.totalApplications}</Text>
-          <Text style={styles.statLabel}>Total Applications</Text>
-          <Text style={styles.statSubLabel}>This Year</Text>
-        </View>
-        <View style={styles.statCard}>
-          <MaterialIcons name="pending" size={32} color="#E8A598" />
-          <Text style={styles.statNumber}>{animatedStats.pendingApprovals}</Text>
-          <Text style={styles.statLabel}>Pending Approvals</Text>
-          <Text style={styles.statSubLabel}>Needs Review</Text>
+          <MaterialIcons name="business-center" size={32} color="#2D5A3D" />
+          <Text style={styles.statNumber}>{animatedStats.totalPartnerCompanies}</Text>
+          <Text style={styles.statLabel}>Total Partner Companies</Text>
+          <Text style={styles.statSubLabel}>Active Partners</Text>
         </View>
       </View>
 
@@ -1679,6 +1772,21 @@ const styles = StyleSheet.create({
   slotsContainer: {
     marginBottom: 10,
   },
+  slotsContainerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  slotLabelHeader: {
+    fontSize: 14,
+    color: '#FBFBFB', // Light text
+    fontWeight: '500',
+  },
+  slotValueHeader: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#F56E0F', // Primary orange
+  },
   slotInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1694,41 +1802,61 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#F56E0F', // Primary orange
   },
-  slotBar: {
-    height: 6,
-    backgroundColor: 'rgba(245, 110, 15, 0.2)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  slotFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
   moaContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 10,
   },
-  moaLabel: {
+  moaText: {
     fontSize: 15,
     color: '#FBFBFB', // Light text
-    marginRight: 8,
+    fontWeight: '600',
   },
-  moaBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  moaText: {
-    fontSize: 10,
+  moaValue: {
+    fontSize: 15,
     fontWeight: 'bold',
-    color: '#FBFBFB', // Light text
+    color: '#F56E0F', // Primary orange
   },
   moaDate: {
     fontSize: 13,
     color: '#FBFBFB', // Light text
     opacity: 0.8,
+    marginTop: 4,
+  },
+  schoolYearContainer: {
+    marginBottom: 10,
+  },
+  schoolYearText: {
+    fontSize: 14,
+    color: '#FBFBFB', // Light text
+    opacity: 0.8,
+  },
+  qualificationsContainer: {
+    marginBottom: 10,
+  },
+  qualificationsLabel: {
+    fontSize: 14,
+    color: '#FBFBFB', // Light text
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  qualificationsValue: {
+    fontSize: 14,
+    color: '#FBFBFB', // Light text
+    opacity: 0.9,
+    fontStyle: 'italic',
+  },
+  contactContainer: {
+    marginBottom: 10,
+  },
+  contactLabel: {
+    fontSize: 14,
+    color: '#FBFBFB', // Light text
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  contactValue: {
+    fontSize: 14,
+    color: '#34a853', // Green color for contact
+    fontWeight: '500',
   },
   description: {
     fontSize: 15,
@@ -1767,6 +1895,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  expandButton: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 8,
   },
   emptyState: {
     alignItems: 'center',
@@ -1915,16 +2049,25 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#34a853',
   },
+  matchingTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   matchingScoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
   matchingScoreText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#34a853',
     marginLeft: 6,
+  },
+  distanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   distanceText: {
     fontSize: 14,

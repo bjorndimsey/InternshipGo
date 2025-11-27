@@ -95,6 +95,9 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
   const [waveAnim] = useState(new Animated.Value(0));
   const [expandedDropdown, setExpandedDropdown] = useState<string | null>(null);
   const [submenuAnimation] = useState(new Animated.Value(0));
+  const [showLocationReminderModal, setShowLocationReminderModal] = useState(false);
+  const [hasLocation, setHasLocation] = useState<boolean | null>(null);
+  const [shouldOpenLocationPicker, setShouldOpenLocationPicker] = useState(false);
 
   // Fetch user profile and unread counts when component mounts
   useEffect(() => {
@@ -115,6 +118,19 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
           };
           console.log('🔍 Setting user profile data:', profileData);
           setUserProfile(profileData);
+          
+          // Check if user has location set
+          const userData = profileResponse.user as any;
+          const hasLocationSet = userData.latitude !== null && userData.latitude !== undefined && 
+                                 userData.longitude !== null && userData.longitude !== undefined;
+          setHasLocation(hasLocationSet);
+          
+          // Show location reminder modal if no location set
+          if (!hasLocationSet) {
+            setTimeout(() => {
+              setShowLocationReminderModal(true);
+            }, 2500); // Show after 2.5 seconds
+          }
         }
 
         // Fetch unread message count
@@ -352,6 +368,26 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
     }
   };
 
+  const refreshUserProfileWithLocation = async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      const profileResponse = await apiService.getProfile(currentUser.id);
+      if (profileResponse.success && profileResponse.user) {
+        const userData = profileResponse.user as any;
+        const hasLocationSet = userData.latitude !== null && userData.latitude !== undefined && 
+                               userData.longitude !== null && userData.longitude !== undefined;
+        setHasLocation(hasLocationSet);
+        
+        if (hasLocationSet) {
+          setShowLocationReminderModal(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing user profile with location:', error);
+    }
+  };
+
   const handleDropdownToggle = (itemName: string) => {
     const isOpening = expandedDropdown !== itemName;
     setExpandedDropdown(expandedDropdown === itemName ? null : itemName);
@@ -480,7 +516,14 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
           user_type: 'company'
         } : null} onUnreadCountChange={handleUnreadNotificationCountChange} />;
       case 'Profile':
-        return <ProfilePage currentUser={currentUser} />;
+        return <ProfilePage 
+          currentUser={currentUser} 
+          autoOpenLocationPicker={shouldOpenLocationPicker}
+          onLocationPickerOpened={() => {
+            setShouldOpenLocationPicker(false);
+            refreshUserProfileWithLocation();
+          }}
+        />;
       default:
         return <DashboardHome />;
     }
@@ -892,6 +935,54 @@ export default function CompanyDashboard({ onLogout, currentUser }: CompanyDashb
             </Animated.Text>
           </Animated.View>
         </View>
+      )}
+
+      {/* Location Reminder Modal */}
+      {showLocationReminderModal && (
+        <TouchableOpacity 
+          style={styles.locationReminderModalOverlay}
+          onPress={() => {
+            // Prevent dismissing modal by clicking outside - location is mandatory
+          }}
+          activeOpacity={1}
+        >
+          <TouchableOpacity 
+            style={styles.locationReminderModal}
+            onPress={(e) => e.stopPropagation()}
+            activeOpacity={1}
+          >
+            <View style={styles.locationReminderModalContent}>
+              <View style={styles.locationReminderModalHeader}>
+                <View style={styles.locationReminderIconContainer}>
+                  <Ionicons name="location-outline" size={24} color="#F56E0F" />
+                </View>
+                <Text style={styles.locationReminderModalTitle}>Location Reminder</Text>
+              </View>
+              
+              <View style={styles.locationReminderModalBody}>
+                <Text style={styles.locationReminderModalMessage}>
+                  You haven't set your location yet. Setting your location helps coordinators and companies find you for internship opportunities.
+                </Text>
+              </View>
+              
+              <View style={styles.locationReminderModalFooter}>
+                <TouchableOpacity 
+                  style={styles.locationReminderNavigateButton}
+                  onPress={() => {
+                    setShowLocationReminderModal(false);
+                    // Set flag to open location picker when profile page loads
+                    setShouldOpenLocationPicker(true);
+                    // Navigate to profile page
+                    handleNavigation('Profile');
+                  }}
+                >
+                  <Ionicons name="location" size={18} color="#fff" />
+                  <Text style={styles.locationReminderButtonText}>Set Location</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       )}
 
       {/* Auto Notification Popup */}
@@ -1625,5 +1716,86 @@ const styles = StyleSheet.create({
     color: '#FBFBFB', // Light text
     fontSize: 14,
     fontWeight: '500',
+  },
+  // Location Reminder Modal Styles
+  locationReminderModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    zIndex: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  locationReminderModal: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 12,
+    width: width < 400 ? width - 40 : 400,
+    maxWidth: 400,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  locationReminderModalContent: {
+    overflow: 'hidden',
+  },
+  locationReminderModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  locationReminderIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  locationReminderModalTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+  },
+  locationReminderModalBody: {
+    padding: 20,
+  },
+  locationReminderModalMessage: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  locationReminderModalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  locationReminderNavigateButton: {
+    backgroundColor: '#F56E0F',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  locationReminderButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

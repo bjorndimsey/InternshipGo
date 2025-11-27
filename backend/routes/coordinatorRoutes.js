@@ -35,6 +35,9 @@ router.delete('/:id', CoordinatorController.deleteCoordinator);
 // PUT /api/coordinators/:id/admin - Toggle admin status
 router.put('/:id/admin', CoordinatorController.toggleAdminStatus);
 
+// PUT /api/coordinators/:id/status - Update coordinator account status (enable/disable)
+router.put('/:id/status', CoordinatorController.updateCoordinatorStatus);
+
 // PUT /api/coordinators/:id/partnership - Update coordinator partnership status
 router.put('/:id/partnership', CoordinatorController.updateCoordinatorPartnershipStatus);
 

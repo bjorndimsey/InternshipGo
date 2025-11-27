@@ -147,18 +147,47 @@ export default function DashboardHome() {
 
       setCompanyInfo(baseCompany);
 
-      // Resolve actual companies.id using profile-by-user endpoint for reliability
+      // Use user_id directly for getApprovedApplications (backend handles both user_id and company_id)
+      // This ensures consistency with InternsPage.tsx which uses currentUser.id directly
+      const userIdForApplications = effectiveUser?.id?.toString() || '1';
+      
+      console.log('🔍 DashboardHome: Fetching approved applications for user_id:', userIdForApplications);
+      
+      // Fetch approved applications (treated as current interns) for this company
+      // The backend getApprovedApplications accepts either user_id or company_id and resolves it correctly
+      const approved = await apiService.getApprovedApplications(userIdForApplications);
+      
+      console.log('📊 DashboardHome: Approved applications response:', {
+        success: approved.success,
+        count: (approved as any)?.applications?.length || 0,
+        applications: (approved as any)?.applications || []
+      });
+
+      const approvedApps = (approved as any)?.applications || [];
+      
+      console.log('✅ DashboardHome: Approved apps count:', approvedApps.length);
+      if (approvedApps.length > 0) {
+        console.log('📋 DashboardHome: Approved apps details:', approvedApps.map((app: any) => ({
+          id: app.id,
+          student_id: app.student_id,
+          company_id: app.company_id,
+          reviewed_by: app.reviewed_by,
+          status: app.status
+        })));
+      }
+
+      // Resolve actual companies.id for attendance APIs (they may need company_id)
       let companyId = effectiveUser?.id?.toString() || '1';
       try {
         const profile = await apiService.getCompanyProfileByUserId(companyId);
         const resolved = (profile as any)?.user?.id;
-        if (resolved) companyId = resolved.toString();
-      } catch {}
-
-      // Fetch approved applications (treated as current interns) for this company
-      const approved = await apiService.getApprovedApplications(companyId);
-
-      const approvedApps = (approved as any)?.applications || [];
+        if (resolved) {
+          companyId = resolved.toString();
+          console.log('✅ DashboardHome: Resolved company_id:', companyId, 'from user_id:', effectiveUser?.id);
+        }
+      } catch (error) {
+        console.warn('⚠️ DashboardHome: Failed to resolve company_id, using user_id:', companyId, error);
+      }
 
       // Compute monthly counts for the current year (Jan-Dec)
       const currentYear = new Date().getFullYear();

@@ -377,7 +377,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
     switch (status) {
       case 'active': return '#2D5A3D'; // Forest green
       case 'expired': return '#E8A598'; // Soft coral
-      case 'pending': return '#F4D03F'; // Bright yellow
+      case 'pending': return '#F56E0F'; // Primary orange
       default: return '#1E3A5F'; // Deep navy blue
     }
   };
@@ -401,7 +401,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
       switch (status) {
         case 'active': return { color: '#2D5A3D', text: 'Active', icon: 'check-circle' };
         case 'expired': return { color: '#E8A598', text: 'Expired', icon: 'cancel' };
-        case 'pending': return { color: '#F4D03F', text: 'Pending', icon: 'schedule' };
+        case 'pending': return { color: '#F56E0F', text: 'Pending', icon: 'schedule' };
         default: return { color: '#1E3A3D', text: 'Unknown', icon: 'help' };
       }
     };
@@ -474,7 +474,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
               <Text style={styles.companyName}>{company.name}</Text>
               <Text style={styles.companyIndustry}>{company.industry}</Text>
               <View style={styles.ratingContainer}>
-                <MaterialIcons name="star" size={18} color="#F4D03F" />
+                <MaterialIcons name="star" size={18} color="#F56E0F" />
                 <Text style={styles.ratingText}>{company.rating}</Text>
               </View>
             </View>
@@ -488,7 +488,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
                 size={24} 
-                color="#F4D03F" 
+                color="#F56E0F" 
               />
             </View>
           </View>
@@ -498,7 +498,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
           <Animated.View style={styles.expandedContent}>
             <View style={styles.companyDetails}>
               <View style={styles.locationContainer}>
-                <MaterialIcons name="location-on" size={18} color="#F4D03F" />
+                <MaterialIcons name="location-on" size={18} color="#F56E0F" />
                 <Text style={styles.locationText}>{company.location}</Text>
               </View>
               
@@ -580,7 +580,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading favorites...</Text>
       </View>
     );
@@ -617,7 +617,7 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
             <Text style={styles.statLabel}>Available Slots</Text>
           </View>
           <View style={styles.statItem}>
-            <MaterialIcons name="star" size={32} color="#F4D03F" />
+            <MaterialIcons name="star" size={32} color="#F56E0F" />
             <Text style={styles.statNumber}>
               {favoriteCompanies.length > 0 ? (favoriteCompanies.reduce((sum, company) => sum + company.rating, 0) / favoriteCompanies.length).toFixed(1) : '0.0'}
             </Text>
@@ -870,9 +870,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', // Dark secondary
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -890,7 +890,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   statsContainer: {
@@ -937,11 +937,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   enhancedCompanyCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
   },
   headerActions: {
     flexDirection: 'row',
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
   },
   statusDate: {
     fontSize: 12,
-    color: '#F4D03F',
+    color: '#F56E0F',
     marginTop: 4,
   },
   companyHeader: {
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   companyIndustry: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: 6,
     fontWeight: '600',
   },
@@ -1077,11 +1077,11 @@ const styles = StyleSheet.create({
   slotValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#F4D03F',
+    color: '#F56E0F',
   },
   slotBar: {
     height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -1124,7 +1124,7 @@ const styles = StyleSheet.create({
   },
   addedDate: {
     fontSize: 13,
-    color: '#F4D03F',
+    color: '#F56E0F',
     fontStyle: 'italic',
     fontWeight: '500',
   },
@@ -1149,7 +1149,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8A598', // Soft coral
   },
   applyButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
   },
   disabledButton: {
     backgroundColor: '#ccc',
@@ -1371,11 +1371,11 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonFavoriteCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E',
     borderRadius: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -1393,7 +1393,7 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: 60,
     height: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 30,
   },
   skeletonCompanyInfo: {
@@ -1402,21 +1402,21 @@ const styles = StyleSheet.create({
   skeletonCompanyName: {
     width: '70%',
     height: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 6,
   },
   skeletonCompanyIndustry: {
     width: '50%',
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 6,
     marginBottom: 6,
   },
   skeletonRating: {
     width: 60,
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 6,
   },
   skeletonHeaderActions: {
@@ -1427,13 +1427,13 @@ const styles = StyleSheet.create({
   skeletonFavoriteButton: {
     width: 24,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 12,
   },
   skeletonExpandIcon: {
     width: 24,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 12,
   },
 });

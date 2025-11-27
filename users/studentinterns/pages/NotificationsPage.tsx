@@ -282,15 +282,15 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'success': return '#2D5A3D'; // Forest green
-      case 'info': return '#1E3A5F'; // Deep navy blue
-      case 'warning': return '#F4D03F'; // Bright yellow
-      case 'error': return '#E8A598'; // Soft coral
-      case 'application': return '#2D5A3D'; // Forest green
-      case 'assignment': return '#F4D03F'; // Bright yellow
-      case 'requirement': return '#1E3A5F'; // Deep navy blue
-      case 'attendance': return '#FF8400'; // Orange
-      default: return '#1E3A5F'; // Deep navy blue
+      case 'success': return '#F56E0F'; // Primary orange
+      case 'info': return '#F56E0F'; // Primary orange
+      case 'warning': return '#F56E0F'; // Primary orange
+      case 'error': return '#F56E0F'; // Primary orange
+      case 'application': return '#F56E0F'; // Primary orange
+      case 'assignment': return '#F56E0F'; // Primary orange
+      case 'requirement': return '#F56E0F'; // Primary orange
+      case 'attendance': return '#F56E0F'; // Primary orange
+      default: return '#F56E0F'; // Primary orange
     }
   };
 
@@ -363,7 +363,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading notifications...</Text>
       </View>
     );
@@ -415,7 +415,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
           style={styles.actionButton}
           onPress={handleMarkAllAsRead}
         >
-          <MaterialIcons name="done-all" size={20} color="#fff" />
+          <MaterialIcons name="done-all" size={20} color="#F56E0F" />
           <Text style={styles.actionButtonText}>Mark All Read</Text>
         </TouchableOpacity>
       </View>
@@ -435,7 +435,7 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
           </>
         ) : filteredNotifications.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="notifications-none" size={64} color="#02050a" />
+            <MaterialIcons name="notifications-none" size={64} color="#F56E0F" />
             <Text style={styles.emptyStateTitle}>No notifications</Text>
             <Text style={styles.emptyStateText}>
               {filter === 'all' 
@@ -457,26 +457,26 @@ export default function NotificationsPage({ currentUser, onUnreadCountChange }: 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: 'rgba(255, 255, 255, 0.83)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#2A2A2E', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#2A2A2E', 
     paddingHorizontal: 20,
     paddingVertical: 16,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
   },
   filterScrollView: {
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   activeFilterTab: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
   },
   filterText: {
     fontSize: 11,
@@ -521,15 +521,15 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   activeFilterText: {
-    color: '#02050a', // Dark navy text on yellow
+    color: '#FBFBFB', // Light text on orange
     fontWeight: 'bold',
   },
   actionsContainer: {
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#1B1B1E', // Dark secondary background
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
   },
   actionButton: {
     flexDirection: 'row',
@@ -550,20 +550,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   notificationItem: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     marginHorizontal: 20,
     marginVertical: 8,
     borderRadius: 16,
     padding: 20,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   unreadNotification: {
     borderLeftWidth: 6,
-    borderLeftColor: '#F4D03F', // Bright yellow
+    borderLeftColor: '#F56E0F', // Primary orange
     elevation: 8,
     shadowOpacity: 0.2,
   },
@@ -591,7 +593,7 @@ const styles = StyleSheet.create({
   },
   notificationMessage: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     lineHeight: 22,
     fontWeight: '500',
     opacity: 0.9,
@@ -609,7 +611,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
   },
   notificationAction: {
     flexDirection: 'row',
@@ -622,7 +624,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 15,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '600',
   },
   emptyState: {
@@ -632,14 +634,14 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     marginTop: 20,
     marginBottom: 12,
     fontFamily: 'System',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#878787', // Muted gray
     textAlign: 'center',
     lineHeight: 24,
     opacity: 0.7,
@@ -647,16 +649,18 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonNotificationItem: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     marginHorizontal: 20,
     marginVertical: 8,
     borderRadius: 16,
     padding: 20,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
     opacity: 0.7,
   },
   skeletonNotificationHeader: {
@@ -666,7 +670,7 @@ const styles = StyleSheet.create({
   skeletonNotificationIcon: {
     width: 48,
     height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 24,
     marginRight: 16,
   },
@@ -676,14 +680,14 @@ const styles = StyleSheet.create({
   skeletonNotificationTitle: {
     width: '70%',
     height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
     marginBottom: 8,
   },
   skeletonNotificationMessage: {
     width: '90%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 4,
   },
@@ -693,20 +697,20 @@ const styles = StyleSheet.create({
   skeletonNotificationTime: {
     width: 60,
     height: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginBottom: 8,
   },
   skeletonUnreadDot: {
     width: 10,
     height: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 5,
   },
   skeletonNotificationAction: {
     width: '40%',
     height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
     marginTop: 16,
   },

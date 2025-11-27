@@ -190,6 +190,11 @@ const getAttendanceRecords = async (req, res) => {
         pm_time_out: convertTo12Hour(record.pm_time_out),
         am_status: record.am_status || 'not_marked',
         pm_status: record.pm_status || 'not_marked',
+        // Include verification fields
+        verification_status: record.verification_status || 'pending',
+        verified_by: record.verified_by || null,
+        verified_at: record.verified_at || null,
+        verification_remarks: record.verification_remarks || null,
         // Include student data
         first_name: student.first_name || 'N/A',
         last_name: student.last_name || 'N/A',
@@ -454,6 +459,97 @@ const saveAttendanceRecord = async (req, res) => {
         total_hours: result?.total_hours
       }
     });
+
+    // Calculate total accumulated hours and remaining hours
+    try {
+      console.log('📊 Calculating total accumulated hours and remaining hours...');
+      
+      // Get all attendance records for this intern to calculate total accumulated hours
+      const { data: allAttendanceRecords, error: attendanceError } = await supabase
+        .from('attendance_records')
+        .select('total_hours')
+        .eq('user_id', actualUserId)
+        .eq('company_id', actualCompanyId);
+
+      if (attendanceError) {
+        console.error('Error fetching attendance records for hours calculation:', attendanceError);
+      } else {
+        // Calculate total accumulated hours from all records
+        const totalAccumulatedHours = allAttendanceRecords.reduce((sum, record) => {
+          return sum + (parseFloat(record.total_hours) || 0);
+        }, 0);
+
+        console.log('📊 Total accumulated hours:', totalAccumulatedHours);
+
+        // Get the application for this student and company to find hours_of_internship
+        const { data: applicationData, error: applicationError } = await supabase
+          .from('applications')
+          .select('hours_of_internship')
+          .eq('student_id', actualUserId)
+          .eq('company_id', actualCompanyId)
+          .eq('status', 'approved')
+          .single();
+
+        if (!applicationError && applicationData && applicationData.hours_of_internship) {
+          // Parse hours_of_internship (e.g., "136 hours" -> 136)
+          const hoursMatch = applicationData.hours_of_internship.match(/(\d+(?:\.\d+)?)/);
+          const totalRequiredHours = hoursMatch ? parseFloat(hoursMatch[1]) || 0 : 0;
+
+          if (totalRequiredHours > 0) {
+            const remainingHours = Math.max(0, totalRequiredHours - totalAccumulatedHours);
+            const remainingDays = Math.ceil(remainingHours / 8);
+
+            console.log('📊 Hours calculation (from application):', {
+              hours_of_internship: applicationData.hours_of_internship,
+              totalRequiredHours,
+              totalAccumulatedHours,
+              remainingHours,
+              remainingDays
+            });
+
+            // Also update requirements table if it exists (for backward compatibility)
+            const { data: studentData, error: studentError } = await supabase
+              .from('students')
+              .select('id')
+              .eq('user_id', actualUserId)
+              .single();
+
+            if (!studentError && studentData) {
+              const { error: updateError } = await supabase
+                .from('requirements')
+                .update({
+                  remaining_hours: remainingHours,
+                  remaining_days: remainingDays,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('student_id', studentData.id);
+
+              if (updateError) {
+                console.error('⚠️ Error updating remaining hours in requirements:', updateError);
+              } else {
+                console.log('✅ Remaining hours updated in requirements table');
+              }
+            }
+            
+            // Include calculated hours in the response
+            result.total_accumulated_hours = totalAccumulatedHours;
+            result.remaining_hours = remainingHours;
+            result.remaining_days = remainingDays;
+          } else {
+            console.log('⚠️ No valid hours_of_internship found in application');
+          }
+        } else {
+          console.log('⚠️ No application found or hours_of_internship not set:', {
+            applicationError: applicationError?.message,
+            hasApplication: !!applicationData,
+            hoursOfInternship: applicationData?.hours_of_internship
+          });
+        }
+      }
+    } catch (hoursError) {
+      console.error('Error calculating hours:', hoursError);
+      // Don't fail the request if hours calculation fails
+    }
 
     // Trigger attendance notification for coordinators
     try {
@@ -757,6 +853,11 @@ const getTodayAttendance = async (req, res) => {
         pm_time_out: convertTo12Hour(record.pm_time_out),
         am_status: record.am_status || 'not_marked',
         pm_status: record.pm_status || 'not_marked',
+        // Include verification fields
+        verification_status: record.verification_status || 'pending',
+        verified_by: record.verified_by || null,
+        verified_at: record.verified_at || null,
+        verification_remarks: record.verification_remarks || null,
         // Include student data
         first_name: student.first_name || 'N/A',
         last_name: student.last_name || 'N/A',
@@ -804,9 +905,132 @@ const getTodayAttendance = async (req, res) => {
   }
 };
 
+// Verify attendance record
+const verifyAttendanceRecord = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { userId } = req.query;
+    const { attendanceId, verificationStatus, remarks } = req.body;
+
+    if (!companyId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Company ID and User ID are required'
+      });
+    }
+
+    if (!attendanceId || !verificationStatus) {
+      return res.status(400).json({
+        success: false,
+        message: 'Attendance ID and verification status are required'
+      });
+    }
+
+    if (!['accepted', 'denied'].includes(verificationStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification status must be either "accepted" or "denied"'
+      });
+    }
+
+    // First, check if companyId is actually a user_id and find the corresponding company
+    let actualCompanyId = parseInt(companyId);
+    
+    if (isNaN(actualCompanyId)) {
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .select('id, user_id')
+        .eq('user_id', companyId)
+        .single();
+
+      if (companyError || !companyData) {
+        return res.status(404).json({
+          success: false,
+          message: 'Company not found'
+        });
+      }
+      
+      actualCompanyId = companyData.id;
+    }
+
+    // Verify the attendance record exists and belongs to this company
+    const { data: attendanceData, error: attendanceError } = await supabase
+      .from('attendance_records')
+      .select('id, company_id, user_id')
+      .eq('id', attendanceId)
+      .eq('company_id', actualCompanyId)
+      .single();
+
+    if (attendanceError || !attendanceData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attendance record not found or does not belong to this company'
+      });
+    }
+
+    // Update the attendance record with verification information
+    const { data: updatedRecord, error: updateError } = await supabase
+      .from('attendance_records')
+      .update({
+        verification_status: verificationStatus,
+        verified_by: parseInt(userId),
+        verified_at: new Date().toISOString(),
+        verification_remarks: remarks || null
+      })
+      .eq('id', attendanceId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Error updating attendance verification:', updateError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update attendance verification',
+        error: updateError.message
+      });
+    }
+
+    // Format the response data
+    const formattedData = {
+      id: updatedRecord.id,
+      user_id: updatedRecord.user_id,
+      company_id: updatedRecord.company_id,
+      attendance_date: updatedRecord.attendance_date,
+      status: updatedRecord.status,
+      am_time_in: convertTo12Hour(updatedRecord.am_time_in),
+      am_time_out: convertTo12Hour(updatedRecord.am_time_out),
+      pm_time_in: convertTo12Hour(updatedRecord.pm_time_in),
+      pm_time_out: convertTo12Hour(updatedRecord.pm_time_out),
+      total_hours: updatedRecord.total_hours,
+      notes: updatedRecord.notes,
+      verification_status: updatedRecord.verification_status,
+      verified_by: updatedRecord.verified_by,
+      verified_at: updatedRecord.verified_at,
+      verification_remarks: updatedRecord.verification_remarks,
+      created_at: updatedRecord.created_at,
+      updated_at: updatedRecord.updated_at
+    };
+
+    res.json({
+      success: true,
+      data: formattedData,
+      message: `Attendance ${verificationStatus} successfully`
+    });
+
+  } catch (error) {
+    console.error('Error in verifyAttendanceRecord:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAttendanceRecords,
   saveAttendanceRecord,
   getTodayAttendance,
-  getAttendanceStats
+  getAttendanceStats,
+  verifyAttendanceRecord
 };

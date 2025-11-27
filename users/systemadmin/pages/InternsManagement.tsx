@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,358 +11,808 @@ import {
   Dimensions,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { apiService } from '../../../lib/api';
+import { EmailService } from '../../../lib/emailService';
 
 const { width } = Dimensions.get('window');
 
-interface Intern {
+// Responsive helper functions
+const getResponsiveSize = (size: number) => {
+  const scale = width / 375;
+  return Math.max(size * scale, size * 0.8);
+};
+
+const getResponsiveFontSize = (size: number) => {
+  const scale = width / 375;
+  return Math.max(size * scale, size * 0.85);
+};
+
+const isSmallScreen = width < 768;
+
+interface Student {
   id: string;
-  name: string;
-  age: number;
-  academicYear: string;
-  profilePicture?: string;
+  user_id?: string;
+  id_number?: string;
+  first_name: string;
+  middle_name?: string;
+  last_name: string;
   email: string;
-  phone: string;
-  university: string;
-  course: string;
-  status: 'active' | 'inactive' | 'graduated';
+  phone_number?: string;
+  major?: string;
+  year?: string;
+  university?: string;
+  gpa?: number;
+  profile_picture?: string;
+  created_at?: string;
+  status?: 'active' | 'inactive';
+  is_active?: boolean;
 }
 
-const academicYears = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduate'];
-
 export default function InternsManagement() {
-  const [interns, setInterns] = useState<Intern[]>([]);
-  const [filteredInterns, setFilteredInterns] = useState<Intern[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedYear, setSelectedYear] = useState('All');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedIntern, setSelectedIntern] = useState<Intern | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [warningModalData, setWarningModalData] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [successModalData, setSuccessModalData] = useState<{ title: string; message: string } | null>(null);
+  const [dimensions, setDimensions] = useState({ width, height: Dimensions.get('window').height });
+  const [tooltip, setTooltip] = useState<{ visible: boolean; text: string; x: number; y: number; buttonWidth?: number }>({
+    visible: false,
+    text: '',
+    x: 0,
+    y: 0,
+  });
+  const buttonRefs = useRef<{ [key: string]: any }>({});
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    fetchInterns();
+    fetchStudents();
   }, []);
 
   useEffect(() => {
-    filterInterns();
-  }, [searchQuery, selectedYear, interns]);
+    filterStudents();
+  }, [searchQuery, students]);
 
-  const fetchInterns = async () => {
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions({ width: window.width, height: window.height });
+    });
+    return () => subscription?.remove();
+  }, []);
+
+  const fetchStudents = async () => {
     try {
       setLoading(true);
-      // Simulate API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await apiService.getAllStudents();
       
-      // Mock data - replace with real API call
-      const mockInterns: Intern[] = [
-        {
-          id: '1',
-          name: 'John Doe',
-          age: 20,
-          academicYear: '3rd Year',
-          email: 'john.doe@email.com',
-          phone: '+1234567890',
-          university: 'University of Technology',
-          course: 'Computer Science',
-          status: 'active',
-        },
-        {
-          id: '2',
-          name: 'Sarah Wilson',
-          age: 21,
-          academicYear: '4th Year',
-          email: 'sarah.wilson@email.com',
-          phone: '+1234567891',
-          university: 'State University',
-          course: 'Information Technology',
-          status: 'active',
-        },
-        {
-          id: '3',
-          name: 'Mike Johnson',
-          age: 19,
-          academicYear: '2nd Year',
-          email: 'mike.johnson@email.com',
-          phone: '+1234567892',
-          university: 'Tech Institute',
-          course: 'Software Engineering',
-          status: 'inactive',
-        },
-        {
-          id: '4',
-          name: 'Emily Davis',
-          age: 22,
-          academicYear: 'Graduate',
-          email: 'emily.davis@email.com',
-          phone: '+1234567893',
-          university: 'Metro University',
-          course: 'Data Science',
-          status: 'graduated',
-        },
-      ];
-      
-      setInterns(mockInterns);
+      if (response.success) {
+        const responseData = response as any;
+        const studentsData = responseData.students || responseData.data?.students || responseData.data || [];
+        const mappedStudents: Student[] = studentsData.map((student: any) => ({
+          id: student.id?.toString() || '',
+          user_id: student.user_id?.toString() || '',
+          id_number: student.id_number || '',
+          first_name: student.first_name || '',
+          middle_name: student.middle_name || '',
+          last_name: student.last_name || '',
+          email: student.email || '',
+          phone_number: student.phone_number || '',
+          major: student.major || '',
+          year: student.year || '',
+          university: student.university || '',
+          gpa: student.gpa || 0,
+          profile_picture: student.profile_picture || null,
+          created_at: student.created_at || '',
+          is_active: student.is_active !== undefined ? student.is_active : true,
+          status: student.is_active === false ? 'inactive' : 'active',
+        }));
+        setStudents(mappedStudents);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to fetch students');
+        setStudents([]);
+      }
     } catch (error) {
-      console.error('Error fetching interns:', error);
-      Alert.alert('Error', 'Failed to fetch interns');
+      console.error('Error fetching students:', error);
+      Alert.alert('Error', 'Failed to fetch students. Please try again.');
+      setStudents([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterInterns = () => {
-    let filtered = interns;
+  const filterStudents = () => {
+    let filtered = students;
 
-    // Filter by search query
     if (searchQuery) {
-      filtered = filtered.filter(intern =>
-        intern.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        intern.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        intern.university.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter(student => {
+        const fullName = `${student.first_name} ${student.middle_name || ''} ${student.last_name}`.toLowerCase();
+        return (
+          fullName.includes(searchQuery.toLowerCase()) ||
+          student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          student.id_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          student.university?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      });
     }
 
-    // Filter by academic year
-    if (selectedYear !== 'All') {
-      filtered = filtered.filter(intern => intern.academicYear === selectedYear);
-    }
-
-    setFilteredInterns(filtered);
+    setFilteredStudents(filtered);
   };
 
-  const handleAddIntern = () => {
-    setShowAddModal(true);
+  const handleViewStudent = (student: Student) => {
+    setSelectedStudent(student);
+    setShowViewModal(true);
   };
 
-  const handleEditIntern = (intern: Intern) => {
-    setSelectedIntern(intern);
-    setShowEditModal(true);
+  const handleToggleStatus = async (student: Student) => {
+    console.log('🔄 handleToggleStatus called for student:', student.id, student.first_name, student.last_name);
+    const newStatus: 'active' | 'inactive' = student.status === 'active' ? 'inactive' : 'active';
+    const isActive = newStatus === 'active';
+    const statusText = newStatus === 'active' ? 'enable' : 'disable';
+    
+    console.log('🔄 Current status:', student.status, 'New status:', newStatus, 'isActive:', isActive);
+    
+    // Show warning modal
+    setWarningModalData({
+      title: `${statusText === 'enable' ? 'Enable' : 'Disable'} Student`,
+      message: `Are you sure you want to ${statusText} ${student.first_name} ${student.last_name}? ${!isActive ? 'They will not be able to login until re-enabled.' : 'They can now login to the system.'}`,
+      onConfirm: async () => {
+        setShowWarningModal(false);
+        try {
+          console.log('🔄 Calling API to update student status...');
+          if (!student.id) {
+            setSuccessModalData({
+              title: 'Error',
+              message: 'Student ID is missing. Please try again.'
+            });
+            setShowSuccessModal(true);
+            return;
+          }
+
+          const response = await apiService.updateStudentStatus(student.id, isActive);
+          console.log('🔄 API response:', response);
+          
+          if (response.success) {
+            // Update local state using functional updates to ensure we have the latest state
+            // The useEffect will automatically update filteredStudents when students changes
+            setStudents(prevStudents => {
+              const updated = prevStudents.map(s => 
+                s.id === student.id ? { 
+                  ...s, 
+                  status: newStatus,
+                  is_active: isActive
+                } : s
+              );
+              console.log('🔄 Updated students:', updated.find(s => s.id === student.id));
+              return updated;
+            });
+            
+            // Also update filteredStudents immediately for instant UI update
+            // This prevents the need to wait for useEffect to run
+            setFilteredStudents(prevFiltered => {
+              const updated = prevFiltered.map(s => 
+                s.id === student.id ? { 
+                  ...s, 
+                  status: newStatus,
+                  is_active: isActive
+                } : s
+              );
+              console.log('🔄 Updated filtered students:', updated.find(s => s.id === student.id));
+              return updated;
+            });
+            
+            // Send email notification if account is disabled
+            if (!isActive) {
+              try {
+                const studentEmail = student.email?.trim();
+                const studentName = `${student.first_name} ${student.last_name}`.trim() || 'User';
+                
+                if (!studentEmail) {
+                  console.warn('⚠️ Student email is missing, cannot send disabled email');
+                } else {
+                  console.log('📧 Preparing to send disabled email to student:', studentEmail);
+                  const emailResult = await EmailService.sendAccountDisabledEmail(
+                    studentEmail,
+                    studentName
+                  );
+                  
+                  if (emailResult.success) {
+                    console.log('✅ Account disabled email sent successfully to:', studentEmail);
+                  } else {
+                    console.warn('⚠️ Failed to send account disabled email to:', studentEmail, 'Error:', emailResult.error);
+                    // Don't fail the operation if email fails
+                  }
+                }
+              } catch (emailError) {
+                console.error('Error sending account disabled email:', emailError);
+                // Don't fail the operation if email fails
+              }
+            }
+            
+            // Force a re-render by updating a dummy state (if needed)
+            // Actually, the state updates above should trigger a re-render automatically
+            
+            // Show success modal
+            setSuccessModalData({
+              title: 'Success',
+              message: `Student ${statusText}d successfully. ${!isActive ? 'They cannot login until re-enabled. An email notification has been sent.' : 'They can now login.'}`
+            });
+            setShowSuccessModal(true);
+          } else {
+            console.error('🔄 API error:', response.message);
+            setSuccessModalData({
+              title: 'Error',
+              message: response.message || 'Failed to update student status. Please try again.'
+            });
+            setShowSuccessModal(true);
+          }
+        } catch (error) {
+          console.error('🔄 Error updating student status:', error);
+          setSuccessModalData({
+            title: 'Error',
+            message: 'Failed to update student status. Please try again.'
+          });
+          setShowSuccessModal(true);
+        }
+      }
+    });
+    setShowWarningModal(true);
   };
 
-  const handleViewIntern = (intern: Intern) => {
-    Alert.alert(
-      'Intern Details',
-      `Name: ${intern.name}\nAge: ${intern.age}\nAcademic Year: ${intern.academicYear}\nEmail: ${intern.email}\nPhone: ${intern.phone}\nUniversity: ${intern.university}\nCourse: ${intern.course}\nStatus: ${intern.status}`,
-      [{ text: 'OK' }]
-    );
+  const handleDeleteStudent = (student: Student) => {
+    console.log('🗑️ handleDeleteStudent called for student:', student.id, student.first_name, student.last_name);
+    
+    // Show warning modal
+    setWarningModalData({
+      title: 'Delete Student',
+      message: `Are you sure you want to delete ${student.first_name} ${student.last_name}? This action cannot be undone and will permanently remove the student and their account from the system.`,
+      onConfirm: async () => {
+        setShowWarningModal(false);
+        try {
+          console.log('🗑️ Calling API to delete student...');
+          if (!student.id) {
+            setSuccessModalData({
+              title: 'Error',
+              message: 'Student ID is missing. Please try again.'
+            });
+            setShowSuccessModal(true);
+            return;
+          }
+
+          const response = await apiService.deleteStudent(student.id);
+          console.log('🗑️ API response:', response);
+          
+          if (response.success) {
+            // Update local state using functional updates
+            setStudents(prevStudents => prevStudents.filter(s => s.id !== student.id));
+            // Also update filtered students
+            setFilteredStudents(prevFiltered => prevFiltered.filter(s => s.id !== student.id));
+            
+            // Show success modal
+            setSuccessModalData({
+              title: 'Success',
+              message: `Student ${student.first_name} ${student.last_name} has been deleted successfully.`
+            });
+            setShowSuccessModal(true);
+          } else {
+            console.error('🗑️ API error:', response.message);
+            setSuccessModalData({
+              title: 'Error',
+              message: response.message || 'Failed to delete student. Please try again.'
+            });
+            setShowSuccessModal(true);
+          }
+        } catch (error) {
+          console.error('🗑️ Error deleting student:', error);
+          setSuccessModalData({
+            title: 'Error',
+            message: 'Failed to delete student. Please try again.'
+          });
+          setShowSuccessModal(true);
+        }
+      }
+    });
+    setShowWarningModal(true);
   };
 
-  const handleDeleteIntern = (intern: Intern) => {
-    Alert.alert(
-      'Delete Intern',
-      `Are you sure you want to delete ${intern.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setInterns(interns.filter(i => i.id !== intern.id));
-          },
-        },
-      ]
-    );
-  };
-
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'active': return '#34a853';
-      case 'inactive': return '#ff9800';
-      case 'graduated': return '#9c27b0';
-      default: return '#666';
+      case 'active': return '#10b981';
+      case 'inactive': return '#ef4444';
+      default: return '#10b981';
     }
   };
 
-  const InternCard = ({ intern }: { intern: Intern }) => (
-    <View style={styles.internCard}>
-      <View style={styles.internHeader}>
-        <View style={styles.profileContainer}>
-          {intern.profilePicture ? (
-            <Image source={{ uri: intern.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>{intern.name.charAt(0)}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.internInfo}>
-          <Text style={styles.internName}>{intern.name}</Text>
-          <Text style={styles.internAge}>Age: {intern.age}</Text>
-          <Text style={styles.internYear}>{intern.academicYear}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
-            <Text style={styles.statusText}>{intern.status.toUpperCase()}</Text>
+  const getFullName = (student: Student) => {
+    const parts = [
+      student.first_name,
+      student.middle_name && student.middle_name !== 'N/A' ? student.middle_name : null,
+      student.last_name
+    ].filter(part => part && part.trim() !== '');
+    return parts.join(' ').trim();
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  const showTooltip = (text: string, event: any, buttonKey?: string) => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    
+    let x = 0;
+    let y = 0;
+    let buttonWidth = 36;
+    const tooltipHeight = 40;
+    const arrowHeight = 6;
+    const spacing = 4;
+    
+    if (Platform.OS === 'web') {
+      if (event?.target) {
+        const rect = event.target.getBoundingClientRect();
+        buttonWidth = rect.width;
+        
+        if (event.clientX !== undefined) {
+          x = event.clientX;
+        } else {
+          x = rect.left + rect.width / 2;
+        }
+        
+        const totalHeight = tooltipHeight + arrowHeight + spacing;
+        
+        if (event.clientY !== undefined) {
+          const tooltipBottomAtCursor = event.clientY;
+          const tooltipTopAtCursor = tooltipBottomAtCursor - tooltipHeight - arrowHeight;
+          
+          if (tooltipTopAtCursor < rect.top - totalHeight) {
+            y = event.clientY - tooltipHeight - arrowHeight;
+          } else {
+            y = rect.top - totalHeight;
+          }
+        } else {
+          y = rect.top - totalHeight;
+        }
+      } else if (event?.clientX !== undefined && event?.clientY !== undefined) {
+        x = event.clientX;
+        y = event.clientY - tooltipHeight - arrowHeight - spacing;
+      }
+    } else if (event?.nativeEvent) {
+      const buttonRef = buttonKey ? buttonRefs.current[buttonKey] : null;
+      if (buttonRef) {
+        buttonRef.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+          buttonWidth = width;
+          setTooltip({
+            visible: true,
+            text,
+            x: px + width / 2,
+            y: py - tooltipHeight - arrowHeight - spacing,
+            buttonWidth: width,
+          });
+        });
+        return;
+      } else {
+        const { pageX, pageY } = event.nativeEvent;
+        x = pageX || 0;
+        y = (pageY || 0) - tooltipHeight - arrowHeight - spacing;
+      }
+    }
+    
+    setTooltip({
+      visible: true,
+      text,
+      x,
+      y,
+      buttonWidth,
+    });
+  };
+
+  const hideTooltip = () => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }, 150);
+  };
+
+  const handleButtonPress = (action: () => void, tooltipText: string) => {
+    hideTooltip();
+    action();
+  };
+
+  const renderStudentTable = () => {
+    return (
+      <View style={styles.tableContainer}>
+        {/* Table Header */}
+        <View style={styles.tableHeader}>
+          <View style={[styles.tableHeaderCell, styles.tableCellName]}>
+            <Text style={styles.tableHeaderText}>Name</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellEmail]}>
+            <Text style={styles.tableHeaderText}>Email</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellId]}>
+            <Text style={styles.tableHeaderText}>ID Number</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellYear]}>
+            <Text style={styles.tableHeaderText}>Year</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellMajor]}>
+            <Text style={styles.tableHeaderText}>Major</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellStatus]}>
+            <Text style={styles.tableHeaderText}>Status</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellActions]}>
+            <Text style={styles.tableHeaderText}>Actions</Text>
           </View>
         </View>
-      </View>
-      
-      <View style={styles.internDetails}>
-        <Text style={styles.detailText}>📧 {intern.email}</Text>
-        <Text style={styles.detailText}>📱 {intern.phone}</Text>
-        <Text style={styles.detailText}>🏫 {intern.university}</Text>
-        <Text style={styles.detailText}>📚 {intern.course}</Text>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewIntern(intern)}
-        >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View</Text>
-        </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.editButton]} 
-          onPress={() => handleEditIntern(intern)}
-        >
-          <MaterialIcons name="edit" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]} 
-          onPress={() => handleDeleteIntern(intern)}
-        >
-          <MaterialIcons name="delete" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
+        {/* Table Rows */}
+        {filteredStudents.map((student, index) => (
+          <View key={student.id} style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}>
+            <View style={[styles.tableCell, styles.tableCellName]}>
+              <View style={styles.tableCellNameContent}>
+                <View style={styles.tableProfileContainer}>
+                  {student.profile_picture ? (
+                    <Image source={{ uri: student.profile_picture }} style={styles.tableProfileImage} />
+                  ) : (
+                    <View style={styles.tableProfilePlaceholder}>
+                      <Text style={styles.tableProfileText}>
+                        {student.first_name?.charAt(0)?.toUpperCase() || 'S'}
+                        {student.last_name?.charAt(0)?.toUpperCase() || 'T'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.tableCellNameText} numberOfLines={1}>
+                  {getFullName(student)}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellEmail]}>
+              <Text style={styles.tableCellText} numberOfLines={1}>{student.email || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellId]}>
+              <Text style={styles.tableCellText}>{student.id_number || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellYear]}>
+              <Text style={styles.tableCellText}>{student.year || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellMajor]}>
+              <Text style={styles.tableCellText} numberOfLines={1}>{student.major || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellStatus]}>
+              <View style={[styles.tableStatusBadge, { backgroundColor: getStatusColor(student.status) }]}>
+                <Text style={styles.tableStatusText}>{(student.status || 'active').toUpperCase()}</Text>
+              </View>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellActions]}>
+              <View style={styles.tableActionButtons}>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`view-${student.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionView]} 
+                  onPress={() => handleButtonPress(() => handleViewStudent(student), 'View Details')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e, `view-${student.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e, `view-${student.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('View Details', e, `view-${student.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="visibility" size={16} color="#3b82f6" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`toggle-${student.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionToggle]} 
+                  onPress={() => handleButtonPress(() => handleToggleStatus(student), student.status === 'active' ? 'Disable Student' : 'Enable Student')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip(student.status === 'active' ? 'Disable Student' : 'Enable Student', e, `toggle-${student.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip(student.status === 'active' ? 'Disable Student' : 'Enable Student', e, `toggle-${student.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip(student.status === 'active' ? 'Disable Student' : 'Enable Student', e, `toggle-${student.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons 
+                    name={student.status === 'active' ? 'block' : 'check-circle'} 
+                    size={16} 
+                    color={student.status === 'active' ? '#f59e0b' : '#10b981'} 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`delete-${student.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionDelete]} 
+                  onPress={() => handleButtonPress(() => handleDeleteStudent(student), 'Delete Student')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Student', e, `delete-${student.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Student', e, `delete-${student.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('Delete Student', e, `delete-${student.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="delete" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ))}
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4285f4" />
-        <Text style={styles.loadingText}>Loading interns...</Text>
+        <Text style={styles.loadingText}>Loading students...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header Actions */}
-      <View style={styles.headerActions}>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddIntern}>
-          <MaterialIcons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Add Intern</Text>
-        </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Interns Management</Text>
       </View>
 
-      {/* Search and Filter */}
-      <View style={styles.searchContainer}>
+      {/* Search Section */}
+      <View style={styles.searchSection}>
         <View style={styles.searchInputContainer}>
           <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search interns..."
+            placeholder="Search students..."
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor="#999"
           />
         </View>
-        
-        <View style={styles.filterContainer}>
-          <Text style={styles.filterLabel}>Academic Year:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {['All', ...academicYears].map((year) => (
-              <TouchableOpacity
-                key={year}
-                style={[
-                  styles.filterChip,
-                  selectedYear === year && styles.activeFilterChip
-                ]}
-                onPress={() => setSelectedYear(year)}
-              >
-                <Text style={[
-                  styles.filterChipText,
-                  selectedYear === year && styles.activeFilterChipText
-                ]}>
-                  {year}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
       </View>
 
-      {/* Interns List */}
-      <ScrollView style={styles.internsList} showsVerticalScrollIndicator={false}>
-        {filteredInterns.length === 0 ? (
+      {/* Students Table */}
+      <View style={styles.tableWrapper}>
+        {filteredStudents.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="school" size={64} color="#ccc" />
-            <Text style={styles.emptyStateTitle}>No interns found</Text>
+            <Text style={styles.emptyStateTitle}>No students found</Text>
             <Text style={styles.emptyStateText}>
-              {searchQuery || selectedYear !== 'All' 
-                ? 'Try adjusting your search or filter criteria'
-                : 'Add your first intern to get started'
+              {searchQuery 
+                ? 'Try adjusting your search criteria'
+                : 'No students registered yet'
               }
             </Text>
           </View>
         ) : (
-          filteredInterns.map((intern) => (
-            <InternCard key={intern.id} intern={intern} />
-          ))
+          <ScrollView 
+            style={styles.studentsList} 
+            showsVerticalScrollIndicator={false}
+            horizontal={dimensions.width < 768}
+            showsHorizontalScrollIndicator={dimensions.width < 768}
+            contentContainerStyle={dimensions.width < 768 ? { minWidth: 1000 } : undefined}
+          >
+            {renderStudentTable()}
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
 
-      {/* Add/Edit Modal */}
+      {/* View Modal */}
       <Modal
-        visible={showAddModal || showEditModal}
+        visible={showViewModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => {
-          setShowAddModal(false);
-          setShowEditModal(false);
-          setSelectedIntern(null);
+          setShowViewModal(false);
+          setSelectedStudent(null);
         }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {showAddModal ? 'Add New Intern' : 'Edit Intern'}
-            </Text>
-            <Text style={styles.modalSubtitle}>
-              {showAddModal ? 'Fill in the intern details below' : 'Update the intern information'}
-            </Text>
-            
-            {/* Form fields would go here */}
-            <View style={styles.modalPlaceholder}>
-              <MaterialIcons name="person-add" size={48} color="#ccc" />
-              <Text style={styles.modalPlaceholderText}>
-                Form implementation would go here
-              </Text>
-            </View>
-
-            <View style={styles.modalActions}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Student Details</Text>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={styles.closeModalButton}
                 onPress={() => {
-                  setShowAddModal(false);
-                  setShowEditModal(false);
-                  setSelectedIntern(null);
+                  setShowViewModal(false);
+                  setSelectedStudent(null);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <MaterialIcons name="close" size={24} color="#666" />
               </TouchableOpacity>
-              
+            </View>
+            
+            {selectedStudent && (
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.detailsContainer}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Name:</Text>
+                    <Text style={styles.detailValue}>{getFullName(selectedStudent)}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Email:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.email || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>ID Number:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.id_number || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Phone:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.phone_number || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>University:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.university || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Major:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.major || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Year:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.year || 'N/A'}</Text>
+                  </View>
+                  
+                  {selectedStudent.gpa && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>GPA:</Text>
+                      <Text style={styles.detailValue}>{selectedStudent.gpa.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Status:</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedStudent.status) }]}>
+                      <Text style={styles.statusText}>{(selectedStudent.status || 'active').toUpperCase()}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Registered Date:</Text>
+                    <Text style={styles.detailValue}>{formatDate(selectedStudent.created_at)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+
+            <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
+                style={styles.cancelButton}
                 onPress={() => {
-                  // Handle save logic here
-                  setShowAddModal(false);
-                  setShowEditModal(false);
-                  setSelectedIntern(null);
+                  setShowViewModal(false);
+                  setSelectedStudent(null);
                 }}
               >
-                <Text style={styles.saveButtonText}>Save</Text>
+                <Text style={styles.cancelButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Warning Modal */}
+      <Modal
+        visible={showWarningModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowWarningModal(false);
+          setWarningModalData(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.warningModalHeader}>
+              <MaterialIcons name="warning" size={32} color="#f59e0b" />
+              <Text style={styles.warningModalTitle}>
+                {warningModalData?.title || 'Warning'}
+              </Text>
+            </View>
+            <Text style={styles.warningModalMessage}>
+              {warningModalData?.message || ''}
+            </Text>
+            <View style={styles.warningModalButtons}>
+              <TouchableOpacity
+                style={[styles.warningModalButton, styles.warningModalButtonCancel]}
+                onPress={() => {
+                  setShowWarningModal(false);
+                  setWarningModalData(null);
+                }}
+              >
+                <Text style={styles.warningModalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.warningModalButton, styles.warningModalButtonConfirm]}
+                onPress={() => {
+                  if (warningModalData?.onConfirm) {
+                    warningModalData.onConfirm();
+                  }
+                }}
+              >
+                <Text style={styles.warningModalButtonConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          setSuccessModalData(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.successModalHeader}>
+              <MaterialIcons name="check-circle" size={32} color="#10b981" />
+              <Text style={styles.successModalTitle}>
+                {successModalData?.title || 'Success'}
+              </Text>
+            </View>
+            <Text style={styles.successModalMessage}>
+              {successModalData?.message || ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.successModalButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                setSuccessModalData(null);
+              }}
+            >
+              <Text style={styles.successModalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Tooltip */}
+      {tooltip.visible && (
+        <View 
+          style={[
+            styles.tooltip,
+            {
+              left: tooltip.x,
+              top: tooltip.y,
+              transform: [{ translateX: -50 }],
+            }
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.tooltipText}>{tooltip.text}</Text>
+          <View style={styles.tooltipArrowDown} />
+        </View>
+      )}
     </View>
   );
 }
@@ -370,7 +820,7 @@ export default function InternsManagement() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
   },
   loadingContainer: {
     flex: 1,
@@ -383,207 +833,236 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  headerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 20,
-    backgroundColor: '#fff',
+  header: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#e2e8f0',
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4285f4',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1e293b',
+    letterSpacing: -0.5,
   },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  searchContainer: {
-    backgroundColor: '#fff',
-    padding: 20,
+  searchSection: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#e2e8f0',
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 12,
+    color: '#64748b',
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 16,
-    color: '#1a1a2e',
-  },
-  filterContainer: {
-    marginBottom: 10,
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a2e',
-    marginBottom: 10,
-  },
-  filterScroll: {
-    flexDirection: 'row',
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    marginRight: 10,
-  },
-  activeFilterChip: {
-    backgroundColor: '#4285f4',
-  },
-  filterChipText: {
-    fontSize: 14,
-    color: '#666',
+    color: '#1e293b',
     fontWeight: '500',
   },
-  activeFilterChipText: {
-    color: '#fff',
-  },
-  internsList: {
+  tableWrapper: {
     flex: 1,
-    padding: 20,
+    backgroundColor: '#ffffff',
+    width: '100%',
   },
-  internCard: {
-    backgroundColor: '#fff',
+  studentsList: {
+    flex: 1,
+  },
+  tableContainer: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
-    elevation: 2,
+    overflow: 'hidden',
+    marginLeft: 20,
+    marginRight: 16,
+    marginVertical: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    minWidth: isSmallScreen ? 1000 : undefined,
+    width: isSmallScreen ? undefined : '100%',
+    alignSelf: 'stretch',
   },
-  internHeader: {
+  tableHeader: {
     flexDirection: 'row',
-    marginBottom: 15,
+    backgroundColor: '#151419',
+    borderBottomWidth: 2,
+    borderBottomColor: '#F56E0F',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
-  profileContainer: {
-    marginRight: 15,
-  },
-  profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  profilePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+  tableHeaderCell: {
+    paddingHorizontal: 12,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  tableHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    minHeight: 72,
     alignItems: 'center',
   },
-  profileText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#666',
+  tableRowEven: {
+    backgroundColor: '#f8fafc',
   },
-  internInfo: {
-    flex: 1,
+  tableCell: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  internName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 4,
+  tableCellName: {
+    flex: isSmallScreen ? 0 : 2,
+    width: isSmallScreen ? 200 : undefined,
+    minWidth: 200,
   },
-  internAge: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+  tableCellEmail: {
+    flex: isSmallScreen ? 0 : 2.5,
+    width: isSmallScreen ? 200 : undefined,
+    minWidth: 200,
   },
-  internYear: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+  tableCellId: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 120 : undefined,
+    minWidth: 120,
   },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  tableCellYear: {
+    flex: isSmallScreen ? 0 : 1,
+    width: isSmallScreen ? 90 : undefined,
+    minWidth: 90,
   },
-  statusText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
+  tableCellMajor: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 120 : undefined,
+    minWidth: 120,
   },
-  internDetails: {
-    marginBottom: 15,
+  tableCellStatus: {
+    flex: isSmallScreen ? 0 : 1,
+    width: isSmallScreen ? 90 : undefined,
+    minWidth: 90,
   },
-  detailText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+  tableCellActions: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 150 : undefined,
+    minWidth: 150,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
+  tableCellNameContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
     flex: 1,
-    marginHorizontal: 4,
+  },
+  tableProfileContainer: {
+    marginRight: 12,
+  },
+  tableProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  tableProfilePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3b82f6',
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
   },
-  viewButton: {
-    backgroundColor: '#34a853',
+  tableProfileText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
-  editButton: {
-    backgroundColor: '#fbbc04',
-  },
-  deleteButton: {
-    backgroundColor: '#ea4335',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 12,
+  tableCellNameText: {
+    fontSize: 14,
     fontWeight: '600',
-    marginLeft: 4,
+    color: '#1e293b',
+    flex: 1,
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  tableStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  tableStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tableActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  tableActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  tableActionView: {
+    borderColor: '#3b82f6',
+  },
+  tableActionToggle: {
+    borderColor: '#f59e0b',
+  },
+  tableActionDelete: {
+    borderColor: '#ef4444',
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#ffffff',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#1e293b',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#64748b',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -595,63 +1074,220 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 30,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 500,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#1e293b',
   },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 30,
-    textAlign: 'center',
+  closeModalButton: {
+    padding: 4,
   },
-  modalPlaceholder: {
-    alignItems: 'center',
-    padding: 40,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    marginBottom: 30,
+  modalBody: {
+    padding: 20,
   },
-  modalPlaceholderText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 16,
-    textAlign: 'center',
+  detailsContainer: {
+    gap: 16,
   },
-  modalActions: {
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  modalButton: {
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 8,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1e293b',
+    flex: 2,
+    textAlign: 'right',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-end',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  saveButton: {
-    backgroundColor: '#4285f4',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#475569',
   },
-  saveButtonText: {
+  // Tooltip Styles
+  tooltip: {
+    position: 'absolute',
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 10000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    maxWidth: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tooltipText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  tooltipArrowDown: {
+    position: 'absolute',
+    top: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#1e293b',
+  },
+  // Warning Modal Styles
+  confirmModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 400,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  warningModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  warningModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    flex: 1,
+  },
+  warningModalMessage: {
+    fontSize: 16,
+    color: '#475569',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  warningModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  warningModalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  warningModalButtonCancel: {
+    backgroundColor: '#f1f5f9',
+  },
+  warningModalButtonConfirm: {
+    backgroundColor: '#f59e0b',
+  },
+  warningModalButtonCancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#475569',
+  },
+  warningModalButtonConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  // Success Modal Styles
+  successModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  successModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    flex: 1,
+  },
+  successModalMessage: {
+    fontSize: 16,
+    color: '#475569',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  successModalButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    alignSelf: 'center',
+    minWidth: 100,
+  },
+  successModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

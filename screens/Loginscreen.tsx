@@ -12,7 +12,9 @@ import {
   Image,
   TextInput,
   ScrollView,
-  Animated
+  Animated,
+  Modal,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -65,6 +67,11 @@ export default function GoogleLogin({
   const [bubbleAnim3] = useState(new Animated.Value(0));
   const [bubbleAnim4] = useState(new Animated.Value(0));
   const [bubbleAnim5] = useState(new Animated.Value(0));
+  const [showDisabledModal, setShowDisabledModal] = useState(false);
+  const [showAppealForm, setShowAppealForm] = useState(false);
+  const [appealMessage, setAppealMessage] = useState('');
+  const [appealEmail, setAppealEmail] = useState('');
+  const [isSendingAppeal, setIsSendingAppeal] = useState(false);
 
   // Get client IDs from app.json via Constants
   const googleWebClientId = Constants.expoConfig?.extra?.googleWebClientId;
@@ -273,8 +280,33 @@ export default function GoogleLogin({
         try {
           const checkUserResponse = await apiService.checkGoogleUser(user.email);
           
+          console.log("🔍 Google user check response:", checkUserResponse);
+          
+          // First, check if account is disabled (this should be checked BEFORE checking if user exists)
+          // The backend returns success: false with message about disabled account when is_active is false
+          if (!checkUserResponse.success) {
+            const errorMessage = checkUserResponse.message || '';
+            const isDisabled = errorMessage.toLowerCase().includes('disabled') || 
+                              errorMessage.toLowerCase().includes('inactive');
+            
+            if (isDisabled) {
+              console.log("🚫 Google user account is disabled (from response message)");
+              setShowDisabledModal(true);
+              setIsLoading(false);
+              return;
+            }
+          }
+          
           if (checkUserResponse.success && checkUserResponse.user) {
-            // User exists, navigate to dashboard
+            // Double-check if account is disabled from user data
+            if (checkUserResponse.user.is_active === false) {
+              console.log("🚫 Google user account is disabled (from user data)");
+              setShowDisabledModal(true);
+              setIsLoading(false);
+              return;
+            }
+            
+            // User exists and is active, navigate to dashboard
             console.log("✅ Existing Google user found:", checkUserResponse.user);
             
             // Normalize user type from database
@@ -321,14 +353,42 @@ export default function GoogleLogin({
             showLoginSuccessAnimation(dbUserData, userType);
           } else {
             // User doesn't exist, show setup screen
+            // Only show setup if the response doesn't indicate a disabled account
+            const errorMessage = checkUserResponse.message || '';
+            const isDisabled = errorMessage.toLowerCase().includes('disabled') || 
+                              errorMessage.toLowerCase().includes('inactive');
+            
+            if (isDisabled) {
+              console.log("🚫 Google user account is disabled (user not found but disabled)");
+              setShowDisabledModal(true);
+              setIsLoading(false);
+              return;
+            }
+            
             console.log("🆕 New Google user, showing setup screen");
             setGoogleUser(user);
             setGoogleToken(accessToken);
             setShowGoogleSetup(true);
           }
-        } catch (dbError) {
+        } catch (dbError: any) {
           console.error("❌ Database check error:", dbError);
-          // If database check fails, show setup screen as fallback
+          
+          // Check if error indicates disabled account
+          const errorMessage = dbError.message || dbError.toString() || '';
+          const isDisabled = errorMessage.toLowerCase().includes('disabled') ||
+                            errorMessage.toLowerCase().includes('inactive') ||
+                            dbError.status === 403 ||
+                            (dbError.response && dbError.response.status === 403);
+          
+          if (isDisabled) {
+            console.log("🚫 Google user account is disabled (from error)");
+            setShowDisabledModal(true);
+            setIsLoading(false);
+            return;
+          }
+          
+          // If database check fails for other reasons, show setup screen as fallback
+          console.log("🆕 Database check failed, showing setup screen as fallback");
           setGoogleUser(user);
           setGoogleToken(accessToken);
           setShowGoogleSetup(true);
@@ -535,13 +595,25 @@ export default function GoogleLogin({
         
         console.log("✅ Email Login successful:", userData);
       } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Login Failed',
-          text2: data.message || 'Invalid email or password',
-          position: 'top',
-          visibilityTime: 4000,
-        });
+        // Check if account is disabled
+        const errorMessage = data.message || 'Invalid email or password';
+        const isDisabled = errorMessage.toLowerCase().includes('disabled') || 
+                          errorMessage.toLowerCase().includes('inactive') ||
+                          response.status === 403;
+        
+        if (isDisabled) {
+          // Show modal for disabled account
+          setShowDisabledModal(true);
+        } else {
+          // Show toast for other errors
+          Toast.show({
+            type: 'error',
+            text1: 'Login Failed',
+            text2: errorMessage,
+            position: 'top',
+            visibilityTime: 4000,
+          });
+        }
       }
     } catch (error) {
       console.error("❌ Email login error:", error);
@@ -1100,6 +1172,163 @@ export default function GoogleLogin({
         </Animated.View>
       </ScrollView>
       
+      {/* Disabled Account Modal */}
+      <Modal
+        visible={showDisabledModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowDisabledModal(false);
+          setShowAppealForm(false);
+          setAppealMessage('');
+          setAppealEmail('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.disabledModalContent}>
+            {!showAppealForm ? (
+              <>
+                <View style={styles.disabledModalHeader}>
+                  <Ionicons name="warning" size={40} color="#f59e0b" />
+                  <Text style={styles.disabledModalTitle}>Account Disabled</Text>
+                </View>
+                <Text style={styles.disabledModalMessage}>
+                  Your account has been disabled. Please contact the administrator to restore access to your account.
+                </Text>
+                <View style={styles.disabledModalButtons}>
+                  <TouchableOpacity
+                    style={[styles.disabledModalButton, styles.disabledModalButtonSecondary]}
+                    onPress={() => {
+                      setShowAppealForm(true);
+                      setAppealEmail(email || '');
+                    }}
+                  >
+                    <Text style={styles.disabledModalButtonSecondaryText}>Send Appeal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.disabledModalButton}
+                    onPress={() => setShowDisabledModal(false)}
+                  >
+                    <Text style={styles.disabledModalButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.disabledModalHeader}>
+                  <Ionicons name="mail" size={40} color="#f59e0b" />
+                  <Text style={styles.disabledModalTitle}>Send Appeal</Text>
+                </View>
+                <Text style={styles.disabledModalMessage}>
+                  Send a message to the administrator requesting account restoration.
+                </Text>
+                <View style={styles.appealForm}>
+                  <View style={styles.appealInputContainer}>
+                    <Text style={styles.appealLabel}>Your Email *</Text>
+                    <TextInput
+                      style={styles.appealInput}
+                      value={appealEmail}
+                      onChangeText={setAppealEmail}
+                      placeholder="Enter your email"
+                      placeholderTextColor="#878787"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={!isSendingAppeal}
+                    />
+                  </View>
+                  <View style={styles.appealInputContainer}>
+                    <Text style={styles.appealLabel}>Message *</Text>
+                    <TextInput
+                      style={[styles.appealInput, styles.appealTextArea]}
+                      value={appealMessage}
+                      onChangeText={setAppealMessage}
+                      placeholder="Explain why you believe your account should be restored..."
+                      placeholderTextColor="#878787"
+                      multiline
+                      numberOfLines={5}
+                      textAlignVertical="top"
+                      editable={!isSendingAppeal}
+                    />
+                  </View>
+                </View>
+                <View style={styles.disabledModalButtons}>
+                  <TouchableOpacity
+                    style={[styles.disabledModalButton, styles.disabledModalButtonSecondary]}
+                    onPress={() => {
+                      setShowAppealForm(false);
+                      setAppealMessage('');
+                    }}
+                    disabled={isSendingAppeal}
+                  >
+                    <Text style={styles.disabledModalButtonSecondaryText}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.disabledModalButton, isSendingAppeal && styles.disabledModalButtonDisabled]}
+                    onPress={async () => {
+                      if (!appealEmail.trim() || !appealMessage.trim()) {
+                        Toast.show({
+                          type: 'error',
+                          text1: 'Validation Error',
+                          text2: 'Please fill in all fields',
+                          position: 'top',
+                          visibilityTime: 4000,
+                        });
+                        return;
+                      }
+
+                      setIsSendingAppeal(true);
+                      try {
+                        const response = await apiService.sendAccountAppeal(appealEmail, appealMessage);
+                        
+                        if (response.success) {
+                          Toast.show({
+                            type: 'success',
+                            text1: 'Appeal Sent',
+                            text2: 'Your appeal has been sent to the administrator. You will be contacted soon.',
+                            position: 'top',
+                            visibilityTime: 5000,
+                          });
+                          setShowDisabledModal(false);
+                          setShowAppealForm(false);
+                          setAppealMessage('');
+                          setAppealEmail('');
+                        } else {
+                          Toast.show({
+                            type: 'error',
+                            text1: 'Error',
+                            text2: response.message || 'Failed to send appeal. Please try again.',
+                            position: 'top',
+                            visibilityTime: 4000,
+                          });
+                        }
+                      } catch (error) {
+                        console.error('Error sending appeal:', error);
+                        Toast.show({
+                          type: 'error',
+                          text1: 'Error',
+                          text2: 'Failed to send appeal. Please try again.',
+                          position: 'top',
+                          visibilityTime: 4000,
+                        });
+                      } finally {
+                        setIsSendingAppeal(false);
+                      }
+                    }}
+                    disabled={isSendingAppeal}
+                  >
+                    {isSendingAppeal ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.disabledModalButtonText}>Send Appeal</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+      
       {/* Toast Component */}
       <Toast />
     </View>
@@ -1503,6 +1732,104 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  // Disabled Account Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  disabledModalContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  disabledModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  disabledModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    flex: 1,
+  },
+  disabledModalMessage: {
+    fontSize: 16,
+    color: '#9ca3af',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  disabledModalButton: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    alignSelf: 'center',
+    minWidth: 120,
+  },
+  disabledModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  disabledModalButtonSecondary: {
+    backgroundColor: '#2A2A2E',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  disabledModalButtonSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#f59e0b',
+  },
+  disabledModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  disabledModalButtonDisabled: {
+    opacity: 0.6,
+  },
+  appealForm: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  appealInputContainer: {
+    marginBottom: 16,
+  },
+  appealLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginBottom: 8,
+  },
+  appealInput: {
+    borderWidth: 2,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#2A2A2E',
+    color: '#FBFBFB',
+  },
+  appealTextArea: {
+    minHeight: 120,
+    paddingTop: 12,
   },
   loginSuccessContainer: {
     backgroundColor: '#1B1B1E', // Dark secondary background

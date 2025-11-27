@@ -150,6 +150,14 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
         
         // Add assigned requirements
         response.requirements.forEach((req: any) => {
+          console.log('📋 Requirement coordinator data:', {
+            requirement_name: req.requirement_name,
+            coordinator_first_name: req.coordinator_first_name,
+            coordinator_last_name: req.coordinator_last_name,
+            coordinator_id: req.coordinator_id,
+            allKeys: Object.keys(req)
+          });
+          
           allRequirements.set(req.requirement_id, {
             id: req.requirement_id,
             requirement_id: req.requirement_id,
@@ -172,16 +180,20 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
         submissions.forEach((sub: any) => {
           const existingReq = allRequirements.get(sub.requirement_id);
           if (existingReq) {
-            // Update existing requirement with submission data
+            // Update existing requirement with submission data (preserve coordinator info)
             allRequirements.set(sub.requirement_id, {
               ...existingReq,
               submissionStatus: sub.status,
               submittedAt: sub.submitted_at,
               coordinatorFeedback: sub.coordinator_feedback,
-              completed: sub.status === 'approved'
+              completed: sub.status === 'approved',
+              // Preserve coordinator info if not in submission
+              coordinator_first_name: existingReq.coordinator_first_name || sub.coordinator_first_name,
+              coordinator_last_name: existingReq.coordinator_last_name || sub.coordinator_last_name,
+              coordinator_id: existingReq.coordinator_id || sub.coordinator_id
             });
           } else {
-            // Add new requirement from submission
+            // Add new requirement from submission (include coordinator if available)
             allRequirements.set(sub.requirement_id, {
               id: sub.requirement_id,
               requirement_id: sub.requirement_id,
@@ -195,7 +207,52 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
               completed: sub.status === 'approved',
               submissionStatus: sub.status,
               submittedAt: sub.submitted_at,
-              coordinatorFeedback: sub.coordinator_feedback
+              coordinatorFeedback: sub.coordinator_feedback,
+              coordinator_first_name: sub.coordinator_first_name,
+              coordinator_last_name: sub.coordinator_last_name,
+              coordinator_id: sub.coordinator_id
+            });
+          }
+        });
+        
+        // Collect unique coordinator IDs and fetch their profiles
+        const coordinatorIds = new Set<number | string>();
+        Array.from(allRequirements.values()).forEach(req => {
+          if (req.coordinator_id) {
+            coordinatorIds.add(req.coordinator_id);
+          }
+        });
+        
+        console.log('👤 Fetching coordinator profiles for IDs:', Array.from(coordinatorIds));
+        
+        // Fetch coordinator profiles
+        const coordinatorMap = new Map<number | string, { first_name: string; last_name: string }>();
+        await Promise.all(
+          Array.from(coordinatorIds).map(async (coordinatorId) => {
+            try {
+              const coordinatorIdStr = coordinatorId.toString();
+              const coordinatorResponse = await apiService.getCoordinatorProfile(coordinatorIdStr);
+              if (coordinatorResponse.success && coordinatorResponse.user) {
+                coordinatorMap.set(coordinatorId, {
+                  first_name: coordinatorResponse.user.first_name || '',
+                  last_name: coordinatorResponse.user.last_name || ''
+                });
+                console.log(`✅ Fetched coordinator ${coordinatorId}:`, coordinatorResponse.user.first_name, coordinatorResponse.user.last_name);
+              }
+            } catch (error) {
+              console.error(`❌ Error fetching coordinator ${coordinatorId}:`, error);
+            }
+          })
+        );
+        
+        // Update requirements with coordinator names
+        allRequirements.forEach((req, reqId) => {
+          if (req.coordinator_id && coordinatorMap.has(req.coordinator_id)) {
+            const coordinator = coordinatorMap.get(req.coordinator_id)!;
+            allRequirements.set(reqId, {
+              ...req,
+              coordinator_first_name: coordinator.first_name,
+              coordinator_last_name: coordinator.last_name
             });
           }
         });
@@ -203,6 +260,13 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
         const requirementsWithStatus = Array.from(allRequirements.values());
         console.log('📋 Final requirements with status:', requirementsWithStatus.length);
         console.log('📋 Approved requirements:', requirementsWithStatus.filter(r => r.submissionStatus === 'approved').length);
+        console.log('👤 Coordinator data check:', requirementsWithStatus.map(r => ({
+          name: r.requirement_name,
+          coordinator_first_name: r.coordinator_first_name,
+          coordinator_last_name: r.coordinator_last_name,
+          coordinator_id: r.coordinator_id,
+          hasCoordinator: !!(r.coordinator_first_name || r.coordinator_last_name)
+        })));
         
         setRequirements(requirementsWithStatus);
       } else {
@@ -420,7 +484,7 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
   };
 
   // Enhanced Progress Bar Component
-  const ProgressBar = ({ progress, color = '#F4D03F' }: { progress: number; color?: string }) => {
+  const ProgressBar = ({ progress, color = '#F56E0F' }: { progress: number; color?: string }) => {
     const progressAnim = useRef(new Animated.Value(0)).current;
     
     useEffect(() => {
@@ -461,7 +525,7 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
       if (status === 'pending') {
         return { color: '#E8A598', text: 'Pending', icon: 'schedule' };
       }
-      return { color: '#F4D03F', text: 'Required', icon: 'assignment' };
+      return { color: '#F56E0F', text: 'Required', icon: 'assignment' };
     };
     
     const config = getStatusConfig();
@@ -509,14 +573,6 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
           </View>
           <Animated.View style={[styles.skeletonExpandIcon, { opacity: shimmerOpacity }]} />
         </View>
-        
-        <View style={styles.skeletonProgressSection}>
-          <Animated.View style={[styles.skeletonProgressLabel, { opacity: shimmerOpacity }]} />
-          <View style={styles.skeletonProgressBarContainer}>
-            <Animated.View style={[styles.skeletonProgressBar, { opacity: shimmerOpacity }]} />
-            <Animated.View style={[styles.skeletonProgressText, { opacity: shimmerOpacity }]} />
-          </View>
-        </View>
       </View>
     );
   };
@@ -524,7 +580,7 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
   if (loadingRequirements) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading requirements...</Text>
       </View>
     );
@@ -539,26 +595,44 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
             {requirements.length} requirement{requirements.length !== 1 ? 's' : ''} assigned
           </Text>
           {requirements.length > 0 && (
-            <View style={styles.headerStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>
-                  {requirements.filter(r => r.submissionStatus === 'approved').length}
-                </Text>
-                <Text style={styles.statLabel}>Completed</Text>
+            <>
+              {/* Overall Progress Bar */}
+              <View style={styles.overallProgressSection}>
+                <View style={styles.overallProgressHeader}>
+                  <Text style={styles.overallProgressLabel}>Overall Progress</Text>
+                  <Text style={styles.overallProgressText}>
+                    {requirements.filter(r => r.submissionStatus === 'approved').length} / {requirements.length} Completed
+                  </Text>
+                </View>
+                <ProgressBar 
+                  progress={requirements.length > 0 
+                    ? (requirements.filter(r => r.submissionStatus === 'approved').length / requirements.length) * 100 
+                    : 0} 
+                  color="#F56E0F" 
+                />
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>
-                  {requirements.filter(r => r.submissionStatus === 'pending').length}
-                </Text>
-                <Text style={styles.statLabel}>Pending</Text>
+              
+              <View style={styles.headerStats}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>
+                    {requirements.filter(r => r.submissionStatus === 'approved').length}
+                  </Text>
+                  <Text style={styles.statLabel}>Completed</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>
+                    {requirements.filter(r => r.submissionStatus === 'pending').length}
+                  </Text>
+                  <Text style={styles.statLabel}>Pending</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>
+                    {requirements.filter(r => !r.submissionStatus).length}
+                  </Text>
+                  <Text style={styles.statLabel}>New</Text>
+                </View>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>
-                  {requirements.filter(r => !r.submissionStatus).length}
-                </Text>
-                <Text style={styles.statLabel}>New</Text>
-              </View>
-            </View>
+            </>
           )}
         </View>
       </Animated.View>
@@ -584,8 +658,17 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
         ) : (
           requirements.map((requirement, index) => {
             const isExpanded = expandedCard === requirement.requirement_id;
-            const progress = requirement.submissionStatus === 'approved' ? 100 : 
-                           requirement.submissionStatus === 'pending' ? 50 : 0;
+            
+            // Debug: Log coordinator data for each requirement
+            if (index === 0) {
+              console.log('🔍 Rendering requirement with coordinator data:', {
+                name: requirement.requirement_name,
+                coordinator_first_name: requirement.coordinator_first_name,
+                coordinator_last_name: requirement.coordinator_last_name,
+                coordinator_id: requirement.coordinator_id,
+                willShow: !!(requirement.coordinator_first_name || requirement.coordinator_last_name || requirement.coordinator_id)
+              });
+            }
             
             return (
               <Animated.View 
@@ -613,17 +696,21 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                     <MaterialIcons 
                       name={isExpanded ? "expand-less" : "expand-more"} 
                       size={24} 
-                      color="#F4D03F" 
+                      color="#F56E0F" 
                     />
                   </View>
-                  
-                  <View style={styles.progressSection}>
-                    <Text style={styles.progressLabel}>Progress</Text>
-                    <ProgressBar 
-                      progress={progress} 
-                      color={requirement.submissionStatus === 'approved' ? '#2D5A3D' : '#F4D03F'} 
-                    />
-                  </View>
+                  {(requirement.coordinator_first_name || requirement.coordinator_last_name || requirement.coordinator_id) && (
+                    <View style={styles.coordinatorInfoCollapsed}>
+                      <MaterialIcons name="person" size={16} color="#F56E0F" />
+                      <Text style={styles.coordinatorTextCollapsed}>
+                        Assigned by: {
+                          [requirement.coordinator_first_name, requirement.coordinator_last_name]
+                            .filter(Boolean)
+                            .join(' ') || 'Coordinator'
+                        }
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
 
                 {isExpanded && (
@@ -637,7 +724,7 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                     <View style={styles.requirementDetails}>
                 {requirement.due_date && (
                   <View style={styles.requirementDetailRow}>
-                    <MaterialIcons name="schedule" size={18} color="#F4D03F" />
+                    <MaterialIcons name="schedule" size={18} color="#F56E0F" />
                     <Text style={styles.requirementDetailText}>
                       Due: {new Date(requirement.due_date).toLocaleDateString()}
                     </Text>
@@ -646,7 +733,7 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
 
                 {requirement.coordinator_first_name && (
                   <View style={styles.requirementDetailRow}>
-                    <MaterialIcons name="person" size={18} color="#F4D03F" />
+                    <MaterialIcons name="person" size={18} color="#F56E0F" />
                     <Text style={styles.requirementDetailText}>
                       Assigned by: {requirement.coordinator_first_name} {requirement.coordinator_last_name}
                     </Text>
@@ -655,7 +742,7 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                 
                 {requirement.file_url && (
                   <View style={styles.requirementDetailRow}>
-                    <MaterialIcons name="attach-file" size={18} color="#F4D03F" />
+                    <MaterialIcons name="attach-file" size={18} color="#F56E0F" />
                     <TouchableOpacity
                       onPress={() => handleDownloadRequirement(requirement.file_url, requirement.file_name || 'requirement.pdf')}
                     >
@@ -754,10 +841,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    shadowColor: '#000',
+    backgroundColor: '#2A2A2E', // Dark secondary
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -769,8 +856,8 @@ const styles = StyleSheet.create({
   headerStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 20,
-    paddingTop: 20,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -778,28 +865,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#F4D03F',
-    marginBottom: 4,
+    color: '#F56E0F',
+    marginBottom: 1,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#fff',
     opacity: 0.8,
     fontWeight: '500',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 2,
     fontFamily: 'System',
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    fontSize: 13,
+    color: '#F56E0F', // Primary orange
     fontWeight: '500',
+  },
+  overallProgressSection: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  overallProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  overallProgressLabel: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  overallProgressText: {
+    fontSize: 12,
+    color: '#F56E0F',
+    fontWeight: '600',
   },
   content: {
     flex: 1,
@@ -829,22 +940,22 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   requirementCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 20,
     padding: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
   },
   enhancedRequirementCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -878,26 +989,42 @@ const styles = StyleSheet.create({
   },
   progressBarBackground: {
     flex: 1,
-    height: 8,
+    height: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 4,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
   },
   progressText: {
-    fontSize: 12,
-    color: '#F4D03F',
+    fontSize: 11,
+    color: '#F56E0F',
     fontWeight: 'bold',
-    marginLeft: 12,
+    marginLeft: 8,
   },
   requirementHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  coordinatorInfoCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+  },
+  coordinatorTextCollapsed: {
+    fontSize: 14,
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '500',
+    opacity: 0.9,
   },
   requirementTitleContainer: {
     flex: 1,
@@ -977,7 +1104,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   linkText: {
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     textDecorationLine: 'underline',
     fontWeight: '600',
   },
@@ -1002,7 +1129,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   uploadButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1010,7 +1137,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -1050,14 +1177,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   successModalContent: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
     maxWidth: 350,
     width: '90%',
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1082,7 +1209,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   successButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingVertical: 14,
     paddingHorizontal: 30,
     borderRadius: 12,
@@ -1096,11 +1223,11 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonRequirementCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,

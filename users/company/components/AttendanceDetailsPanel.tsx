@@ -7,12 +7,8 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
-  Modal,
-  Platform,
-  TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import DatePicker from '@react-native-community/datetimepicker';
 import { apiService } from '../../../lib/api';
 
 const { width, height } = Dimensions.get('window');
@@ -105,11 +101,8 @@ export default function AttendanceDetailsPanel({
   companyId,
   currentUser,
 }: AttendanceDetailsPanelProps) {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [cache, setCache] = useState<{[key: string]: any[]}>({});
 
   if (!selectedInternDetail) return null;
 
@@ -124,44 +117,30 @@ export default function AttendanceDetailsPanel({
     return `${h}h ${m}m`;
   };
 
-  // Fetch attendance records for the selected intern and selected date
-  const fetchAttendanceRecords = async (date?: Date) => {
+  // Fetch ALL attendance records for the selected intern
+  const fetchAttendanceRecords = async () => {
     if (!companyId || !currentUser.id || !selectedInternDetail) {
-      return;
-    }
-
-    const targetDate = date || selectedDate;
-    const dateString = targetDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    const cacheKey = `${selectedInternDetail.student_id}-${dateString}`;
-
-    // Check cache first
-    if (cache[cacheKey]) {
-      setAttendanceRecords(cache[cacheKey]);
       return;
     }
 
     setLoading(true);
     try {
+      // Fetch all records without date filtering
       const response = await apiService.getAttendanceRecords(companyId, currentUser.id, {
-        startDate: dateString,
-        endDate: dateString,
         internId: selectedInternDetail.student_id
+        // No date filter - get all records
       });
 
       if (response.success && response.data) {
-        setAttendanceRecords(response.data);
-        // Cache the result
-        setCache(prev => ({
-          ...prev,
-          [cacheKey]: response.data
-        }));
+        // Sort by date descending (most recent first)
+        const sortedRecords = response.data.sort((a: any, b: any) => {
+          const dateA = new Date(a.attendance_date).getTime();
+          const dateB = new Date(b.attendance_date).getTime();
+          return dateB - dateA;
+        });
+        setAttendanceRecords(sortedRecords);
       } else {
         setAttendanceRecords([]);
-        // Cache empty result to avoid repeated API calls
-        setCache(prev => ({
-          ...prev,
-          [cacheKey]: []
-        }));
       }
     } catch (error) {
       console.error('Error fetching attendance records:', error);
@@ -171,39 +150,130 @@ export default function AttendanceDetailsPanel({
     }
   };
 
-  // Debounced date change handler
-  const handleDateChange = React.useCallback((newDate: Date) => {
-    setSelectedDate(newDate);
-    // Small delay to avoid rapid API calls
-    setTimeout(() => {
-      fetchAttendanceRecords(newDate);
-    }, 100);
-  }, [selectedInternDetail, companyId, currentUser.id]);
-
   // Fetch records when component mounts
   React.useEffect(() => {
     fetchAttendanceRecords();
   }, [companyId, currentUser.id, selectedInternDetail]);
 
+  const parseTimeTo24Hour = (timeStr: string, isPM: boolean = false) => {
+    if (!timeStr || timeStr === '--:--' || timeStr === '') return null;
+    
+    // Backend sends times in 12-hour format with AM/PM (e.g., "07:00 AM", "12:00 PM", "01:00 PM")
+    // Extract time part and period
+    const trimmed = timeStr.trim();
+    const upperTimeStr = trimmed.toUpperCase();
+    
+    // Check if time string contains AM/PM indicator
+    const hasAM = upperTimeStr.includes('AM');
+    const hasPM = upperTimeStr.includes('PM');
+    
+    // Extract time part (remove AM/PM)
+    const timePart = trimmed.replace(/\s*(AM|PM)/i, '').trim();
+    const parts = timePart.split(':');
+    let hour = parseInt(parts[0]);
+    const minute = parseInt(parts[1] || '0');
+    
+    // Validate parsed values
+    if (isNaN(hour) || isNaN(minute)) {
+      console.warn('Invalid time format:', timeStr);
+      return null;
+    }
+    
+    // Convert to 24-hour format - prioritize AM/PM indicator in string
+    if (hasAM) {
+      if (hour === 12) hour = 0; // 12 AM = 0:00
+      // Other AM hours stay as is (1-11 AM = 1-11)
+    } else if (hasPM) {
+      if (hour !== 12) hour += 12; // 1 PM = 13:00, 2 PM = 14:00, etc.
+      // 12 PM stays 12:00 (noon)
+    } else {
+      // No AM/PM indicator in string - use isPM parameter as fallback
+      // If isPM is true and hour is 1-11, it's likely PM time in 12-hour format
+      if (isPM && hour >= 1 && hour <= 11) {
+        hour += 12; // Convert 1-11 PM to 13-23
+      }
+      // If hour is already 13-23, it's already in 24-hour format
+      // If hour is 0, it's midnight (12 AM)
+      // If hour is 12 and isPM is false, it's noon (12 PM) - but this is ambiguous, assume noon
+      if (hour === 12 && !isPM) {
+        // Could be 12 PM (noon) or 12 AM (midnight) - default to noon if isPM is false
+        // Actually, if isPM is false and hour is 12, it's more likely 12 PM (noon) in 24-hour format
+        // But to be safe, we'll keep it as 12
+      }
+    }
+    
+    return { hour, minute };
+  };
+
   const getTimeSegments = (record: any) => {
     const segments = [];
     
-    if (record?.amTimeIn && record?.amTimeOut) {
-      segments.push({
-        start: record.amTimeIn.split(' ')[0],
-        end: record.amTimeOut.split(' ')[0],
-        type: 'am',
-        color: '#4CAF50'
-      });
+    // AM segment (should be blue) - 7 AM to 12 PM
+    // Get values from record, handling both camelCase and snake_case
+    const amTimeIn = record?.amTimeIn || record?.am_time_in;
+    const amTimeOut = record?.amTimeOut || record?.am_time_out;
+    
+    if (amTimeIn && amTimeOut && amTimeIn !== '--:--' && amTimeOut !== '--:--') {
+      const amIn = parseTimeTo24Hour(amTimeIn, false);
+      const amOut = parseTimeTo24Hour(amTimeOut, false);
+      
+      if (amIn && amOut) {
+        segments.push({
+          startHour: amIn.hour,
+          startMin: amIn.minute,
+          endHour: amOut.hour,
+          endMin: amOut.minute,
+          type: 'am',
+          color: '#2196F3' // Blue for AM
+        });
+      }
     }
     
-    if (record?.pmTimeIn && record?.pmTimeOut) {
-      segments.push({
-        start: record.pmTimeIn.split(' ')[0],
-        end: record.pmTimeOut.split(' ')[0],
-        type: 'pm',
-        color: '#2196F3'
-      });
+    // PM segment (should be green) - 1 PM to 12 AM
+    // Get values from record, handling both camelCase and snake_case
+    const pmTimeIn = record?.pmTimeIn || record?.pm_time_in;
+    const pmTimeOut = record?.pmTimeOut || record?.pm_time_out;
+    
+    if (pmTimeIn && pmTimeOut && pmTimeIn !== '--:--' && pmTimeOut !== '--:--') {
+      // For PM times, pass true as isPM parameter (fallback if no AM/PM in string)
+      const pmIn = parseTimeTo24Hour(pmTimeIn, true);
+      const pmOut = parseTimeTo24Hour(pmTimeOut, true);
+      
+      if (pmIn && pmOut) {
+        // Ensure PM times are in afternoon/evening (13-23) or midnight (0)
+        // If parsed hour is 1-12, it might be in 12-hour format without PM indicator
+        let pmInHour = pmIn.hour;
+        let pmOutHour = pmOut.hour;
+        
+        // Check if the time string has PM indicator
+        const pmInHasPM = (pmTimeIn || '').toUpperCase().includes('PM');
+        const pmOutHasPM = (pmTimeOut || '').toUpperCase().includes('PM');
+        
+        // If no PM indicator and hour is 1-11, convert to 13-23
+        if (!pmInHasPM && pmInHour >= 1 && pmInHour <= 11) {
+          pmInHour += 12;
+        }
+        if (!pmOutHasPM && pmOutHour >= 1 && pmOutHour <= 11) {
+          pmOutHour += 12;
+        }
+        
+        // If hour is 12 and no AM/PM indicator, assume PM (noon)
+        if (!pmInHasPM && !(pmTimeIn || '').toUpperCase().includes('AM') && pmInHour === 12) {
+          // Keep as 12 (noon)
+        }
+        if (!pmOutHasPM && !(pmTimeOut || '').toUpperCase().includes('AM') && pmOutHour === 12) {
+          // Keep as 12 (noon)
+        }
+        
+        segments.push({
+          startHour: pmInHour,
+          startMin: pmIn.minute,
+          endHour: pmOutHour,
+          endMin: pmOut.minute,
+          type: 'pm',
+          color: '#4CAF50' // Green for PM
+        });
+      }
     }
     
     return segments;
@@ -227,81 +297,125 @@ export default function AttendanceDetailsPanel({
     }
 
     return (
-      <View style={[
-        styles.timelineBarContainer,
-        isTablet && styles.timelineBarContainerTablet,
-        isMobile && styles.timelineBarContainerMobile
-      ]}>
+      <View>
+        {/* Timeline Legend */}
         <View style={[
-          styles.timelineBar,
-          isTablet && styles.timelineBarTablet,
-          isMobile && styles.timelineBarMobile
+          styles.timelineLegend,
+          isTablet && styles.timelineLegendTablet,
+          isMobile && styles.timelineLegendMobile
         ]}>
-          {segments.map((segment, index) => {
-            const startHour = parseInt(segment.start.split(':')[0]);
-            const startMin = parseInt(segment.start.split(':')[1]);
-            const endHour = parseInt(segment.end.split(':')[0]);
-            const endMin = parseInt(segment.end.split(':')[1]);
-            
-            const startPercent = ((startHour - 9) * 60 + startMin) / (15 * 60) * 100;
-            const widthPercent = ((endHour - startHour) * 60 + (endMin - startMin)) / (15 * 60) * 100;
-            
-            return (
-              <View
-                key={index}
-                style={[
-                  styles.timelineSegment,
-                  isTablet && styles.timelineSegmentTablet,
-                  isMobile && styles.timelineSegmentMobile,
-                  {
-                    left: `${Math.max(0, startPercent)}%`,
-                    width: `${Math.max(2, widthPercent)}%`,
-                    backgroundColor: segment.color
-                  }
-                ]}
-              />
-            );
-          })}
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: '#2196F3' }]} />
+            <Text style={[
+              styles.legendText,
+              isTablet && styles.legendTextTablet,
+              isMobile && styles.legendTextMobile
+            ]}>AM</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: '#4CAF50' }]} />
+            <Text style={[
+              styles.legendText,
+              isTablet && styles.legendTextTablet,
+              isMobile && styles.legendTextMobile
+            ]}>PM</Text>
+          </View>
         </View>
-        <View style={styles.timelineMarkers}>
-          {[9, 11, 13, 15, 17, 19, 21, 23].map((hour, index) => (
-            <View key={index} style={styles.timelineMarker}>
-              <Text style={styles.timelineMarkerText}>{hour}:00</Text>
-            </View>
-          ))}
+        <View style={[
+          styles.timelineBarContainer,
+          isTablet && styles.timelineBarContainerTablet,
+          isMobile && styles.timelineBarContainerMobile
+        ]}>
+          <View style={[
+            styles.timelineBar,
+            isTablet && styles.timelineBarTablet,
+            isMobile && styles.timelineBarMobile
+          ]}>
+            {segments.map((segment, index) => {
+              const { startHour, startMin, endHour, endMin } = segment;
+              
+              // Timeline spans from 7 AM (7) to 12 AM (24, treated as 24 for calculation)
+              const timelineStartHour = 7;
+              const timelineEndHour = 24; // 12 AM (midnight)
+              const totalHours = timelineEndHour - timelineStartHour; // 17 hours
+              const totalMinutes = totalHours * 60; // 1020 minutes
+              
+              // Calculate start position (minutes from 7 AM)
+              const startMinutesFrom7AM = (startHour - timelineStartHour) * 60 + startMin;
+              const startPercent = (startMinutesFrom7AM / totalMinutes) * 100;
+              
+              // Calculate duration in minutes
+              const durationMinutes = (endHour - startHour) * 60 + (endMin - startMin);
+              const widthPercent = (durationMinutes / totalMinutes) * 100;
+              
+              return (
+                <View
+                  key={index}
+                  style={[
+                    styles.timelineSegment,
+                    isTablet && styles.timelineSegmentTablet,
+                    isMobile && styles.timelineSegmentMobile,
+                    {
+                      left: `${Math.max(0, startPercent)}%`,
+                      width: `${Math.max(2, widthPercent)}%`,
+                      backgroundColor: segment.color
+                    }
+                  ]}
+                />
+              );
+            })}
+          </View>
+          <View style={styles.timelineMarkers}>
+            {[7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].map((hour, index) => {
+              // Format hour for display: 7-11 AM, 12 PM, 1-11 PM, 12 AM (24 -> 12 AM)
+              let displayHour = hour === 24 ? 12 : hour > 12 ? hour - 12 : hour;
+              let period = hour === 24 ? 'AM' : hour < 12 ? 'AM' : hour === 12 ? 'PM' : 'PM';
+              
+              return (
+                <View key={index} style={styles.timelineMarker}>
+                  <Text style={styles.timelineMarkerText}>
+                    {displayHour} {period}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
       </View>
     );
   };
 
   const getAttendanceHistory = () => {
-    // Use real attendance records from database
-    const record = attendanceRecords.find((r: any) => 
-      r.user_id === parseInt(selectedInternDetail.student_id) ||
-      r.intern_id === parseInt(selectedInternDetail.student_id) ||
-      r.student_id === parseInt(selectedInternDetail.student_id)
-    );
-
+    // Convert all attendance records to history format
     const today = new Date();
-    return [{
-      date: selectedDate,
-      isToday: selectedDate.toDateString() === today.toDateString(),
-      record: record ? {
-        status: record.status,
-        amTimeIn: record.am_time_in,
-        amTimeOut: record.am_time_out,
-        pmTimeIn: record.pm_time_in,
-        pmTimeOut: record.pm_time_out,
-        totalHours: record.total_hours || 0
-      } : null
-    }];
+    today.setHours(0, 0, 0, 0);
+    
+    return attendanceRecords.map((record: any) => {
+      const recordDate = new Date(record.attendance_date);
+      recordDate.setHours(0, 0, 0, 0);
+      const isToday = recordDate.getTime() === today.getTime();
+      
+      // Map all time fields - handle both snake_case and camelCase
+      return {
+        date: recordDate,
+        isToday: isToday,
+        record: {
+          status: record.status,
+          amTimeIn: record.am_time_in || record.amTimeIn || null,
+          amTimeOut: record.am_time_out || record.amTimeOut || null,
+          pmTimeIn: record.pm_time_in || record.pmTimeIn || null,
+          pmTimeOut: record.pm_time_out || record.pmTimeOut || null,
+          totalHours: record.total_hours || record.totalHours || 0
+        }
+      };
+    });
   };
 
   const attendanceHistory = getAttendanceHistory();
 
   return (
     <View style={styles.detailPanel}>
-      {/* Header */}
+      {/* Header with Back Button */}
       <View style={[
         styles.detailHeader,
         isTablet && styles.detailHeaderTablet,
@@ -311,19 +425,14 @@ export default function AttendanceDetailsPanel({
           style={styles.backButton}
           onPress={onClose}
         >
-          <MaterialIcons name="arrow-forward" size={24} color="#F56E0F" />
+          <MaterialIcons name="arrow-back" size={24} color="#F56E0F" />
         </TouchableOpacity>
         <Text style={[
           styles.detailTitle,
           isTablet && styles.detailTitleTablet,
           isMobile && styles.detailTitleMobile
         ]}>Attendance Details</Text>
-        <TouchableOpacity 
-          style={styles.calendarIconContainer}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <MaterialIcons name="calendar-today" size={24} color="#F56E0F" />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Intern Summary Card */}
@@ -381,84 +490,6 @@ export default function AttendanceDetailsPanel({
               </View>
             </View>
           </View>
-          <View style={[
-            styles.internSummaryRight,
-            isTablet && styles.internSummaryRightTablet,
-            isMobile && styles.internSummaryRightMobile
-          ]}>
-            <View style={[
-              styles.summaryMetrics,
-              isTablet && styles.summaryMetricsTablet,
-              isMobile && styles.summaryMetricsMobile
-            ]}>
-              <View style={[
-                styles.summaryMetric,
-                isTablet && styles.summaryMetricTablet,
-                isMobile && styles.summaryMetricMobile
-              ]}>
-                <Text style={[
-                  styles.summaryMetricLabel,
-                  isTablet && styles.summaryMetricLabelTablet,
-                  isMobile && styles.summaryMetricLabelMobile
-                ]}>Last Clocked In</Text>
-                <Text style={[
-                  styles.summaryMetricValue,
-                  isTablet && styles.summaryMetricValueTablet,
-                  isMobile && styles.summaryMetricValueMobile
-                ]}>A few seconds ago</Text>
-              </View>
-              <View style={[
-                styles.summaryMetric,
-                isTablet && styles.summaryMetricTablet,
-                isMobile && styles.summaryMetricMobile
-              ]}>
-                <Text style={[
-                  styles.summaryMetricLabel,
-                  isTablet && styles.summaryMetricLabelTablet,
-                  isMobile && styles.summaryMetricLabelMobile
-                ]}>Last Messaged</Text>
-                <Text style={[
-                  styles.summaryMetricValue,
-                  isTablet && styles.summaryMetricValueTablet,
-                  isMobile && styles.summaryMetricValueMobile
-                ]}>2 Days ago</Text>
-              </View>
-              <View style={[
-                styles.summaryMetric,
-                isTablet && styles.summaryMetricTablet,
-                isMobile && styles.summaryMetricMobile
-              ]}>
-                <Text style={[
-                  styles.summaryMetricLabel,
-                  isTablet && styles.summaryMetricLabelTablet,
-                  isMobile && styles.summaryMetricLabelMobile
-                ]}>Intern ID</Text>
-                <Text style={[
-                  styles.summaryMetricValue,
-                  isTablet && styles.summaryMetricValueTablet,
-                  isMobile && styles.summaryMetricValueMobile
-                ]}>#{selectedInternDetail.id_number || selectedInternDetail.student_id}</Text>
-              </View>
-              <View style={[
-                styles.summaryMetric,
-                isTablet && styles.summaryMetricTablet,
-                isMobile && styles.summaryMetricMobile
-              ]}>
-                <Text style={[
-                  styles.summaryMetricLabel,
-                  isTablet && styles.summaryMetricLabelTablet,
-                  isMobile && styles.summaryMetricLabelMobile
-                ]}>Remaining Hours</Text>
-                <Text style={[
-                  styles.summaryMetricValue,
-                  isTablet && styles.summaryMetricValueTablet,
-                  isMobile && styles.summaryMetricValueMobile
-                ]}>
-                  {formatHours(selectedInternDetail.remainingHours || 0)}
-                </Text>
-              </View>
-            </View>
-          </View>
         </View>
       </View>
 
@@ -473,187 +504,110 @@ export default function AttendanceDetailsPanel({
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading attendance data...</Text>
           </View>
-        ) : (
+        ) : attendanceHistory.length > 0 ? (
           attendanceHistory.map((day, index) => {
-          const segments = getTimeSegments(day.record);
-          const totalHours = day.record?.totalHours || 0;
-          
-          return (
-            <View key={index} style={[
-              styles.dayCard,
-              isTablet && styles.dayCardTablet,
-              isMobile && styles.dayCardMobile
-            ]}>
-              <View style={[
-                styles.dayHeader,
-                isTablet && styles.dayHeaderTablet,
-                isMobile && styles.dayHeaderMobile
+            const segments = getTimeSegments(day.record);
+            const totalHours = day.record?.totalHours || 0;
+            
+            return (
+              <View key={index} style={[
+                styles.dayCard,
+                isTablet && styles.dayCardTablet,
+                isMobile && styles.dayCardMobile
               ]}>
-                <Text style={[
-                  styles.dayTitle,
-                  isTablet && styles.dayTitleTablet,
-                  isMobile && styles.dayTitleMobile
+                <View style={[
+                  styles.dayHeader,
+                  isTablet && styles.dayHeaderTablet,
+                  isMobile && styles.dayHeaderMobile
                 ]}>
-                  {day.isToday ? 'Today' : day.date.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    day: 'numeric' 
-                  })}
-                </Text>
-                {day.record?.status === 'present' && (
-                  <View style={styles.approvedBadge}>
-                    <View style={styles.approvedDot} />
-                    <Text style={styles.approvedText}>Approved</Text>
+                  <Text style={[
+                    styles.dayTitle,
+                    isTablet && styles.dayTitleTablet,
+                    isMobile && styles.dayTitleMobile
+                  ]}>
+                    {day.isToday ? 'Today' : day.date.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </Text>
+                </View>
+                
+                <View style={[
+                  styles.dayContent,
+                  isTablet && styles.dayContentTablet,
+                  isMobile && styles.dayContentMobile
+                ]}>
+                  <View style={[
+                    styles.timeInfo,
+                    isTablet && styles.timeInfoTablet,
+                    isMobile && styles.timeInfoMobile
+                  ]}>
+                    <Text style={[
+                      styles.timeLabel,
+                      isTablet && styles.timeLabelTablet,
+                      isMobile && styles.timeLabelMobile
+                    ]}>Clock-in:</Text>
+                    <Text style={[
+                      styles.timeValue,
+                      isTablet && styles.timeValueTablet,
+                      isMobile && styles.timeValueMobile
+                    ]}>
+                      {formatTime(day.record?.amTimeIn || day.record?.pmTimeIn || undefined)}
+                    </Text>
                   </View>
-                )}
-              </View>
-              
-              <View style={[
-                styles.dayContent,
-                isTablet && styles.dayContentTablet,
-                isMobile && styles.dayContentMobile
-              ]}>
-                <View style={[
-                  styles.timeInfo,
-                  isTablet && styles.timeInfoTablet,
-                  isMobile && styles.timeInfoMobile
-                ]}>
-                  <Text style={[
-                    styles.timeLabel,
-                    isTablet && styles.timeLabelTablet,
-                    isMobile && styles.timeLabelMobile
-                  ]}>Clock-in:</Text>
-                  <Text style={[
-                    styles.timeValue,
-                    isTablet && styles.timeValueTablet,
-                    isMobile && styles.timeValueMobile
+                  
+                  {renderTimelineBar(segments, totalHours)}
+                  
+                  <View style={[
+                    styles.timeInfo,
+                    isTablet && styles.timeInfoTablet,
+                    isMobile && styles.timeInfoMobile
                   ]}>
-                    {formatTime(day.record?.amTimeIn || day.record?.pmTimeIn || undefined)}
-                  </Text>
-                </View>
-                
-                {renderTimelineBar(segments, totalHours)}
-                
-                <View style={[
-                  styles.timeInfo,
-                  isTablet && styles.timeInfoTablet,
-                  isMobile && styles.timeInfoMobile
-                ]}>
-                  <Text style={[
-                    styles.timeLabel,
-                    isTablet && styles.timeLabelTablet,
-                    isMobile && styles.timeLabelMobile
-                  ]}>Clock-out:</Text>
-                  <Text style={[
-                    styles.timeValue,
-                    isTablet && styles.timeValueTablet,
-                    isMobile && styles.timeValueMobile
+                    <Text style={[
+                      styles.timeLabel,
+                      isTablet && styles.timeLabelTablet,
+                      isMobile && styles.timeLabelMobile
+                    ]}>Clock-out:</Text>
+                    <Text style={[
+                      styles.timeValue,
+                      isTablet && styles.timeValueTablet,
+                      isMobile && styles.timeValueMobile
+                    ]}>
+                      {formatTime(day.record?.pmTimeOut || day.record?.amTimeOut || undefined)}
+                    </Text>
+                  </View>
+                  
+                  <View style={[
+                    styles.durationInfo,
+                    isTablet && styles.durationInfoTablet,
+                    isMobile && styles.durationInfoMobile
                   ]}>
-                    {formatTime(day.record?.pmTimeOut || day.record?.amTimeOut || undefined)}
-                  </Text>
-                </View>
-                
-                <View style={[
-                  styles.durationInfo,
-                  isTablet && styles.durationInfoTablet,
-                  isMobile && styles.durationInfoMobile
-                ]}>
-                  <Text style={[
-                    styles.durationLabel,
-                    isTablet && styles.durationLabelTablet,
-                    isMobile && styles.durationLabelMobile
-                  ]}>Duration:</Text>
-                  <Text style={[
-                    styles.durationValue,
-                    isTablet && styles.durationValueTablet,
-                    isMobile && styles.durationValueMobile
-                  ]}>
-                    {totalHours > 0 ? formatHours(totalHours) : '-'}
-                  </Text>
+                    <Text style={[
+                      styles.durationLabel,
+                      isTablet && styles.durationLabelTablet,
+                      isMobile && styles.durationLabelMobile
+                    ]}>Duration:</Text>
+                    <Text style={[
+                      styles.durationValue,
+                      isTablet && styles.durationValueTablet,
+                      isMobile && styles.durationValueMobile
+                    ]}>
+                      {totalHours > 0 ? formatHours(totalHours) : '-'}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          );
-        })
+            );
+          })
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <MaterialIcons name="event-busy" size={48} color="#6c757d" />
+            <Text style={styles.emptyStateText}>No attendance records found</Text>
+          </View>
         )}
       </ScrollView>
-
-      {/* Date Picker Modal */}
-      <Modal
-        visible={showDatePicker}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.datePickerModal}>
-            <View style={styles.datePickerHeader}>
-              <Text style={styles.datePickerTitle}>Select Date</Text>
-              <TouchableOpacity
-                style={styles.closeModalButton}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <MaterialIcons name="close" size={24} color="##F56E0" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.datePickerContent}>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="date"
-                  value={selectedDate.toISOString().split('T')[0]}
-                  onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      handleDateChange(date);
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 8,
-                    padding: '12px',
-                    fontSize: 16,
-                    color: '#333',
-                    outline: 'none',
-                  }}
-                />
-              ) : (
-                <TextInput
-                  style={styles.dateInput}
-                  value={selectedDate.toISOString().split('T')[0]}
-                  onChangeText={(text: string) => {
-                    const date = new Date(text);
-                    if (!isNaN(date.getTime())) {
-                      handleDateChange(date);
-                    }
-                  }}
-                  placeholder="YYYY-MM-DD"
-                  keyboardType="numeric"
-                />
-              )}
-              
-              <View style={styles.datePickerActions}>
-                <TouchableOpacity
-                  style={styles.todayButton}
-                  onPress={() => {
-                    const today = new Date();
-                    handleDateChange(today);
-                    setShowDatePicker(false);
-                  }}
-                >
-                  <Text style={styles.todayButtonText}>Today</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.confirmButton}
-                  onPress={() => setShowDatePicker(false)}
-                >
-                  <Text style={styles.confirmButtonText}>Confirm</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -704,32 +658,32 @@ const styles = StyleSheet.create({
   },
   internSummaryContent: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 20,
+    alignItems: 'center',
+    gap: 12,
     flexWrap: 'wrap',
   },
   internSummaryLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 10,
     flex: 1,
     minWidth: 0,
   },
   detailProfileContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   detailProfileContainerTablet: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   detailProfileContainerMobile: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   detailProfileImage: {
     width: '100%',
@@ -744,54 +698,54 @@ const styles = StyleSheet.create({
   },
   detailProfileText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   detailProfileTextTablet: {
-    fontSize: 18,
+    fontSize: 14,
   },
   detailProfileTextMobile: {
-    fontSize: 20,
+    fontSize: 16,
   },
   detailProfileInfo: {
     flex: 1,
   },
   detailProfileName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1E3A5F',
     marginBottom: 2,
   },
   detailProfileNameTablet: {
-    fontSize: 16,
-    marginBottom: 6,
+    fontSize: 14,
+    marginBottom: 4,
   },
   detailProfileNameMobile: {
-    fontSize: 16,
-    marginBottom: 8,
+    fontSize: 14,
+    marginBottom: 4,
     textAlign: 'center',
   },
   statusBadge: {
     backgroundColor: '#e8f5e8',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
     alignSelf: 'flex-start',
   },
   statusBadgeTablet: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   statusBadgeMobile: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
     alignSelf: 'center',
   },
   statusText: {
     color: '#34a853',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
   },
   internSummaryRight: {
@@ -859,26 +813,6 @@ const styles = StyleSheet.create({
     color: '#1E3A5F',
     flexShrink: 1,
   },
-  approvedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e8',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  approvedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34a853',
-    marginRight: 6,
-  },
-  approvedText: {
-    color: '#34a853',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   dayContent: {
     gap: 12,
   },
@@ -920,6 +854,41 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
   },
+  timelineLegend: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  timelineLegendTablet: {
+    gap: 12,
+    marginBottom: 6,
+  },
+  timelineLegendMobile: {
+    gap: 10,
+    marginBottom: 4,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+  },
+  legendText: {
+    fontSize: 11,
+    color: '#6c757d',
+    fontWeight: '500',
+  },
+  legendTextTablet: {
+    fontSize: 10,
+  },
+  legendTextMobile: {
+    fontSize: 9,
+  },
   timelineBarContainer: {
     height: 32,
     marginVertical: 12,
@@ -949,17 +918,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     maxWidth: '100%',
   },
   timelineMarker: {
     alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
   },
   timelineMarkerText: {
-    fontSize: 10,
+    fontSize: 8,
     color: '#999',
     fontWeight: '500',
-    flexShrink: 1,
+    textAlign: 'center',
   },
   timelineBarEmpty: {
     height: 32,
@@ -1296,78 +1267,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   
-  // Date Picker Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  datePickerModal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: '100%',
-    maxWidth: 400,
-  },
-  datePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  datePickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1E3A5F',
-  },
-  closeModalButton: {
-    padding: 4,
-  },
-  datePickerContent: {
-    padding: 20,
-  },
-  dateInput: {
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 20,
-  },
-  datePickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  todayButton: {
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    marginRight: 8,
-  },
-  todayButtonText: {
-    color: '#1E3A5F',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  confirmButton: {
-    backgroundColor: '#1E3A5F',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  
   // Loading Styles
   loadingContainer: {
     flex: 1,
@@ -1379,5 +1278,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     fontWeight: '500',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#6c757d',
+    fontWeight: '500',
+    marginTop: 16,
   },
 });

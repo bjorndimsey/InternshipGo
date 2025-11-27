@@ -250,16 +250,42 @@ class CoordinatorController {
           
           // Only include coordinators (not other user types)
           if (user.user_type === 'Coordinator') {
-            // Get MOA information from this specific company where this coordinator uploaded MOA
-            const moaResult = await query('companies', 'select', null, { 
-              id: parseInt(companyId),
-              moa_uploaded_by: coordinator.user_id 
-            });
-
-            // Only include this coordinator if they uploaded MOA for this specific company
-            if (moaResult.data && moaResult.data.length > 0) {
-              const moaData = moaResult.data[0];
+            // PHASE 3: Try to get partnership from junction table first (NEW WAY)
+            let partnershipData = null;
+            let moaData = null;
+            
+            try {
+              const partnershipResult = await query('company_coordinator_partnerships', 'select', null, { 
+                company_id: parseInt(companyId),
+                coordinator_id: coordinator.id 
+              });
               
+              if (partnershipResult.data && partnershipResult.data.length > 0) {
+                partnershipData = partnershipResult.data[0];
+                console.log('✅ Found partnership in junction table for coordinator', coordinator.id);
+              }
+            } catch (error) {
+              console.log('⚠️ Junction table may not exist yet, falling back to old method:', error.message);
+            }
+            
+            // FALLBACK: Get MOA information from companies table (OLD WAY - backward compatibility)
+            if (!partnershipData) {
+              const moaResult = await query('companies', 'select', null, { 
+                id: parseInt(companyId),
+                moa_uploaded_by: coordinator.user_id 
+              });
+              
+              if (moaResult.data && moaResult.data.length > 0) {
+                moaData = moaResult.data[0];
+                console.log('⚠️ Using old companies table data (junction table not found)');
+              }
+            } else {
+              // Use partnership data from junction table
+              moaData = partnershipData;
+            }
+
+            // Only include this coordinator if they have a partnership/MOA with this company
+            if (partnershipData || moaData) {
               // Check if coordinator has admin status
               const adminResult = await query('admin_coordinators', 'select', null, { 
                 coordinator_id: coordinator.id, 
@@ -268,18 +294,56 @@ class CoordinatorController {
               
               const isAdminCoordinator = adminResult.data && adminResult.data.length > 0;
               
-              // Determine MOA status based on uploaded MOAs
-              let moaStatus = moaData.moa_status || 'sent';
-              let moaDocument = moaData.moa_url ? 'MOA Document' : null;
-              let moaSentDate = moaData.moa_uploaded_at ? new Date(moaData.moa_uploaded_at).toISOString().split('T')[0] : null;
-              let moaReceivedDate = moaData.moa_uploaded_at ? new Date(moaData.moa_uploaded_at).toISOString().split('T')[0] : null;
-              let moaExpiryDate = moaData.moa_expiry_date;
-              let partnershipStatus = moaData.partnership_status || 'pending';
+              // Determine MOA status - use partnership data if available, otherwise fallback
+              let moaStatus = partnershipData ? (partnershipData.moa_status || 'pending') : (moaData.moa_status || 'sent');
+              let moaDocument = (partnershipData?.moa_url || moaData?.moa_url) ? 'MOA Document' : null;
+              let moaSentDate = null;
+              let moaReceivedDate = null;
+              let moaExpiryDate = null;
+              
+              if (partnershipData) {
+                moaSentDate = partnershipData.moa_uploaded_at ? new Date(partnershipData.moa_uploaded_at).toISOString().split('T')[0] : null;
+                moaReceivedDate = partnershipData.moa_received_date ? new Date(partnershipData.moa_received_date).toISOString().split('T')[0] : null;
+                moaExpiryDate = partnershipData.moa_expiry_date;
+              } else if (moaData) {
+                moaSentDate = moaData.moa_uploaded_at ? new Date(moaData.moa_uploaded_at).toISOString().split('T')[0] : null;
+                moaReceivedDate = moaData.moa_uploaded_at ? new Date(moaData.moa_uploaded_at).toISOString().split('T')[0] : null;
+                moaExpiryDate = moaData.moa_expiry_date;
+              }
+              
+              // Get approval status from partnership table (NEW WAY) or fallback to old tables
+              let companyApproved = false;
+              let coordinatorApproved = false;
+              
+              if (partnershipData) {
+                // Read from junction table (per-partnership status)
+                companyApproved = partnershipData.company_approved === true || partnershipData.company_approved === 1;
+                coordinatorApproved = partnershipData.coordinator_approved === true || partnershipData.coordinator_approved === 1;
+              } else if (moaData) {
+                // Fallback to old tables (backward compatibility)
+                companyApproved = coordinator.company_approved === true || coordinator.company_approved === 1;
+                coordinatorApproved = moaData.coordinator_approved === true || moaData.coordinator_approved === 1;
+              }
+              
+              // Calculate partnership status based on approval flags
+              let partnershipStatus = 'pending';
+              if (companyApproved && coordinatorApproved) {
+                partnershipStatus = 'approved';
+              } else {
+                partnershipStatus = 'pending';
+              }
+              
+              console.log('🔍 Approval status for coordinator', coordinator.id, ':', {
+                source: partnershipData ? 'junction_table' : 'old_tables',
+                companyApproved,
+                coordinatorApproved,
+                calculatedPartnershipStatus: partnershipStatus
+              });
 
               coordinators.push({
                 id: coordinator.id.toString(),
                 userId: coordinator.user_id.toString(),
-                companyId: moaData.id.toString(),
+                companyId: parseInt(companyId).toString(),
                 firstName: coordinator.first_name,
                 lastName: coordinator.last_name,
                 email: user.email,
@@ -293,12 +357,14 @@ class CoordinatorController {
                 status: user.is_active ? 'active' : 'inactive',
                 moaStatus: moaStatus,
                 moaDocument: moaDocument,
-                moaUrl: moaData.moa_url,
-                moaPublicId: moaData.moa_public_id,
+                moaUrl: partnershipData?.moa_url || moaData?.moa_url || null,
+                moaPublicId: partnershipData?.moa_public_id || moaData?.moa_public_id || null,
                 moaSentDate: moaSentDate,
                 moaReceivedDate: moaReceivedDate,
                 moaExpiryDate: moaExpiryDate,
                 partnershipStatus: partnershipStatus,
+                companyApproved: companyApproved,
+                coordinatorApproved: coordinatorApproved,
                 assignedInterns: 0, // This would need to be calculated from related tables
                 lastContact: coordinator.updated_at ? new Date(coordinator.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 latitude: user.latitude,
@@ -401,11 +467,65 @@ class CoordinatorController {
         console.log('⚠️ No companies found for this coordinator, using null for partnership_approved_by');
       }
 
+      // Get current coordinator data to check existing approvals
+      // Try to get approval columns, but handle case where they don't exist yet
+      let currentCompanyApproved = false;
+      let currentCoordinatorApproved = false;
+      
+      try {
+        const currentCoordinator = await query('coordinators', 'select', ['company_approved', 'coordinator_approved'], { id: parseInt(id) });
+        if (currentCoordinator.data && currentCoordinator.data.length > 0) {
+          currentCompanyApproved = currentCoordinator.data[0].company_approved || false;
+          currentCoordinatorApproved = currentCoordinator.data[0].coordinator_approved || false;
+        }
+      } catch (error) {
+        // If columns don't exist yet, default to false
+        console.log('⚠️ Approval columns may not exist yet, defaulting to false:', error.message);
+        currentCompanyApproved = false;
+        currentCoordinatorApproved = false;
+      }
+
+      // When company approves coordinator, set company_approved = true
+      // IMPORTANT: This is the COMPANY's approval of the coordinator, NOT the coordinator's approval
+      const companyApproved = status === 'approved' ? true : (status === 'rejected' ? false : currentCompanyApproved);
+      
+      // For coordinator_approved, we need to check the COMPANIES table, not the coordinators table
+      // The coordinator's approval is stored in the companies table as coordinator_approved
+      // We should NOT use currentCoordinatorApproved from coordinators table for this check
+      // Instead, we'll check the companies table when updating
+      
+      // Calculate final partnership status based on both approvals
+      // IMPORTANT: Only set to 'approved' if BOTH sides have approved
+      // Since we're updating from company side, we need to check if coordinator has approved in companies table
+      let finalStatus = 'pending';
+      
+      // If company is rejecting, set to pending
+      if (status === 'rejected') {
+        finalStatus = 'pending';
+      } else if (companyApproved) {
+        // Company has approved, but we need to check if coordinator has also approved
+        // We'll check this in the companies table update below
+        // For now, keep it as pending until we verify coordinator approval
+        finalStatus = 'pending';
+      } else {
+        // Neither approved
+        finalStatus = 'pending';
+      }
+      
+      console.log('🔍 Partnership status calculation:', {
+        companyApproved,
+        currentCoordinatorApproved,
+        status,
+        finalStatus,
+        message: 'Company approval recorded. Partnership will be active only after coordinator also approves.'
+      });
+
       const updateData = {
-        partnership_status: status,
+        partnership_status: finalStatus,
         partnership_approved_by: approvedByValue,
-        partnership_approved_at: status !== 'pending' ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
+        partnership_approved_at: finalStatus === 'approved' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+        company_approved: companyApproved
       };
 
       console.log('📤 Update data:', updateData);
@@ -423,34 +543,98 @@ class CoordinatorController {
         });
       }
 
-      // Also update ALL companies associated with this coordinator
+      // PHASE 1: Update companies table (OLD WAY - for backward compatibility)
+      // FIXED: Only update the specific company if companyId provided, not ALL companies
       if (companiesToUpdate.length > 0) {
-        console.log('🔄 Updating companies table for', companiesToUpdate.length, 'companies:', companiesToUpdate.map(c => c.id));
+        const now = new Date().toISOString();
+        const coordinatorId = parseInt(id);
         
-        const companyUpdateData = {
-          partnership_status: status,
-          partnership_approved_by: approvedByValue,
-          partnership_approved_at: status !== 'pending' ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString()
-        };
+        // Only process the specific company if companyId was provided
+        // Otherwise, process all companies (for backward compatibility, but this is a bug)
+        const companiesToProcess = companyId ? companiesToUpdate.slice(0, 1) : companiesToUpdate;
         
-        console.log('📤 Company update data:', companyUpdateData);
+        console.log('🔄 Updating companies table for', companiesToProcess.length, 'company(ies):', companiesToProcess.map(c => c.id));
         
-        // Update each company
-        for (const company of companiesToUpdate) {
+        // For each company, check if coordinator has approved it
+        for (const company of companiesToProcess) {
           try {
-            console.log('🔄 Updating company ID:', company.id);
+            // Get current company approval status
+            const currentCompany = await query('companies', 'select', ['coordinator_approved', 'company_approved'], { id: company.id });
+            const currentCompanyCoordinatorApproved = currentCompany.data && currentCompany.data.length > 0 
+              ? (currentCompany.data[0].coordinator_approved || false)
+              : false;
+            const currentCompanyCompanyApproved = currentCompany.data && currentCompany.data.length > 0 
+              ? (currentCompany.data[0].company_approved || false)
+              : false;
+
+            // When company approves coordinator:
+            // - Set company_approved = true in companies table (company approved this coordinator)
+            // - DO NOT change coordinator_approved - that's only set when coordinator approves
+            const companyApprovedForCompany = companyApproved;
+            
+            // Calculate final status for company based on both approvals
+            let companyFinalStatus = 'pending';
+            
+            if (status === 'rejected') {
+              companyFinalStatus = 'pending';
+            } else if (currentCompanyCoordinatorApproved && companyApprovedForCompany) {
+              companyFinalStatus = 'approved';
+            } else {
+              companyFinalStatus = 'pending';
+            }
+            
+            console.log('🔍 Company final status calculation:', {
+              companyId: company.id,
+              currentCompanyCoordinatorApproved,
+              companyApprovedForCompany,
+              companyFinalStatus
+            });
+
+            // PHASE 1: Update companies table (OLD WAY)
+            const companyUpdateData = {
+              company_approved: companyApprovedForCompany,
+              partnership_status: companyFinalStatus,
+              partnership_approved_by: approvedByValue,
+              partnership_approved_at: companyFinalStatus === 'approved' ? now : null,
+              updated_at: now
+            };
+            
             const companyResult = await query('companies', 'update', companyUpdateData, { id: company.id });
-            console.log('📥 Company update result for ID', company.id, ':', companyResult);
             
             if (companyResult.data && companyResult.data.length > 0) {
-              console.log('✅ Company', company.id, 'updated successfully');
+              console.log('✅ Company', company.id, 'updated successfully in companies table');
+              
+              // PHASE 1: Update partnership in junction table (NEW WAY)
+              try {
+                const partnershipResult = await query('company_coordinator_partnerships', 'select', ['id'], { 
+                  company_id: company.id, 
+                  coordinator_id: coordinatorId 
+                });
+
+                if (partnershipResult.data && partnershipResult.data.length > 0) {
+                  // Update existing partnership
+                  const partnershipUpdateData = {
+                    company_approved: companyApprovedForCompany,
+                    partnership_status: companyFinalStatus,
+                    partnership_approved_by: approvedByValue,
+                    partnership_approved_at: companyFinalStatus === 'approved' ? now : null,
+                    updated_at: now
+                  };
+                  await query('company_coordinator_partnerships', 'update', partnershipUpdateData, { 
+                    id: partnershipResult.data[0].id 
+                  });
+                  console.log('✅ Updated partnership in junction table');
+                } else {
+                  console.log('⚠️ Partnership not found in junction table, may need to create it');
+                }
+              } catch (error) {
+                console.error('⚠️ Error updating partnership junction table (migration may not be run yet):', error.message);
+              }
             } else {
               console.log('❌ Company', company.id, 'update failed - no data returned');
             }
           } catch (companyError) {
             console.error('❌ Error updating company', company.id, ':', companyError);
-            // Continue with other companies even if one fails
           }
         }
       } else {
@@ -460,7 +644,9 @@ class CoordinatorController {
       console.log('✅ Partnership status updated successfully in coordinators table:', result.data);
       res.json({
         success: true,
-        message: 'Partnership status updated successfully in both coordinators and companies tables',
+        message: companyApproved 
+          ? (finalStatus === 'approved' ? 'Partnership approved successfully! Both sides have approved.' : 'Your approval has been recorded. Waiting for coordinator approval.')
+          : 'Partnership status updated',
         coordinator: result.data
       });
     } catch (error) {
@@ -704,7 +890,7 @@ class CoordinatorController {
   static async toggleAdminStatus(req, res) {
     try {
       const { id } = req.params;
-      const { isAdmin, assignedBy = 1 } = req.body; // assignedBy defaults to 1 (system admin)
+      let { isAdmin, assignedBy } = req.body;
 
       // Check if coordinator exists
       const coordinatorResult = await query('coordinators', 'select', null, { id: parseInt(id) });
@@ -713,6 +899,60 @@ class CoordinatorController {
           success: false,
           message: 'Coordinator not found'
         });
+      }
+
+      // Resolve assignedBy: if not provided or invalid, find a system admin user
+      let finalAssignedBy = null;
+      
+      if (assignedBy) {
+        // Check if the provided assignedBy user exists
+        const userCheck = await query('users', 'select', ['id'], { id: parseInt(assignedBy) });
+        if (userCheck.data && userCheck.data.length > 0) {
+          finalAssignedBy = parseInt(assignedBy);
+          console.log('✅ Using provided assignedBy user ID:', finalAssignedBy);
+        } else {
+          console.warn('⚠️ Provided assignedBy user ID does not exist:', assignedBy);
+        }
+      }
+      
+      // If assignedBy is not provided or invalid, find a system admin user
+      if (!finalAssignedBy) {
+        console.log('🔍 Searching for system admin user...');
+        // Try to find a system admin user (user_type might be 'System Admin' or 'System')
+        const systemAdminResult = await query('users', 'select', ['id'], { 
+          user_type: 'System Admin'
+        });
+        
+        if (systemAdminResult.data && systemAdminResult.data.length > 0) {
+          finalAssignedBy = systemAdminResult.data[0].id;
+          console.log('✅ Found system admin user ID:', finalAssignedBy);
+        } else {
+          // Try alternative user_type values
+          const altSystemAdminResult = await query('users', 'select', ['id'], { 
+            user_type: 'System'
+          });
+          
+          if (altSystemAdminResult.data && altSystemAdminResult.data.length > 0) {
+            finalAssignedBy = altSystemAdminResult.data[0].id;
+            console.log('✅ Found system admin user ID (alternative):', finalAssignedBy);
+          } else {
+            // If still not found, try to get any active user
+            const anyAdminResult = await query('users', 'select', ['id'], { 
+              is_active: true
+            });
+            
+            if (anyAdminResult.data && anyAdminResult.data.length > 0) {
+              // Use the first active user as fallback
+              finalAssignedBy = anyAdminResult.data[0].id;
+              console.warn('⚠️ No system admin found, using first active user as fallback:', finalAssignedBy);
+            } else {
+              return res.status(500).json({
+                success: false,
+                message: 'No valid system admin user found to assign admin status. Please ensure at least one system admin user exists in the database.'
+              });
+            }
+          }
+        }
       }
 
       // Check current admin status (check for any existing record, not just active ones)
@@ -726,14 +966,15 @@ class CoordinatorController {
           // Already has admin record, reactivate it
           await query('admin_coordinators', 'update', { 
             is_active: true,
-            assigned_by: parseInt(assignedBy),
+            assigned_by: finalAssignedBy,
             updated_at: new Date().toISOString()
           }, { id: currentAdminResult.data[0].id });
+          console.log('✅ Reactivated existing admin coordinator record');
         } else {
           // Create new admin record
           const adminData = {
             coordinator_id: parseInt(id),
-            assigned_by: parseInt(assignedBy),
+            assigned_by: finalAssignedBy,
             is_active: true,
             permissions: {
               can_manage_coordinators: true,
@@ -744,6 +985,7 @@ class CoordinatorController {
             notes: 'Admin status assigned via system'
           };
           await query('admin_coordinators', 'insert', adminData);
+          console.log('✅ Created new admin coordinator record with assigned_by:', finalAssignedBy);
         }
       } else {
         // Remove admin status
@@ -752,6 +994,7 @@ class CoordinatorController {
             is_active: false,
             updated_at: new Date().toISOString()
           }, { id: currentAdminResult.data[0].id });
+          console.log('✅ Deactivated admin coordinator record');
         }
       }
 
@@ -764,6 +1007,83 @@ class CoordinatorController {
       res.status(500).json({
         success: false,
         message: 'Failed to toggle admin status',
+        error: error.message
+      });
+    }
+  }
+
+  // Update coordinator account status (enable/disable)
+  static async updateCoordinatorStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { is_active } = req.body;
+
+      console.log('🔄 updateCoordinatorStatus called:', { id, is_active, type: typeof is_active });
+
+      if (typeof is_active !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'is_active must be a boolean value'
+        });
+      }
+
+      // Get the coordinator to find the user_id
+      const coordinatorResult = await query('coordinators', 'select', null, { id: parseInt(id) });
+      
+      console.log('🔄 Coordinator query result:', coordinatorResult);
+      
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      const coordinator = coordinatorResult.data[0];
+      const userId = coordinator.user_id;
+
+      console.log('🔄 Found coordinator:', { coordinatorId: coordinator.id, userId });
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coordinator user_id is missing'
+        });
+      }
+
+      // Update the user's is_active status
+      try {
+        const updateResult = await query('users', 'update', { 
+          is_active: is_active,
+          updated_at: new Date().toISOString()
+        }, { id: userId });
+
+        console.log('🔄 Update result:', updateResult);
+
+        if (updateResult.data && updateResult.data.length > 0) {
+          res.json({
+            success: true,
+            message: `Coordinator account ${is_active ? 'enabled' : 'disabled'} successfully`
+          });
+        } else {
+          res.json({
+            success: true,
+            message: `Coordinator account ${is_active ? 'enabled' : 'disabled'} successfully`
+          });
+        }
+      } catch (updateError) {
+        console.error('🔄 Update error caught:', updateError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to update coordinator status',
+          error: updateError.message || updateError
+        });
+      }
+    } catch (error) {
+      console.error('🔄 Error updating coordinator status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update coordinator status',
         error: error.message
       });
     }

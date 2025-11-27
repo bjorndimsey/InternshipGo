@@ -262,7 +262,7 @@ export default function App() {
         return <CompanyDashboard onLogout={handleLogout} currentUser={currentUser} />;
       case 'system_admin':
         console.log('⚙️ Loading System Admin Dashboard');
-        return <SystemAdminDashboard onLogout={handleLogout} />;
+        return <SystemAdminDashboard onLogout={handleLogout} currentUser={currentUser} />;
       default:
         return (
           <View style={styles.errorContainer}>

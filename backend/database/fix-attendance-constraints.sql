@@ -24,7 +24,7 @@ CREATE TABLE attendance_records (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
-    UNIQUE(user_id, attendance_date)
+    UNIQUE(user_id, company_id, attendance_date)
 );
 
 -- Create indexes

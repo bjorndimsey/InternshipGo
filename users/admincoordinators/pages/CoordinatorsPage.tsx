@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Alert,
   TextInput,
   Modal,
+  Platform,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService, Coordinator as ApiCoordinator } from '../../../lib/api';
@@ -90,6 +92,15 @@ export default function CoordinatorsPage() {
   const [assignedStudents, setAssignedStudents] = useState<any[]>([]);
   const [testMessage, setTestMessage] = useState('');
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
+  const [tooltip, setTooltip] = useState<{ visible: boolean; text: string; x: number; y: number; buttonWidth?: number }>({
+    visible: false,
+    text: '',
+    x: 0,
+    y: 0,
+    buttonWidth: 0,
+  });
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const buttonRefs = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
     fetchCoordinators();
@@ -349,184 +360,402 @@ export default function CoordinatorsPage() {
     }
   };
 
-  // Render coordinator cards in responsive grid
-  const renderCoordinatorCards = () => {
-    const cardsPerRow = getCardsPerRow(screenData.width);
-    const padding = 48; // 24px padding on each side
-    const gap = 12; // Gap between cards
-    const cardWidth = (screenData.width - padding - (cardsPerRow - 1) * gap) / cardsPerRow;
+  const showTooltip = (text: string, event: any, buttonKey?: string) => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
     
-    return (
-      <View style={styles.responsiveGrid}>
-        {filteredCoordinators.map((coordinator) => (
-          <View key={coordinator.id} style={[styles.coordinatorCardWrapper, { width: cardWidth }]}>
-            <CoordinatorCard coordinator={coordinator} />
-          </View>
-        ))}
-      </View>
-    );
+    let x = 0;
+    let y = 0;
+    let buttonWidth = 32; // Default button width
+    const tooltipHeight = 40; // Approximate tooltip height
+    const arrowHeight = 6; // Arrow height
+    const spacing = 4; // Spacing between tooltip and button
+    
+    if (Platform.OS === 'web') {
+      // For web hover events - position tooltip above button, aligned with cursor
+      if (event?.target) {
+        const rect = event.target.getBoundingClientRect();
+        buttonWidth = rect.width;
+        
+        // Use cursor position for horizontal alignment
+        if (event.clientX !== undefined) {
+          x = event.clientX;
+        } else {
+          x = rect.left + rect.width / 2; // Center of button
+        }
+        
+        // Position tooltip above button - calculate Y position
+        // The tooltip should appear above the button, with its bottom edge (arrow) just above button top
+        const totalHeight = tooltipHeight + arrowHeight + spacing;
+        
+        // If cursor Y is available, try to position tooltip near cursor but above button
+        if (event.clientY !== undefined) {
+          // Calculate where tooltip bottom would be if positioned at cursor
+          const tooltipBottomAtCursor = event.clientY;
+          const tooltipTopAtCursor = tooltipBottomAtCursor - tooltipHeight - arrowHeight;
+          
+          // Ensure tooltip is above button (tooltip bottom should be above button top)
+          if (tooltipTopAtCursor < rect.top - totalHeight) {
+            // Cursor is high enough, position tooltip so its bottom is at cursor
+            y = event.clientY - tooltipHeight - arrowHeight;
+          } else {
+            // Cursor is too low, position tooltip above button
+            y = rect.top - totalHeight;
+          }
+        } else {
+          // No cursor Y, position above button
+          y = rect.top - totalHeight;
+        }
+      } else if (event?.clientX !== undefined && event?.clientY !== undefined) {
+        // Fallback: use cursor position directly
+        x = event.clientX;
+        // Position tooltip above cursor
+        y = event.clientY - tooltipHeight - arrowHeight - spacing;
+      }
+    } else if (event?.nativeEvent) {
+      // For mobile press events - try to measure button
+      const buttonRef = buttonKey ? buttonRefs.current[buttonKey] : null;
+      if (buttonRef) {
+        buttonRef.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+          buttonWidth = width;
+          setTooltip({
+            visible: true,
+            text,
+            x: px + width / 2, // Center of button
+            y: py - tooltipHeight - arrowHeight - spacing, // Above button with spacing
+            buttonWidth: width,
+          });
+        });
+        return;
+      } else {
+        // Fallback: use event coordinates
+        const { pageX, pageY } = event.nativeEvent;
+        x = pageX || 0;
+        y = (pageY || 0) - tooltipHeight - arrowHeight - spacing;
+      }
+    }
+    
+    setTooltip({
+      visible: true,
+      text,
+      x,
+      y,
+      buttonWidth,
+    });
   };
 
-  const CoordinatorCard = ({ coordinator }: { coordinator: Coordinator }) => {
-    console.log('🚀 Frontend: Rendering coordinator card for:', coordinator.firstName, 'Campus Assignment:', coordinator.campusAssignment);
-    console.log('🚀 Frontend: Rendering action buttons for:', coordinator.firstName);
+  const hideTooltip = () => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }, 150);
+  };
+
+  const handleButtonPress = (action: () => void, tooltipText: string) => {
+    hideTooltip();
+    action();
+  };
+
+  // Render coordinator table
+  const renderCoordinatorTable = () => {
+    const isMobile = screenData.width <= BREAKPOINTS.mobile;
+    
+    if (isMobile) {
+      // Mobile: Render as cards
+      return (
+        <View style={styles.mobileContainer}>
+          {filteredCoordinators.map((coordinator) => (
+            <View key={coordinator.id} style={styles.mobileCard}>
+              <View style={styles.mobileCardHeader}>
+                <View style={styles.mobileProfileContainer}>
+                  {coordinator.profilePicture ? (
+                    <Image source={{ uri: coordinator.profilePicture }} style={styles.mobileProfileImage} />
+                  ) : (
+                    <View style={styles.mobileProfilePlaceholder}>
+                      <Text style={styles.mobileProfileText}>
+                        {coordinator.firstName.charAt(0)}{coordinator.lastName.charAt(0)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.mobileCardInfo}>
+                  <Text style={styles.mobileCardName}>
+                    {coordinator.firstName} {coordinator.lastName}
+                  </Text>
+                  <Text style={styles.mobileCardEmail}>{coordinator.email}</Text>
+                </View>
+                <View style={[styles.mobileStatusBadge, { backgroundColor: getStatusColor(coordinator.status) }]}>
+                  <Text style={styles.mobileStatusText}>{getStatusText(coordinator.status)}</Text>
+                </View>
+              </View>
+              <View style={styles.mobileCardDetails}>
+                <View style={styles.mobileDetailRow}>
+                  <Text style={styles.mobileDetailLabel}>Program:</Text>
+                  <Text style={styles.mobileDetailValue}>{coordinator.program}</Text>
+                </View>
+                <View style={styles.mobileDetailRow}>
+                  <Text style={styles.mobileDetailLabel}>Department:</Text>
+                  <Text style={styles.mobileDetailValue}>{coordinator.department}</Text>
+                </View>
+                <View style={styles.mobileDetailRow}>
+                  <Text style={styles.mobileDetailLabel}>Assigned Interns:</Text>
+                  <Text style={styles.mobileDetailValue}>{coordinator.assignedInterns}</Text>
+                </View>
+                {coordinator.campusAssignment && (
+                  <View style={styles.mobileDetailRow}>
+                    <Text style={styles.mobileDetailLabel}>Campus:</Text>
+                    <View style={[styles.mobileCampusBadge, { backgroundColor: coordinator.campusAssignment === 'in-campus' ? '#10b981' : '#f59e0b' }]}>
+                      <Text style={styles.mobileCampusText}>
+                        {coordinator.campusAssignment === 'in-campus' ? 'In-Campus' : 'Off-Campus'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+              <View style={styles.mobileActionButtons}>
+                <TouchableOpacity 
+                  style={[styles.mobileActionButton, styles.mobileViewButton]} 
+                  onPress={() => handleButtonPress(() => handleViewDetails(coordinator), 'View Details')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('View Details', e),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="visibility" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.mobileActionButton, styles.mobileStudentsButton]} 
+                  onPress={() => handleButtonPress(() => handleViewStudents(coordinator), 'View Students')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('View Students', e)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('View Students', e),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="people" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.mobileActionButton, styles.mobileOffCampusButton]} 
+                  onPress={() => handleButtonPress(() => handleAssignOffCampus(coordinator), 'Assign Off-Campus')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Assign Off-Campus', e)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('Assign Off-Campus', e),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="location-off" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.mobileActionButton, styles.mobileInCampusButton]} 
+                  onPress={() => handleButtonPress(() => handleAssignInCampus(coordinator), 'Assign In-Campus')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Assign In-Campus', e)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('Assign In-Campus', e),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="location-on" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.mobileActionButton, styles.mobileDeleteButton]} 
+                  onPress={() => handleButtonPress(() => handleDeleteCoordinator(coordinator), 'Delete Coordinator')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Coordinator', e)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('Delete Coordinator', e),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="delete" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+    
+    // Desktop/Tablet: Render as table
     return (
-    <View style={styles.coordinatorCard}>
-      <View style={styles.coordinatorHeader}>
-        <View style={styles.profileContainer}>
-          {coordinator.profilePicture ? (
-            <Image source={{ uri: coordinator.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>
-                {coordinator.firstName.charAt(0)}{coordinator.lastName.charAt(0)}
-              </Text>
+      <View style={styles.tableContainer}>
+          {/* Table Header */}
+          <View style={styles.tableHeader}>
+            <View style={[styles.tableHeaderCell, styles.tableCellName]}>
+              <Text style={styles.tableHeaderText}>Name</Text>
             </View>
-          )}
-        </View>
-        <View style={styles.coordinatorInfo}>
-          <Text style={styles.coordinatorName}>
-            {coordinator.firstName} {coordinator.lastName}
-          </Text>
-          <Text style={styles.coordinatorPosition}>{coordinator.program}</Text>
-          <Text style={styles.coordinatorDepartment}>{coordinator.department}</Text>
-          <Text style={styles.coordinatorEmail}>{coordinator.email}</Text>
-        </View>
-        <View style={styles.statusContainer}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(coordinator.status) }]}>
-            <Text style={styles.statusText}>{getStatusText(coordinator.status)}</Text>
-          </View>
-          {coordinator.campusAssignment && (
-            <View style={[styles.campusBadge, { backgroundColor: coordinator.campusAssignment === 'in-campus' ? '#10b981' : '#f59e0b' }]}>
-              <Text style={styles.campusText}>
-                {coordinator.campusAssignment === 'in-campus' ? 'In-Campus' : 'Off-Campus'}
-              </Text>
+            <View style={[styles.tableHeaderCell, styles.tableCellEmail]}>
+              <Text style={styles.tableHeaderText}>Email</Text>
             </View>
-          )}
-        </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellProgram]}>
+              <Text style={styles.tableHeaderText}>Program</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellDepartment]}>
+              <Text style={styles.tableHeaderText}>Department</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellStatus]}>
+              <Text style={styles.tableHeaderText}>Status</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellCampus]}>
+              <Text style={styles.tableHeaderText}>Campus</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellInterns]}>
+              <Text style={styles.tableHeaderText}>Interns</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellAdmin]}>
+              <Text style={styles.tableHeaderText}>Admin</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellActions]}>
+              <Text style={styles.tableHeaderText}>Actions</Text>
+            </View>
+          </View>
+          
+          {/* Table Rows */}
+          {filteredCoordinators.map((coordinator, index) => (
+            <View key={coordinator.id} style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}>
+              <View style={[styles.tableCell, styles.tableCellName]}>
+                <View style={styles.tableCellNameContent}>
+                  <View style={styles.tableProfileContainer}>
+                    {coordinator.profilePicture ? (
+                      <Image source={{ uri: coordinator.profilePicture }} style={styles.tableProfileImage} />
+                    ) : (
+                      <View style={styles.tableProfilePlaceholder}>
+                        <Text style={styles.tableProfileText}>
+                          {coordinator.firstName.charAt(0)}{coordinator.lastName.charAt(0)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.tableCellNameText}>
+                    {coordinator.firstName} {coordinator.lastName}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellEmail]}>
+                <Text style={styles.tableCellText} numberOfLines={1}>{coordinator.email}</Text>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellProgram]}>
+                <Text style={styles.tableCellText}>{coordinator.program}</Text>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellDepartment]}>
+                <Text style={styles.tableCellText}>{coordinator.department}</Text>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellStatus]}>
+                <View style={[styles.tableStatusBadge, { backgroundColor: getStatusColor(coordinator.status) }]}>
+                  <Text style={styles.tableStatusText}>{getStatusText(coordinator.status)}</Text>
+                </View>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellCampus]}>
+                {coordinator.campusAssignment ? (
+                  <View style={[styles.tableCampusBadge, { backgroundColor: coordinator.campusAssignment === 'in-campus' ? '#10b981' : '#f59e0b' }]}>
+                    <Text style={styles.tableCampusText}>
+                      {coordinator.campusAssignment === 'in-campus' ? 'In-Campus' : 'Off-Campus'}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.tableCellTextMuted}>-</Text>
+                )}
+              </View>
+              <View style={[styles.tableCell, styles.tableCellInterns]}>
+                <View style={styles.tableInternsContainer}>
+                  <MaterialIcons name="people" size={16} color="#3b82f6" />
+                  <Text style={styles.tableInternsText}>{coordinator.assignedInterns}</Text>
+                </View>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellAdmin]}>
+                {coordinator.isAdminCoordinator ? (
+                  <View style={styles.tableAdminBadge}>
+                    <MaterialIcons name="admin-panel-settings" size={14} color="#10b981" />
+                    <Text style={styles.tableAdminText}>Yes</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.tableCellTextMuted}>No</Text>
+                )}
+              </View>
+              <View style={[styles.tableCell, styles.tableCellActions]}>
+                <View style={styles.tableActionButtons}>
+                  <TouchableOpacity 
+                    ref={(ref) => { buttonRefs.current[`view-${coordinator.id}`] = ref; }}
+                    style={[styles.tableActionButton, styles.tableActionView]} 
+                    onPress={() => handleButtonPress(() => handleViewDetails(coordinator), 'View Details')}
+                    onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e, `view-${coordinator.id}`)}
+                    onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                    onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e, `view-${coordinator.id}`)}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseEnter: (e: any) => showTooltip('View Details', e, `view-${coordinator.id}`),
+                      onMouseLeave: hideTooltip,
+                    } : {})}
+                  >
+                    <MaterialIcons name="visibility" size={16} color="#3b82f6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    ref={(ref) => { buttonRefs.current[`students-${coordinator.id}`] = ref; }}
+                    style={[styles.tableActionButton, styles.tableActionStudents]} 
+                    onPress={() => handleButtonPress(() => handleViewStudents(coordinator), 'View Students')}
+                    onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('View Students', e, `students-${coordinator.id}`)}
+                    onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                    onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('View Students', e, `students-${coordinator.id}`)}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseEnter: (e: any) => showTooltip('View Students', e, `students-${coordinator.id}`),
+                      onMouseLeave: hideTooltip,
+                    } : {})}
+                  >
+                    <MaterialIcons name="people" size={16} color="#8b5cf6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    ref={(ref) => { buttonRefs.current[`offcampus-${coordinator.id}`] = ref; }}
+                    style={[styles.tableActionButton, styles.tableActionOffCampus]} 
+                    onPress={() => handleButtonPress(() => handleAssignOffCampus(coordinator), 'Assign Off-Campus')}
+                    onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Assign Off-Campus', e, `offcampus-${coordinator.id}`)}
+                    onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                    onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('Assign Off-Campus', e, `offcampus-${coordinator.id}`)}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseEnter: (e: any) => showTooltip('Assign Off-Campus', e, `offcampus-${coordinator.id}`),
+                      onMouseLeave: hideTooltip,
+                    } : {})}
+                  >
+                    <MaterialIcons name="location-off" size={16} color="#f59e0b" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    ref={(ref) => { buttonRefs.current[`incampus-${coordinator.id}`] = ref; }}
+                    style={[styles.tableActionButton, styles.tableActionInCampus]} 
+                    onPress={() => handleButtonPress(() => handleAssignInCampus(coordinator), 'Assign In-Campus')}
+                    onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Assign In-Campus', e, `incampus-${coordinator.id}`)}
+                    onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                    onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('Assign In-Campus', e, `incampus-${coordinator.id}`)}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseEnter: (e: any) => showTooltip('Assign In-Campus', e, `incampus-${coordinator.id}`),
+                      onMouseLeave: hideTooltip,
+                    } : {})}
+                  >
+                    <MaterialIcons name="location-on" size={16} color="#8b5cf6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    ref={(ref) => { buttonRefs.current[`delete-${coordinator.id}`] = ref; }}
+                    style={[styles.tableActionButton, styles.tableActionDelete]} 
+                    onPress={() => handleButtonPress(() => handleDeleteCoordinator(coordinator), 'Delete Coordinator')}
+                    onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Coordinator', e, `delete-${coordinator.id}`)}
+                    onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                    onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Coordinator', e, `delete-${coordinator.id}`)}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseEnter: (e: any) => showTooltip('Delete Coordinator', e, `delete-${coordinator.id}`),
+                      onMouseLeave: hideTooltip,
+                    } : {})}
+                  >
+                    <MaterialIcons name="delete" size={16} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))}
       </View>
-
-      <View style={styles.coordinatorDetails}>
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {Math.floor((new Date().getTime() - new Date(coordinator.joinDate).getTime()) / (1000 * 60 * 60 * 24 * 365))}
-            </Text>
-            <Text style={styles.statLabel}>Years</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {coordinator.isAdminCoordinator ? 'Yes' : 'No'}
-            </Text>
-            <Text style={styles.statLabel}>Admin</Text>
-          </View>
-        </View>
-
-        {/* Assigned Interns Section - Below Stats */}
-        <View style={styles.assignedInternsSection}>
-          <View style={styles.assignedInternsHeader}>
-            <MaterialIcons name="people" size={20} color="#3b82f6" />
-            <Text style={styles.assignedInternsTitle}>Assigned Interns</Text>
-          </View>
-          <View style={styles.assignedInternsContent}>
-            <Text style={styles.assignedInternsCount}>{coordinator.assignedInterns}</Text>
-            <Text style={styles.assignedInternsLabel}>Students</Text>
-          </View>
-        </View>
-
-        <View style={styles.permissionsContainer}>
-          <Text style={styles.permissionsLabel}>Permissions:</Text>
-          <View style={styles.permissionsList}>
-            {coordinator.adminPermissions?.can_manage_interns && (
-              <View style={styles.permissionItem}>
-                <MaterialIcons name="school" size={16} color="#34a853" />
-                <Text style={styles.permissionText}>Manage Interns</Text>
-              </View>
-            )}
-            {coordinator.adminPermissions?.can_manage_companies && (
-              <View style={styles.permissionItem}>
-                <MaterialIcons name="business-center" size={16} color="#34a853" />
-                <Text style={styles.permissionText}>Manage Companies</Text>
-              </View>
-            )}
-            {coordinator.adminPermissions?.can_manage_events && (
-              <View style={styles.permissionItem}>
-                <MaterialIcons name="event" size={16} color="#34a853" />
-                <Text style={styles.permissionText}>Create Events</Text>
-              </View>
-            )}
-            {coordinator.adminPermissions?.can_view_reports && (
-              <View style={styles.permissionItem}>
-                <MaterialIcons name="assessment" size={16} color="#34a853" />
-                <Text style={styles.permissionText}>View Reports</Text>
-              </View>
-            )}
-            {coordinator.adminPermissions?.can_manage_coordinators && (
-              <View style={styles.permissionItem}>
-                <MaterialIcons name="supervisor-account" size={16} color="#34a853" />
-                <Text style={styles.permissionText}>Manage Coordinators</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <Text style={styles.lastActive}>
-          Join Date: {coordinator.joinDate}
-        </Text>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewDetails(coordinator)}
-        >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewStudentsButton]} 
-          onPress={() => handleViewStudents(coordinator)}
-        >
-          <MaterialIcons name="people" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Students</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.assignOffCampusButton]} 
-          onPress={() => {
-            console.log('🚀 Frontend: Off Campus button pressed for:', coordinator.firstName);
-            setTestMessage(`Off Campus button pressed for ${coordinator.firstName}!`);
-            console.log('🚀 Frontend: State updated with test message');
-            handleAssignOffCampus(coordinator);
-          }}
-        >
-          <MaterialIcons name="location-off" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Off Campus</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.assignInCampusButton]} 
-          onPress={() => {
-            console.log('🚀 Frontend: In Campus button pressed for:', coordinator.firstName);
-            setTestMessage(`In Campus button pressed for ${coordinator.firstName}!`);
-            console.log('🚀 Frontend: State updated with test message');
-            handleAssignInCampus(coordinator);
-          }}
-        >
-          <MaterialIcons name="location-on" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>In Campus</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]} 
-          onPress={() => handleDeleteCoordinator(coordinator)}
-        >
-          <MaterialIcons name="delete" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
     );
   };
 
@@ -574,8 +803,8 @@ export default function CoordinatorsPage() {
       </View>
 
 
-      {/* Coordinators List */}
-      <ScrollView style={styles.coordinatorsList} showsVerticalScrollIndicator={false}>
+      {/* Coordinators Table */}
+      <View style={styles.tableWrapper}>
         {filteredCoordinators.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="supervisor-account" size={64} color="#ccc" />
@@ -588,9 +817,11 @@ export default function CoordinatorsPage() {
             </Text>
           </View>
         ) : (
-          renderCoordinatorCards()
+          <ScrollView style={styles.coordinatorsList} showsVerticalScrollIndicator={false}>
+            {renderCoordinatorTable()}
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
 
 
       {/* Edit Coordinator Modal */}
@@ -895,6 +1126,24 @@ export default function CoordinatorsPage() {
           </View>
         </View>
       </Modal>
+
+      {/* Tooltip */}
+      {tooltip.visible && (
+        <View 
+          style={[
+            styles.tooltip,
+            {
+              left: tooltip.x,
+              top: tooltip.y,
+              transform: [{ translateX: -50 }], // Center tooltip on button (50% of tooltip width)
+            }
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.tooltipText}>{tooltip.text}</Text>
+          <View style={styles.tooltipArrowDown} />
+        </View>
+      )}
     </View>
   );
 }
@@ -1056,216 +1305,403 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.2,
   },
+  tableWrapper: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    width: '100%',
+  },
   coordinatorsList: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 20,
   },
-  responsiveGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 12,
-  },
-  coordinatorCardWrapper: {
-    marginBottom: 12,
-  },
-  coordinatorCard: {
+  // Table Styles
+  tableContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginLeft: 20,
+    marginRight: 16,
+    marginVertical: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    width: '100%',
+    alignSelf: 'stretch',
   },
-  coordinatorHeader: {
+  tableHeader: {
     flexDirection: 'row',
-    marginBottom: 12,
+    backgroundColor: '#151419',
+    borderBottomWidth: 2,
+    borderBottomColor: '#F56E0F',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+  },
+  tableHeaderCell: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
     alignItems: 'flex-start',
   },
-  profileContainer: {
+  tableHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    minHeight: 72,
+    alignItems: 'center',
+  },
+  tableRowEven: {
+    backgroundColor: '#f8fafc',
+  },
+  tableCell: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  // Column Widths - Using flex for better width distribution
+  tableCellName: {
+    flex: 2,
+    minWidth: 200,
+  },
+  tableCellEmail: {
+    flex: 2.5,
+    minWidth: 200,
+  },
+  tableCellProgram: {
+    flex: 1.5,
+    minWidth: 120,
+  },
+  tableCellDepartment: {
+    flex: 1.5,
+    minWidth: 120,
+  },
+  tableCellStatus: {
+    flex: 1,
+    minWidth: 90,
+  },
+  tableCellCampus: {
+    flex: 1.2,
+    minWidth: 110,
+  },
+  tableCellInterns: {
+    flex: 1,
+    minWidth: 90,
+  },
+  tableCellAdmin: {
+    flex: 1,
+    minWidth: 90,
+  },
+  tableCellActions: {
+    flex: 1.8,
+    minWidth: 180,
+  },
+  // Table Cell Content
+  tableCellNameContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  tableProfileContainer: {
     marginRight: 12,
   },
-  profileImage: {
+  tableProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  tableProfilePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  tableProfileText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  tableCellNameText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    flex: 1,
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  tableCellTextMuted: {
+    fontSize: 14,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+  },
+  tableStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  tableStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: 0.2,
+  },
+  tableCampusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  tableCampusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  tableInternsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tableInternsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  tableAdminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  tableAdminText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  tableActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tableActionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  tableActionView: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+  },
+  tableActionStudents: {
+    backgroundColor: '#f5f3ff',
+    borderColor: '#8b5cf6',
+  },
+  tableActionOffCampus: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#f59e0b',
+  },
+  tableActionInCampus: {
+    backgroundColor: '#f5f3ff',
+    borderColor: '#8b5cf6',
+  },
+  tableActionDelete: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+  },
+  // Mobile Styles
+  mobileContainer: {
+    padding: 16,
+    gap: 16,
+  },
+  mobileCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  mobileProfileContainer: {
+    marginRight: 12,
+  },
+  mobileProfileImage: {
     width: 48,
     height: 48,
     borderRadius: 24,
     borderWidth: 2,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
-  profilePlaceholder: {
+  mobileProfilePlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#f1f5f9',
   },
-  profileText: {
+  mobileProfileText: {
     fontSize: 18,
     fontWeight: '700',
     color: '#ffffff',
-    letterSpacing: 0.3,
   },
-  coordinatorInfo: {
+  mobileCardInfo: {
     flex: 1,
   },
-  coordinatorName: {
+  mobileCardName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1e293b',
     marginBottom: 4,
-    letterSpacing: -0.2,
   },
-  coordinatorPosition: {
+  mobileCardEmail: {
     fontSize: 13,
-    color: '#3b82f6',
-    marginBottom: 2,
-    fontWeight: '600',
-  },
-  coordinatorDepartment: {
-    fontSize: 12,
     color: '#64748b',
-    marginBottom: 2,
-    fontWeight: '500',
   },
-  coordinatorEmail: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '500',
-  },
-  statusContainer: {
-    alignItems: 'flex-end',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
+  mobileStatusBadge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
+  },
+  mobileStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  mobileCardDetails: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  mobileDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  mobileDetailLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  mobileDetailValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1e293b',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 12,
+  },
+  mobileCampusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  mobileCampusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  mobileActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  mobileActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileViewButton: {
+    backgroundColor: '#3b82f6',
+  },
+  mobileStudentsButton: {
+    backgroundColor: '#8b5cf6',
+  },
+  mobileOffCampusButton: {
+    backgroundColor: '#f59e0b',
+  },
+  mobileInCampusButton: {
+    backgroundColor: '#8b5cf6',
+  },
+  mobileDeleteButton: {
+    backgroundColor: '#ef4444',
+  },
+  // Modal Styles (for status badges and permissions)
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#ffffff',
     letterSpacing: 0.2,
   },
-  campusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    marginTop: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  campusText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#ffffff',
-    letterSpacing: 0.1,
-  },
-  coordinatorDetails: {
-    marginBottom: 12,
-  },
-  permissionsContainer: {
-    marginBottom: 10,
-    padding: 12,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  permissionsLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 8,
-    letterSpacing: -0.1,
-  },
   permissionsList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
+    marginTop: 12,
   },
   permissionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginRight: 8,
+    marginBottom: 8,
   },
   permissionText: {
-    fontSize: 10,
-    color: '#475569',
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  lastActive: {
     fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flex: 1,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-    minHeight: 44, // Increased from 36 to 44 for better touch target
-    marginVertical: 2, // Added margin for better spacing
-  },
-  viewButton: {
-    backgroundColor: '#3b82f6',
-  },
-  viewStudentsButton: {
-    backgroundColor: '#8b5cf6',
-  },
-  editButton: {
-    backgroundColor: '#10b981',
-  },
-  assignOffCampusButton: {
-    backgroundColor: '#f59e0b',
-  },
-  assignInCampusButton: {
-    backgroundColor: '#8b5cf6',
-  },
-  deleteButton: {
-    backgroundColor: '#ef4444',
-  },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
-    marginLeft: 4,
-    letterSpacing: 0.1,
+    color: '#475569',
+    marginLeft: 6,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -1570,5 +2006,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     marginTop: 4,
+  },
+  // Tooltip Styles
+  tooltip: {
+    position: 'absolute',
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 10000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    maxWidth: 200,
+    marginRight: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tooltipText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  tooltipArrow: {
+    position: 'absolute',
+    bottom: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#1e293b',
+  },
+  tooltipArrowDown: {
+    position: 'absolute',
+    top: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#1e293b',
   },
 });

@@ -305,7 +305,7 @@ export default function NewPasswordScreen({
                 onPress={onBack}
                 disabled={isLoading}
               >
-                <Text style={styles.backButtonText}>Back to Login</Text>
+                <Text style={styles.backButtonText}>Back</Text>
               </TouchableOpacity>
             </View>
           </View>

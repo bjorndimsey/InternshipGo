@@ -14,10 +14,16 @@ import {
   Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { apiService } from '../../../lib/api';
 import LocationPicker from '../../../components/LocationPicker';
 import LocationPictures from '../../../components/LocationPictures';
 import CloudinaryService from '../../../lib/cloudinaryService';
+import ESignature from '../../../components/ESignature';
+import CertificateModal from '../components/CertificateModal';
+import { EmailService } from '../../../lib/emailService';
+import OTPVerificationScreen from '../../../screens/OTPVerificationScreen';
+import NewPasswordScreen from '../../../screens/NewPasswordScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +36,7 @@ interface CompanyProfile {
   address: string;
   profilePicture?: string;
   backgroundPicture?: string;
+  customCertificateTemplateUrl?: string;
   qualifications?: string;
   skillsRequired?: string;
   companyDescription?: string;
@@ -43,6 +50,7 @@ interface CompanyProfile {
   availableInternSlots?: number;
   totalInternCapacity?: number;
   currentInternCount?: number;
+  signature?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,21 +66,50 @@ interface UserInfo {
 
 interface ProfilePageProps {
   currentUser: UserInfo | null;
+  autoOpenLocationPicker?: boolean;
+  onLocationPickerOpened?: () => void;
 }
 
-export default function ProfilePage({ currentUser }: ProfilePageProps) {
+export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLocationPickerOpened }: ProfilePageProps) {
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  // Auto-open location picker if requested
+  useEffect(() => {
+    if (autoOpenLocationPicker && !showLocationPicker && profile) {
+      // Small delay to ensure profile is loaded
+      setTimeout(() => {
+        setShowLocationPicker(true);
+        if (onLocationPickerOpened) {
+          onLocationPickerOpened();
+        }
+      }, 500);
+    }
+  }, [autoOpenLocationPicker, profile, onLocationPickerOpened]);
   const [showLocationPictures, setShowLocationPictures] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
   const [uploadingBackgroundPicture, setUploadingBackgroundPicture] = useState(false);
+  const [uploadingCertificateTemplate, setUploadingCertificateTemplate] = useState(false);
+  const [customTemplates, setCustomTemplates] = useState<Array<{id: number; template_name: string; template_image_url: string; is_default: boolean}>>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showTemplateMenu, setShowTemplateMenu] = useState<number | null>(null);
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [viewingTemplate, setViewingTemplate] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<number | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordChangeStep, setPasswordChangeStep] = useState<'otp' | 'password'>('otp');
+  const [isLoadingOTP, setIsLoadingOTP] = useState(false);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [editData, setEditData] = useState({
     companyName: '',
     industry: '',
@@ -103,6 +140,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   useEffect(() => {
     if (currentUser) {
       fetchProfile();
+      fetchCustomTemplates();
       
       // Animate on mount
       Animated.parallel([
@@ -173,6 +211,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           address: userData.address || '',
           profilePicture: userData.profile_picture,
           backgroundPicture: userData.background_picture,
+          customCertificateTemplateUrl: userData.custom_certificate_template_url,
           qualifications: userData.qualifications || '',
           skillsRequired: userData.skills_required || '',
           companyDescription: userData.company_description || '',
@@ -186,6 +225,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           availableInternSlots: userData.available_intern_slots || 0,
           totalInternCapacity: userData.total_intern_capacity || 0,
           currentInternCount: userData.current_intern_count || 0,
+          signature: userData.signature || userData.esignature || null,
           createdAt: userData.created_at,
           updatedAt: userData.updated_at,
         };
@@ -395,12 +435,128 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
     }
   };
 
-  const handleChangePassword = () => {
-    Alert.alert(
-      'Change Password',
-      'Password change functionality will be implemented soon.',
-      [{ text: 'OK' }]
-    );
+  const handleChangePassword = async () => {
+    if (!currentUser?.email) {
+      Alert.alert('Error', 'Unable to get your email address. Please try again.');
+      return;
+    }
+
+    // Check if user is a Google user
+    const isGoogleOAuthUser = currentUser.google_id ? true : false;
+    setIsGoogleUser(isGoogleOAuthUser);
+
+    setIsLoadingOTP(true);
+    try {
+      // Request OTP from backend
+      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Send OTP via EmailJS
+        const emailResult = await EmailService.sendOTPEmail(
+          currentUser.email,
+          data.otp,
+          currentUser.name || 'User'
+        );
+
+        if (emailResult.success) {
+          Toast.show({
+            type: 'success',
+            text1: 'OTP Sent! 📧',
+            text2: 'Check your email for the verification code',
+            position: 'top',
+            visibilityTime: 5000,
+          });
+
+          setPasswordChangeStep('otp');
+          setShowChangePasswordModal(true);
+        } else {
+          Alert.alert(
+            'Email Failed',
+            emailResult.error || 'Failed to send OTP email. Please try again.'
+          );
+        }
+      } else {
+        Alert.alert('Request Failed', data.message || 'Failed to request OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('OTP request error:', error);
+      Alert.alert('Error', 'Unable to send OTP. Please try again.');
+    } finally {
+      setIsLoadingOTP(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!currentUser?.email) {
+      throw new Error('Unable to get your email address');
+    }
+
+    try {
+      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const emailResult = await EmailService.sendOTPEmail(
+          currentUser.email,
+          data.otp,
+          currentUser.name || 'User'
+        );
+
+        if (emailResult.success) {
+          return Promise.resolve();
+        } else {
+          throw new Error(emailResult.error || 'Failed to send OTP email');
+        }
+      } else {
+        throw new Error(data.message || 'Failed to request OTP');
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const handleOTPVerified = () => {
+    setPasswordChangeStep('password');
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    Toast.show({
+      type: 'success',
+      text1: 'Password Changed! 🎉',
+      text2: 'Your password has been updated successfully',
+      position: 'top',
+      visibilityTime: 5000,
+    });
+
+    setTimeout(() => {
+      setShowChangePasswordModal(false);
+      setPasswordChangeStep('otp');
+      showSuccess('Password changed successfully!');
+    }, 2000);
+  };
+
+  const handleBackToOTP = () => {
+    setPasswordChangeStep('otp');
+  };
+
+  const handleCloseChangePasswordModal = () => {
+    setShowChangePasswordModal(false);
+    setPasswordChangeStep('otp');
   };
 
   const handleUploadProfilePicture = async () => {
@@ -590,6 +746,187 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
 
   const handleCloseLocationPictures = () => {
     setShowLocationPictures(false);
+  };
+
+  const handleSignature = () => {
+    setShowSignatureModal(true);
+  };
+
+  const handleCloseSignature = () => {
+    setShowSignatureModal(false);
+  };
+
+  const handleSignatureSaveSuccess = (signatureUrl: string) => {
+    // Update the profile with the new signature URL
+    if (profile) {
+      setProfile({
+        ...profile,
+        signature: signatureUrl,
+      });
+    }
+    setShowSignatureModal(false);
+    showSuccess('Signature saved successfully!');
+  };
+
+  const handleCertificate = () => {
+    setShowCertificateModal(true);
+  };
+
+  const handleCloseCertificate = () => {
+    setShowCertificateModal(false);
+  };
+
+  const fetchCustomTemplates = async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      setLoadingTemplates(true);
+      const response = await apiService.getCustomTemplates(currentUser.id);
+      
+      if (response.success && (response as any).templates) {
+        setCustomTemplates((response as any).templates);
+      }
+    } catch (error) {
+      console.error('Error fetching custom templates:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleUploadCertificateTemplate = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      
+      document.body.appendChild(input);
+      input.click();
+      
+      input.onchange = async (event) => {
+        const target = event.target as HTMLInputElement;
+        const file = target.files?.[0];
+        
+        if (!file) {
+          document.body.removeChild(input);
+          return;
+        }
+        
+        if (!file.type.startsWith('image/')) {
+          Alert.alert('Invalid File', 'Please select an image file.');
+          document.body.removeChild(input);
+          return;
+        }
+        
+        // Certificate templates should be larger - recommend 1200x1600px
+        if (file.size > 10 * 1024 * 1024) {
+          Alert.alert('File Too Large', 'Please select an image smaller than 10MB.');
+          document.body.removeChild(input);
+          return;
+        }
+        
+        setUploadingCertificateTemplate(true);
+        
+        try {
+          const uploadResult = await CloudinaryService.uploadImage(
+            file,
+            'internship-avatars/certificate-templates',
+            {
+              transformation: 'w_1200,h_1600,c_pad,q_auto:best,f_auto'
+            }
+          );
+          
+          if (uploadResult.success && uploadResult.url) {
+            // Create the template using the new API
+            const response = await apiService.createCustomTemplate({
+              companyId: currentUser!.id,
+              templateName: `Template ${customTemplates.length + 1}`,
+              templateImageUrl: uploadResult.url
+            });
+            
+            if (response.success) {
+              // Refresh templates list
+              await fetchCustomTemplates();
+              setSuccessMessage('Certificate template uploaded successfully! You can now use it when generating certificates.');
+              setShowSuccessModal(true);
+            } else {
+              Alert.alert('Error', response.message || 'Failed to save certificate template.');
+            }
+          } else {
+            Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload image. Please try again.');
+          }
+        } catch (error) {
+          console.error('Certificate template upload error:', error);
+          Alert.alert('Error', 'Failed to upload certificate template. Please try again.');
+        } finally {
+          setUploadingCertificateTemplate(false);
+          document.body.removeChild(input);
+        }
+      };
+      
+      input.oncancel = () => {
+        document.body.removeChild(input);
+      };
+      
+    } catch (error) {
+      console.error('Certificate template upload error:', error);
+      Alert.alert('Error', 'Failed to open file picker. Please try again.');
+    }
+  };
+
+  const handleDeleteTemplate = (templateId: number) => {
+    console.log('🗑️ handleDeleteTemplate called with templateId:', templateId);
+    setShowTemplateMenu(null);
+    setTemplateToDelete(templateId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    
+    console.log('✅ Delete confirmed, starting deletion...', templateToDelete);
+    try {
+      setShowDeleteConfirm(false);
+      console.log('📡 Calling deleteCustomTemplate API...', {
+        templateId: templateToDelete.toString(),
+        companyId: currentUser!.id
+      });
+      
+      const response = await apiService.deleteCustomTemplate(templateToDelete.toString(), currentUser!.id);
+      
+      console.log('📥 Delete response received:', response);
+      
+      if (response.success) {
+        console.log('✅ Template deleted successfully, refreshing list...');
+        // Refresh templates list
+        await fetchCustomTemplates();
+        Toast.show({
+          type: 'success',
+          text1: 'Template Deleted',
+          text2: 'The template has been deleted successfully',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      } else {
+        console.error('❌ Delete failed:', response.message);
+        Alert.alert('Error', response.message || 'Failed to delete template.');
+      }
+      setTemplateToDelete(null);
+    } catch (error) {
+      console.error('❌ Error deleting template:', error);
+      Alert.alert('Error', `Failed to delete template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setTemplateToDelete(null);
+    }
+  };
+
+  const cancelDeleteTemplate = () => {
+    console.log('❌ Delete cancelled');
+    setShowDeleteConfirm(false);
+    setTemplateToDelete(null);
+  };
+
+  const handleViewTemplate = (templateUrl: string) => {
+    setViewingTemplate(templateUrl);
   };
 
   const SectionHeader = ({ title, sectionId, hasData }: { title: string; sectionId: string; hasData: boolean }) => (
@@ -948,244 +1285,6 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
         )}
       </Animated.View>
 
-      {/* Company Details */}
-      <View style={styles.section}>
-        <SectionHeader 
-          title="Company Details" 
-          sectionId="company-details"
-          hasData={!!(profile.companyDescription || profile.website || profile.phoneNumber || profile.contactPerson || profile.companySize || profile.foundedYear)}
-        />
-        <View style={styles.infoCard}>
-          {profile.companyDescription || profile.website || profile.phoneNumber || profile.contactPerson || profile.companySize || profile.foundedYear ? (
-            <>
-              {profile.companyDescription && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="description" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Description</Text>
-                    <Text style={styles.infoValue}>{profile.companyDescription}</Text>
-            </View>
-          </View>
-              )}
-              {profile.website && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="language" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Website</Text>
-                    <Text style={styles.infoValue}>{profile.website}</Text>
-            </View>
-          </View>
-              )}
-              {profile.phoneNumber && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="phone" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Phone Number</Text>
-                    <Text style={styles.infoValue}>{profile.phoneNumber}</Text>
-            </View>
-          </View>
-              )}
-              {profile.contactPerson && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="person" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Contact Person</Text>
-                    <Text style={styles.infoValue}>{profile.contactPerson}</Text>
-            </View>
-          </View>
-              )}
-              {profile.companySize && (
-                <View style={styles.infoItem}>
-                  <MaterialIcons name="group" size={20} color="#F56E0F" />
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Company Size</Text>
-                    <Text style={styles.infoValue}>{profile.companySize}</Text>
-                  </View>
-                </View>
-              )}
-              {profile.foundedYear && (
-                <View style={styles.infoItem}>
-                  <MaterialIcons name="calendar-today" size={20} color="#F56E0F" />
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Founded Year</Text>
-                    <Text style={styles.infoValue}>{profile.foundedYear}</Text>
-                  </View>
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="business" size={48} color="#F4D03F" />
-              <Text style={styles.emptyStateText}>No company details added yet</Text>
-              <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Qualifications & Skills */}
-      <View style={styles.section}>
-        <SectionHeader 
-          title="Qualifications & Skills" 
-          sectionId="qualifications-skills"
-          hasData={!!(profile.qualifications || profile.skillsRequired)}
-        />
-        <View style={styles.infoCard}>
-          {profile.qualifications || profile.skillsRequired ? (
-            <>
-              {profile.qualifications && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="school" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Required Qualifications</Text>
-                    <Text style={styles.infoValue}>{profile.qualifications}</Text>
-            </View>
-          </View>
-              )}
-              {profile.skillsRequired && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="build" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Skills Required</Text>
-                    <Text style={styles.infoValue}>{profile.skillsRequired}</Text>
-            </View>
-          </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="school" size={48} color="#F56E0F" />
-              <Text style={styles.emptyStateText}>No qualifications & skills added yet</Text>
-              <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Work Environment & Benefits */}
-      <View style={styles.section}>
-        <SectionHeader 
-          title="Work Environment & Benefits" 
-          sectionId="work-environment"
-          hasData={!!(profile.workEnvironment || profile.benefits)}
-        />
-        <View style={styles.infoCard}>
-          {profile.workEnvironment || profile.benefits ? (
-            <>
-              {profile.workEnvironment && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="work" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Work Environment</Text>
-                    <Text style={styles.infoValue}>{profile.workEnvironment}</Text>
-            </View>
-          </View>
-              )}
-              {profile.benefits && (
-          <View style={styles.infoItem}>
-                  <MaterialIcons name="card-giftcard" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Benefits</Text>
-                    <Text style={styles.infoValue}>{profile.benefits}</Text>
-            </View>
-          </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="work" size={48} color="#F56E0F" />
-              <Text style={styles.emptyStateText}>No work environment & benefits added yet</Text>
-              <Text style={styles.emptyStateSubtext}>Click "Add" to get started</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Internship Capacity */}
-      <View style={styles.section}>
-        <SectionHeader 
-          title="Internship Capacity" 
-          sectionId="internship-capacity"
-          hasData={!!(profile.availableInternSlots || profile.totalInternCapacity || profile.currentInternCount)}
-        />
-        <View style={styles.infoCard}>
-          <View style={styles.infoItem}>
-            <MaterialIcons name="group-add" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Available Intern Slots</Text>
-              <Text style={styles.infoValue}>{profile.availableInternSlots || 0}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <MaterialIcons name="business-center" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Total Intern Capacity</Text>
-              <Text style={styles.infoValue}>{profile.totalInternCapacity || 0}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <MaterialIcons name="people" size={20} color="#F56E0F" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Current Intern Count</Text>
-              <Text style={styles.infoValue}>{profile.currentInternCount || 0}</Text>
-            </View>
-          </View>
-          {profile.totalInternCapacity && profile.currentInternCount && (
-            <View style={styles.infoItem}>
-              <MaterialIcons name="trending-up" size={20} color="#F56E0F" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Capacity Utilization</Text>
-              <Text style={styles.infoValue}>
-                  {Math.round((profile.currentInternCount / profile.totalInternCapacity) * 100)}%
-              </Text>
-            </View>
-          </View>
-          )}
-        </View>
-      </View>
-
-      {/* Account Information */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
-          <View style={styles.sectionBadge}>
-            <MaterialIcons name="account-circle" size={16} color="#F56E0F" />
-            <Text style={styles.sectionBadgeText}>Account</Text>
-          </View>
-        </View>
-        <View style={styles.infoCard}>
-          <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <MaterialIcons name="person" size={20} color="#F56E0F" />
-              </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>User Type</Text>
-              <Text style={styles.infoValue}>{profile.userType}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <MaterialIcons name="schedule" size={20} color="#02050a" />
-              </View>
-            <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Member Since</Text>
-              <Text style={styles.infoValue}>{new Date(profile.createdAt).toLocaleDateString()}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <MaterialIcons name="update" size={20} color="#02050a" />
-              </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Last Updated</Text>
-              <Text style={styles.infoValue}>{new Date(profile.updatedAt).toLocaleDateString()}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </View>
-
       {/* Account Settings */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -1226,28 +1325,239 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
             </View>
             <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleSignature}>
             <View style={styles.settingIconContainer}>
-              <MaterialIcons name="notifications" size={20} color="#02050a" />
+              <MaterialIcons name="edit" size={20} color="#02050a" />
             </View>
             <View style={styles.settingContent}>
-            <Text style={styles.settingText}>Notification Settings</Text>
-              <Text style={styles.settingSubtext}>Manage notifications</Text>
+              <Text style={styles.settingText}>Signature</Text>
+              <Text style={styles.settingSubtext}>Manage your signature</Text>
             </View>
             <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleCertificate}>
             <View style={styles.settingIconContainer}>
-              <MaterialIcons name="privacy-tip" size={20} color="#02050a" />
+              <MaterialIcons name="card-membership" size={20} color="#02050a" />
             </View>
             <View style={styles.settingContent}>
-            <Text style={styles.settingText}>Privacy Settings</Text>
-              <Text style={styles.settingSubtext}>Control your privacy</Text>
+              <Text style={styles.settingText}>Certificate</Text>
+              <Text style={styles.settingSubtext}>View your certificates</Text>
+            </View>
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.settingItem} 
+            onPress={() => setShowTemplatesModal(true)}
+            disabled={uploadingCertificateTemplate}
+          >
+            <View style={styles.settingIconContainer}>
+              {uploadingCertificateTemplate ? (
+                <ActivityIndicator size="small" color="#F56E0F" />
+              ) : (
+                <MaterialIcons name="upload-file" size={20} color="#02050a" />
+              )}
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingText}>Certificate Templates</Text>
+              <Text style={styles.settingSubtext}>
+                {customTemplates.length > 0 
+                  ? `${customTemplates.length} custom template${customTemplates.length > 1 ? 's' : ''}` 
+                  : 'Upload custom certificate backgrounds'}
+              </Text>
             </View>
             <MaterialIcons name="arrow-forward-ios" size={16} color="#F4D03F" />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Templates Management Modal */}
+      <Modal
+        visible={showTemplatesModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTemplatesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.headerLeftSection}>
+                <MaterialIcons name="image" size={24} color="#F56E0F" />
+                <Text style={styles.modalTitle}>Certificate Templates</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => {
+                  setShowTemplatesModal(false);
+                  setShowTemplateMenu(null);
+                }}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {/* Upload Button */}
+              <TouchableOpacity
+                style={styles.uploadTemplateButton}
+                onPress={handleUploadCertificateTemplate}
+                disabled={uploadingCertificateTemplate}
+              >
+                {uploadingCertificateTemplate ? (
+                  <ActivityIndicator size="small" color="#F56E0F" />
+                ) : (
+                  <>
+                    <MaterialIcons name="add" size={24} color="#F56E0F" />
+                    <Text style={styles.uploadTemplateButtonText}>Upload New Template</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Templates List */}
+              {loadingTemplates ? (
+                <View style={styles.templatesLoading}>
+                  <ActivityIndicator size="large" color="#F56E0F" />
+                  <Text style={styles.templatesLoadingText}>Loading templates...</Text>
+                </View>
+              ) : customTemplates.length === 0 ? (
+                <View style={styles.emptyTemplatesContainer}>
+                  <MaterialIcons name="image" size={64} color="#999" />
+                  <Text style={styles.emptyTemplatesText}>No custom templates yet</Text>
+                  <Text style={styles.emptyTemplatesSubtext}>
+                    Upload your first template to get started
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.templatesList}>
+                  {customTemplates.map((template) => (
+                    <View key={template.id} style={styles.templateItem}>
+                      <TouchableOpacity
+                        onPress={() => handleViewTemplate(template.template_image_url)}
+                        style={styles.templateThumbnailContainer}
+                      >
+                        <Image
+                          source={{ uri: template.template_image_url }}
+                          style={styles.templateThumbnail}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.templateThumbnailOverlay}>
+                          <MaterialIcons name="visibility" size={20} color="#fff" />
+                          <Text style={styles.templateViewText}>View</Text>
+                        </View>
+                      </TouchableOpacity>
+                      <View style={styles.templateInfo}>
+                        <Text style={styles.templateName} numberOfLines={1}>
+                          {template.template_name}
+                        </Text>
+                        {template.is_default && (
+                          <View style={styles.defaultBadge}>
+                            <Text style={styles.defaultBadgeText}>Default</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.templateMenuContainer}>
+                        <TouchableOpacity
+                          style={styles.templateMenuButton}
+                          onPress={() => setShowTemplateMenu(showTemplateMenu === template.id ? null : template.id)}
+                        >
+                          <MaterialIcons name="more-vert" size={20} color="#F56E0F" />
+                        </TouchableOpacity>
+                        {showTemplateMenu === template.id && (
+                          <>
+                            <TouchableOpacity
+                              style={styles.templateMenuBackdrop}
+                              activeOpacity={1}
+                              onPress={() => setShowTemplateMenu(null)}
+                            />
+                            <View style={styles.templateMenuDropdown}>
+                              <TouchableOpacity
+                                style={styles.templateMenuOption}
+                                onPress={() => handleDeleteTemplate(template.id)}
+                              >
+                                <MaterialIcons name="delete" size={18} color="#FF4444" />
+                                <Text style={styles.templateMenuOptionText}>Delete</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* View Template Modal */}
+      <Modal
+        visible={viewingTemplate !== null}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setViewingTemplate(null)}
+      >
+        <View style={styles.viewTemplateOverlay}>
+          <View style={styles.viewTemplateContent}>
+            <View style={styles.viewTemplateHeader}>
+              <Text style={styles.viewTemplateTitle}>Template Preview</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setViewingTemplate(null)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            {viewingTemplate && (
+              <ScrollView
+                style={styles.viewTemplateScroll}
+                contentContainerStyle={styles.viewTemplateScrollContent}
+                maximumZoomScale={3}
+                minimumZoomScale={0.5}
+              >
+                <Image
+                  source={{ uri: viewingTemplate }}
+                  style={styles.viewTemplateImage}
+                  resizeMode="contain"
+                />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirm}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={cancelDeleteTemplate}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteConfirmModal}>
+            <View style={styles.deleteConfirmHeader}>
+              <MaterialIcons name="warning" size={32} color="#FF4444" />
+              <Text style={styles.deleteConfirmTitle}>Delete Template</Text>
+            </View>
+            <Text style={styles.deleteConfirmMessage}>
+              Are you sure you want to delete this template? This action cannot be undone.
+            </Text>
+            <View style={styles.deleteConfirmButtons}>
+              <TouchableOpacity
+                style={[styles.deleteConfirmButton, styles.deleteConfirmButtonCancel]}
+                onPress={cancelDeleteTemplate}
+              >
+                <Text style={styles.deleteConfirmButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteConfirmButton, styles.deleteConfirmButtonDelete]}
+                onPress={confirmDeleteTemplate}
+              >
+                <Text style={styles.deleteConfirmButtonDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Edit Profile Modal */}
       <Modal
@@ -1521,6 +1831,35 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
         />
       </Modal>
 
+      {/* Signature Modal */}
+      {currentUser && (
+        <ESignature
+          userId={currentUser.id}
+          currentSignature={profile?.signature}
+          visible={showSignatureModal}
+          onClose={handleCloseSignature}
+          onSaveSuccess={handleSignatureSaveSuccess}
+        />
+      )}
+
+      {/* Certificate Modal */}
+      {currentUser && profile && (
+        <CertificateModal
+        visible={showCertificateModal}
+          onClose={handleCloseCertificate}
+          companyId={currentUser.id}
+          companyData={{
+            companyName: profile.companyName,
+            address: profile.address,
+            signature: profile.signature || undefined,
+            contactPerson: profile.contactPerson || undefined,
+          }}
+          onSuccess={(message) => {
+            showSuccess(message || 'Certificates generated successfully!');
+          }}
+        />
+      )}
+
       {/* Success Modal */}
       <Modal
         visible={showSuccessModal}
@@ -1544,6 +1883,35 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           </View>
         </View>
       </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={handleCloseChangePasswordModal}
+      >
+        {passwordChangeStep === 'otp' && currentUser && (
+          <OTPVerificationScreen
+            email={currentUser.email}
+            onVerifySuccess={handleOTPVerified}
+            onBack={handleCloseChangePasswordModal}
+            onResendOTP={handleResendOTP}
+          />
+        )}
+
+        {passwordChangeStep === 'password' && currentUser && (
+          <NewPasswordScreen
+            email={currentUser.email}
+            onPasswordResetSuccess={handlePasswordChangeSuccess}
+            onBack={handleBackToOTP}
+            isGoogleUser={isGoogleUser}
+          />
+        )}
+      </Modal>
+
+      {/* Toast Component */}
+      <Toast />
     </Animated.ScrollView>
   );
 }
@@ -2003,6 +2371,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2E', // Dark input/gray background
     borderTopLeftRadius: width < 768 ? 16 : 20,
     borderTopRightRadius: width < 768 ? 16 : 20,
+  },
+  headerLeftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   modalTitle: {
     fontSize: width < 768 ? 18 : 20,
@@ -2688,5 +3061,255 @@ const styles = StyleSheet.create({
     height: width < 768 ? 14 : 16,
     backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
+  },
+  templatesList: {
+    gap: width < 768 ? 12 : 16,
+  },
+  templatesLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 12,
+  },
+  templatesLoadingText: {
+    fontSize: 14,
+    color: '#F56E0F',
+  },
+  templateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    padding: width < 768 ? 12 : 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    marginBottom: width < 768 ? 8 : 12,
+  },
+  templateThumbnailContainer: {
+    position: 'relative',
+    marginRight: width < 768 ? 12 : 16,
+  },
+  templateThumbnail: {
+    width: width < 768 ? 60 : 80,
+    height: width < 768 ? 45 : 60,
+    borderRadius: 8,
+    backgroundColor: '#1B1B1E',
+  } as any,
+  templateThumbnailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  templateViewText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  templateInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  templateName: {
+    fontSize: width < 768 ? 14 : 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    flex: 1,
+  },
+  defaultBadge: {
+    backgroundColor: '#F56E0F',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+  },
+  templateMenuContainer: {
+    position: 'relative',
+    zIndex: 10,
+  },
+  templateMenuButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  templateMenuBackdrop: {
+    position: 'absolute',
+    top: -1000,
+    left: -1000,
+    right: -1000,
+    bottom: -1000,
+    zIndex: 999,
+    backgroundColor: 'transparent',
+  },
+  templateMenuDropdown: {
+    position: 'absolute',
+    top: 32,
+    right: 0,
+    backgroundColor: '#1B1B1E',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    minWidth: 120,
+    zIndex: 1000,
+  },
+  templateMenuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: width < 768 ? 12 : 10,
+    gap: 8,
+  },
+  templateMenuOptionText: {
+    fontSize: 14,
+    color: '#FF4444',
+    fontWeight: '600',
+  },
+  uploadTemplateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: width < 768 ? 16 : 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#F56E0F',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    marginBottom: 20,
+    gap: 8,
+  },
+  uploadTemplateButtonText: {
+    fontSize: width < 768 ? 16 : 14,
+    color: '#F56E0F',
+    fontWeight: '600',
+  },
+  emptyTemplatesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyTemplatesText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginTop: 16,
+  },
+  emptyTemplatesSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  viewTemplateOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: width < 768 ? 16 : 20,
+  },
+  viewTemplateContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: width < 768 ? width - 32 : 900,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  viewTemplateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: width < 768 ? 16 : 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 110, 15, 0.3)',
+    backgroundColor: '#2A2A2E',
+  },
+  viewTemplateTitle: {
+    fontSize: width < 768 ? 18 : 20,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+  },
+  viewTemplateScroll: {
+    flex: 1,
+    backgroundColor: '#1B1B1E',
+  },
+  viewTemplateScrollContent: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  viewTemplateImage: {
+    width: '100%',
+    aspectRatio: 0.75,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  deleteConfirmModal: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    padding: width < 768 ? 20 : 24,
+    width: width < 768 ? width - 64 : 400,
+    maxWidth: '90%',
+  },
+  deleteConfirmHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  deleteConfirmTitle: {
+    fontSize: width < 768 ? 20 : 24,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+  },
+  deleteConfirmMessage: {
+    fontSize: width < 768 ? 14 : 16,
+    color: '#999',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteConfirmButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  deleteConfirmButton: {
+    paddingHorizontal: width < 768 ? 20 : 24,
+    paddingVertical: width < 768 ? 12 : 14,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  deleteConfirmButtonCancel: {
+    backgroundColor: '#2A2A2E',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+  },
+  deleteConfirmButtonCancelText: {
+    fontSize: width < 768 ? 14 : 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+  },
+  deleteConfirmButtonDelete: {
+    backgroundColor: '#FF4444',
+  },
+  deleteConfirmButtonDeleteText: {
+    fontSize: width < 768 ? 14 : 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

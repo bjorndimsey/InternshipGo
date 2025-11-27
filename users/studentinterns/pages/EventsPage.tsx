@@ -163,12 +163,12 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
 
   const getEventTypeColor = (type: string) => {
     switch (type) {
-      case 'meeting': return '#1E3A5F'; // Deep navy blue
-      case 'workshop': return '#2D5A3D'; // Forest green
-      case 'orientation': return '#F4D03F'; // Bright yellow
-      case 'deadline': return '#E8A598'; // Soft coral
-      case 'other': return '#1E3A5F'; // Deep navy blue
-      default: return '#1E3A5F';
+      case 'meeting': return '#4285f4'; // Blue
+      case 'workshop': return '#34a853'; // Green
+      case 'orientation': return '#F56E0F'; // Primary orange
+      case 'deadline': return '#ea4335'; // Red
+      case 'other': return '#9c27b0'; // Purple
+      default: return '#666';
     }
   };
 
@@ -185,11 +185,11 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'upcoming': return '#F4D03F'; // Bright yellow
-      case 'ongoing': return '#2D5A3D'; // Forest green
-      case 'completed': return '#1E3A5F'; // Deep navy blue
-      case 'cancelled': return '#E8A598'; // Soft coral
-      default: return '#1E3A5F';
+      case 'upcoming': return '#4285f4'; // Blue
+      case 'ongoing': return '#34a853'; // Green
+      case 'completed': return '#666'; // Gray
+      case 'cancelled': return '#ea4335'; // Red
+      default: return '#666';
     }
   };
 
@@ -225,11 +225,11 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   const StatusBadge = ({ status }: { status: string }) => {
     const getStatusConfig = () => {
       switch (status) {
-        case 'upcoming': return { color: '#F4D03F', text: 'Upcoming', icon: 'schedule' };
-        case 'ongoing': return { color: '#2D5A3D', text: 'Ongoing', icon: 'play-circle' };
-        case 'completed': return { color: '#1E3A5F', text: 'Completed', icon: 'check-circle' };
-        case 'cancelled': return { color: '#E8A598', text: 'Cancelled', icon: 'cancel' };
-        default: return { color: '#1E3A5F', text: 'Unknown', icon: 'help' };
+        case 'upcoming': return { color: '#4285f4', text: 'Upcoming', icon: 'schedule' };
+        case 'ongoing': return { color: '#34a853', text: 'Ongoing', icon: 'play-circle' };
+        case 'completed': return { color: '#666', text: 'Completed', icon: 'check-circle' };
+        case 'cancelled': return { color: '#ea4335', text: 'Cancelled', icon: 'cancel' };
+        default: return { color: '#666', text: 'Unknown', icon: 'help' };
       }
     };
     
@@ -324,7 +324,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
             <MaterialIcons 
               name={isExpanded ? "expand-less" : "expand-more"} 
               size={24} 
-              color="#F4D03F" 
+              color="#F56E0F" 
             />
           </View>
         </TouchableOpacity>
@@ -335,11 +335,11 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
             
             <View style={styles.eventMeta}>
               <View style={styles.metaItem}>
-                <MaterialIcons name="location-on" size={18} color="#F4D03F" />
+                <MaterialIcons name="location-on" size={18} color="#F56E0F" />
                 <Text style={styles.metaText}>{event.location}</Text>
               </View>
               <View style={styles.metaItem}>
-                <MaterialIcons name="people" size={18} color="#F4D03F" />
+                <MaterialIcons name="people" size={18} color="#F56E0F" />
                 <Text style={styles.metaText}>
                   {event.attendees}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attendees
                 </Text>
@@ -467,7 +467,7 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading events...</Text>
       </View>
     );
@@ -482,20 +482,15 @@ export default function EventsPage({ currentUser }: EventsPageProps) {
         <View style={styles.contentWrapper}>
           {/* Header */}
           <Animated.View style={[styles.header, { transform: [{ translateY: slideAnim }] }]}>
-            <View style={styles.headerGradient}>
-              <Text style={styles.headerTitle}>Events</Text>
-              <Text style={styles.headerSubtitle}>
-                {getUpcomingEvents().length} upcoming {getUpcomingEvents().length === 1 ? 'event' : 'events'}
-              </Text>
-              <View style={styles.headerActions}>
-                <TouchableOpacity 
-                  style={styles.calendarButton}
-                  onPress={() => setShowCalendar(!showCalendar)}
-                >
-                  <MaterialIcons name="calendar-today" size={20} color="#F4D03F" />
+            <Text style={styles.headerTitle}>Events</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.calendarButton}
+                onPress={() => setShowCalendar(!showCalendar)}
+              >
+                  <MaterialIcons name="calendar-today" size={20} color="#FBFBFB" />
                   <Text style={styles.calendarButtonText}>Calendar</Text>
-                </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             </View>
           </Animated.View>
 
@@ -671,29 +666,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   header: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#151419', // Dark background
     padding: 24,
-    shadowColor: '#000',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
   },
-  headerGradient: {
-    position: 'relative',
-  },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-    fontFamily: 'System',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#F4D03F', // Bright yellow
-    fontWeight: '500',
-    marginBottom: 20,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FBFBFB', // Light text
+    letterSpacing: -0.5,
   },
   headerActions: {
     flexDirection: 'row',
@@ -702,22 +690,22 @@ const styles = StyleSheet.create({
   calendarButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(244, 208, 63, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#F4D03F',
+    borderColor: '#F56E0F', // Primary orange
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   calendarButtonText: {
-    color: '#F4D03F',
+    color: '#FBFBFB', // Light text
     fontSize: 15,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    fontWeight: '600',
+    marginLeft: 6,
     letterSpacing: 0.2,
   },
   calendarSection: {
@@ -952,11 +940,11 @@ const styles = StyleSheet.create({
     borderColor: '#f0f0f0',
   },
   enhancedEventCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -1043,7 +1031,7 @@ const styles = StyleSheet.create({
   },
   eventDate: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '600',
   },
   eventDetails: {
@@ -1247,11 +1235,11 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonEventCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary
     borderRadius: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -1267,7 +1255,7 @@ const styles = StyleSheet.create({
   skeletonEventTypeIcon: {
     width: 48,
     height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 12,
     marginRight: 16,
   },
@@ -1283,7 +1271,7 @@ const styles = StyleSheet.create({
   skeletonEventTitle: {
     width: '60%',
     height: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
     marginRight: 12,
   },
@@ -1294,25 +1282,25 @@ const styles = StyleSheet.create({
   skeletonStatusBadge: {
     width: 80,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
   skeletonCreatorBadge: {
     width: 60,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
   skeletonEventDate: {
     width: '40%',
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
   },
   skeletonExpandIcon: {
     width: 24,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
 });

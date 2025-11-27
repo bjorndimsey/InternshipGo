@@ -15,4 +15,7 @@ router.post('/:companyId/records', authenticateToken, attendanceController.saveA
 // Get attendance statistics for a company
 router.get('/:companyId/stats', authenticateToken, attendanceController.getAttendanceStats);
 
+// Verify attendance record
+router.post('/:companyId/verify', authenticateToken, attendanceController.verifyAttendanceRecord);
+
 module.exports = router;

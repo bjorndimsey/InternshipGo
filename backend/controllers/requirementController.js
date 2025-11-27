@@ -88,7 +88,7 @@ const getStudentRequirements = async (req, res) => {
 const createRequirement = async (req, res) => {
   try {
     console.log('📝 Creating requirement with data:', req.body);
-    const { name, description, isRequired, dueDate, coordinatorId, fileUrl, fileName } = req.body;
+    const { name, description, isRequired, dueDate, coordinatorId, fileUrl, fileName, schoolYear } = req.body;
     
     // Generate a unique requirement ID
     const requirementId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -114,7 +114,14 @@ const createRequirement = async (req, res) => {
     // Get only the students assigned to this coordinator
     // Note: interns.coordinator_id stores the user_id, not the coordinators.id
     const internsResult = await query('interns', 'select', null, { coordinator_id: coordinatorId });
-    const interns = internsResult.data || [];
+    let interns = internsResult.data || [];
+    
+    // Filter by school year if provided
+    if (schoolYear) {
+      interns = interns.filter(intern => intern.school_year === schoolYear);
+      console.log(`👥 Filtered interns by school year ${schoolYear}:`, interns.length);
+    }
+    
     console.log('👥 Found interns for coordinator:', interns.length);
     
     if (interns.length === 0) {
@@ -172,6 +179,8 @@ const createRequirement = async (req, res) => {
         file_public_id: null,
         completed: false,
         coordinator_id: coordinatorIdForRequirement, // Use the coordinators.id
+        // Note: school_year is not stored in student_requirements table
+        // We identify class requirements by finding requirements of other interns in the same class
         notes: null
       };
       

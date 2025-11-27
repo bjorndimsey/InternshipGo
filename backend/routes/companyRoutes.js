@@ -20,4 +20,13 @@ router.get('/student/:studentId', CompanyController.getStudentCompanies);
 // GET /api/companies/profile-by-user/:userId - Get company profile by user_id
 router.get('/profile-by-user/:userId', CompanyController.getCompanyProfileByUserId);
 
+// PUT /api/companies/:id/status - Update company account status (enable/disable)
+router.put('/:id/status', CompanyController.updateCompanyStatus);
+
+// PUT /api/companies/:id/remove-partnership - Remove partnership/MOA (without deleting company)
+router.put('/:id/remove-partnership', CompanyController.removePartnership);
+
+// DELETE /api/companies/:id - Delete company
+router.delete('/:id', CompanyController.deleteCompany);
+
 module.exports = router;

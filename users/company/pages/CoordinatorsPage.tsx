@@ -47,6 +47,8 @@ interface Coordinator {
   moaReceivedDate?: string;
   moaExpiryDate?: string;
   partnershipStatus: 'pending' | 'approved' | 'rejected';
+  companyApproved?: boolean;
+  coordinatorApproved?: boolean;
   assignedInterns: number;
   lastContact: string;
   latitude?: number;
@@ -83,6 +85,10 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
   const [pageAnimation] = useState(new Animated.Value(0));
   const [statsAnimation] = useState(new Animated.Value(0));
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [coordinatorToRemove, setCoordinatorToRemove] = useState<Coordinator | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     fetchCoordinators();
@@ -165,6 +171,9 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
         return;
       }
       
+      // Store company ID for use in other functions
+      setCompanyId(companyId);
+      
       console.log('🔍 Using company ID for coordinator fetch:', companyId);
       const response = await apiService.getCoordinatorsWithMOA(companyId);
       console.log('📥 Raw API response:', response);
@@ -179,7 +188,9 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
           moaUrl: c.moaUrl,
           hasMoaUrl: !!c.moaUrl,
           moaStatus: c.moaStatus,
-          partnershipStatus: c.partnershipStatus
+          partnershipStatus: c.partnershipStatus,
+          companyApproved: c.companyApproved,
+          coordinatorApproved: c.coordinatorApproved
         })));
         setCoordinators(response.coordinators);
         console.log('✅ Coordinators state updated');
@@ -504,19 +515,35 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
       console.log('📥 API Response Message:', response.message);
 
       if (response.success) {
-        console.log('✅ Partnership accepted successfully, updating UI immediately...');
+        console.log('✅ MOA accepted successfully, updating UI immediately...');
         
         // Update the coordinator data immediately in the state
+        // Set companyApproved to true since company just accepted the MOA
+        // IMPORTANT: partnershipStatus should remain 'pending' until coordinator also approves
+        const updatedCoordinator = (response as any).coordinator?.[0];
+        const newPartnershipStatus = updatedCoordinator?.partnership_status || 'pending';
+        
+        console.log('🔍 Updated coordinator status:', {
+          companyApproved: true,
+          partnershipStatus: newPartnershipStatus,
+          message: newPartnershipStatus === 'approved' 
+            ? 'Both sides approved - partnership active!' 
+            : 'Waiting for coordinator to approve'
+        });
+        
         setCoordinators(prevCoordinators => 
           prevCoordinators.map(coord => 
             coord.id === coordinator.id 
-              ? { ...coord, partnershipStatus: 'approved' }
+              ? { ...coord, companyApproved: true, partnershipStatus: newPartnershipStatus }
               : coord
           )
         );
         
-        console.log('🔄 UI updated immediately, partnership status should now show as approved');
-        Alert.alert('Success', 'Partnership accepted successfully! The status has been updated.');
+        console.log('🔄 UI updated immediately, status should show "Waiting Coordinator" (company approved, waiting for coordinator)');
+        Alert.alert(
+          'MOA Accepted', 
+          'You have accepted the MOA. The partnership will be active once the coordinator also approves.'
+        );
       } else {
         console.error('❌ Failed to accept partnership:', response.message);
         Alert.alert('Error', response.message || 'Failed to accept partnership');
@@ -620,10 +647,11 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
         console.log('✅ Partnership denied successfully, updating UI immediately...');
         
         // Update the coordinator data immediately in the state
+        // Set companyApproved to false since company just rejected
         setCoordinators(prevCoordinators => 
           prevCoordinators.map(coord => 
             coord.id === coordinator.id 
-              ? { ...coord, partnershipStatus: 'rejected' }
+              ? { ...coord, companyApproved: false, partnershipStatus: 'rejected' }
               : coord
           )
         );
@@ -708,6 +736,51 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
     );
   };
 
+  const handleRemoveCoordinator = (coordinator: Coordinator) => {
+    console.log('🗑️ Remove coordinator partnership clicked for:', coordinator.id, coordinator.firstName, coordinator.lastName);
+    setCoordinatorToRemove(coordinator);
+    setShowRemoveModal(true);
+  };
+
+  const confirmRemoveCoordinator = async () => {
+    if (!coordinatorToRemove || !companyId) {
+      Alert.alert('Error', 'Coordinator or company ID not available');
+      return;
+    }
+
+    console.log('🗑️ Confirming removal of partnership/MOA for coordinator:', coordinatorToRemove.id, coordinatorToRemove.firstName, coordinatorToRemove.lastName);
+    setRemoving(true);
+
+    try {
+      const response = await apiService.removePartnership(companyId);
+      
+      console.log('🗑️ Remove partnership API response:', response);
+
+      if (response.success) {
+        console.log('✅ Partnership/MOA removed successfully, refreshing list...');
+        // Refresh the coordinators list to reflect the changes
+        await fetchCoordinators();
+        setShowRemoveModal(false);
+        setCoordinatorToRemove(null);
+        Alert.alert('Success', `Partnership and MOA with ${coordinatorToRemove.firstName} ${coordinatorToRemove.lastName} have been removed. The coordinator remains in the system.`);
+      } else {
+        console.error('❌ Failed to remove partnership:', response.message);
+        Alert.alert('Error', response.message || 'Failed to remove partnership');
+      }
+    } catch (error) {
+      console.error('❌ Error removing partnership:', error);
+      Alert.alert('Error', `Failed to remove partnership: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const cancelRemoveCoordinator = () => {
+    console.log('🗑️ User cancelled coordinator partnership removal');
+    setShowRemoveModal(false);
+    setCoordinatorToRemove(null);
+  };
+
   const getMOAStatusColor = (status: string) => {
     switch (status) {
       case 'active': return '#34a853';
@@ -736,22 +809,102 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
     }
   };
 
-  const getPartnershipStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved': return '#34a853';
-      case 'pending': return '#fbbc04';
-      case 'rejected': return '#ea4335';
-      default: return '#666';
+  const getPartnershipStatusText = (coordinator: Coordinator) => {
+    // Use the actual approval flags, not partnershipStatus
+    // Convert to boolean to handle various formats (true, 1, 'true', '1')
+    // IMPORTANT: Only treat as true if explicitly true, 1, 'true', or '1'
+    // undefined, null, false, 0, '', etc. should all be treated as false
+    const companyApprovedValue = coordinator.companyApproved;
+    const coordinatorApprovedValue = coordinator.coordinatorApproved;
+    
+    // Strict boolean conversion - only true if explicitly true or truthy number/string
+    let companyApproved = false;
+    if (companyApprovedValue === true) {
+      companyApproved = true;
+    } else if (typeof companyApprovedValue === 'number' && companyApprovedValue === 1) {
+      companyApproved = true;
+    } else if (typeof companyApprovedValue === 'string') {
+      const strValue = companyApprovedValue as string;
+      companyApproved = strValue.toLowerCase() === 'true' || strValue === '1';
     }
+    
+    let coordinatorApproved = false;
+    if (coordinatorApprovedValue === true) {
+      coordinatorApproved = true;
+    } else if (typeof coordinatorApprovedValue === 'number' && coordinatorApprovedValue === 1) {
+      coordinatorApproved = true;
+    } else if (typeof coordinatorApprovedValue === 'string') {
+      const strValue = coordinatorApprovedValue as string;
+      coordinatorApproved = strValue.toLowerCase() === 'true' || strValue === '1';
+    }
+    
+    // Check if MOA has been sent
+    const moaSent = !!coordinator.moaUrl || 
+                   coordinator.moaStatus === 'sent' || 
+                   coordinator.moaStatus === 'received' || 
+                   coordinator.moaStatus === 'active' ||
+                   coordinator.moaStatus === 'approved';
+    
+    console.log('🔍 getPartnershipStatusText for coordinator:', {
+      id: coordinator.id,
+      name: `${coordinator.firstName} ${coordinator.lastName}`,
+      companyApprovedRaw: coordinator.companyApproved,
+      coordinatorApprovedRaw: coordinator.coordinatorApproved,
+      companyApprovedBool: companyApproved,
+      coordinatorApprovedBool: coordinatorApproved,
+      moaSent,
+      partnershipStatus: coordinator.partnershipStatus
+    });
+    
+    // Both approved = active partnership
+    if (companyApproved && coordinatorApproved) {
+      console.log('✅ Both approved - showing Partner');
+      return 'Partner';
+    }
+    // Company approved, waiting for coordinator to approve
+    // From company's perspective: "Waiting Coordinator" means waiting for coordinator to approve
+    if (companyApproved && !coordinatorApproved) {
+      console.log('⏳ Company approved, waiting for coordinator to approve - showing Waiting Coordinator');
+      return 'Waiting Coordinator';
+    }
+    // Coordinator approved first, waiting for company to approve
+    // From company's perspective: "Waiting You" means waiting for you (the company) to approve
+    if (!companyApproved && coordinatorApproved) {
+      console.log('⏳ Coordinator approved, waiting for company to approve - showing Waiting You');
+      return 'Waiting You';
+    }
+    // Neither approved - MOA sent but company hasn't accepted yet
+    // This should show "Pending" to indicate company needs to accept
+    if (moaSent) {
+      console.log('⏸️ MOA sent but company has NOT accepted yet - showing Pending');
+      return 'Pending';
+    }
+    // No MOA sent yet
+    console.log('⏸️ No MOA sent yet - showing Pending');
+    return 'Pending';
   };
 
-  const getPartnershipStatusText = (status: string) => {
-    switch (status) {
-      case 'approved': return 'Partner';
-      case 'pending': return 'Pending';
-      case 'rejected': return 'Rejected';
-      default: return 'Unknown';
+  const getPartnershipStatusColor = (coordinator: Coordinator) => {
+    // Use the actual approval flags, not partnershipStatus
+    const companyApprovedValue = coordinator.companyApproved;
+    const coordinatorApprovedValue = coordinator.coordinatorApproved;
+    
+    const companyApproved = companyApprovedValue === true || 
+                            (typeof companyApprovedValue === 'number' && companyApprovedValue === 1) ||
+                            String(companyApprovedValue) === 'true' ||
+                            String(companyApprovedValue) === '1';
+    const coordinatorApproved = coordinatorApprovedValue === true || 
+                                (typeof coordinatorApprovedValue === 'number' && coordinatorApprovedValue === 1) ||
+                                String(coordinatorApprovedValue) === 'true' ||
+                                String(coordinatorApprovedValue) === '1';
+    
+    if (companyApproved && coordinatorApproved) {
+      return '#34a853'; // Green - fully approved
     }
+    if (companyApproved || coordinatorApproved) {
+      return '#fbbc04'; // Yellow - waiting for other side
+    }
+    return '#878787'; // Gray - pending
   };
 
   const toggleCardExpansion = (coordinatorId: string) => {
@@ -847,8 +1000,8 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
               <Text style={styles.coordinatorDepartment}>{coordinator.department}</Text>
             </View>
             <View style={styles.statusContainer}>
-              <View style={[styles.partnershipBadge, { backgroundColor: getPartnershipStatusColor(coordinator.partnershipStatus) }]}>
-                <Text style={styles.partnershipText}>{getPartnershipStatusText(coordinator.partnershipStatus)}</Text>
+              <View style={[styles.partnershipBadge, { backgroundColor: getPartnershipStatusColor(coordinator) }]}>
+                <Text style={styles.partnershipText}>{getPartnershipStatusText(coordinator)}</Text>
               </View>
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
@@ -892,53 +1045,146 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
             )}
 
             <View style={styles.expandedActionButtons}>
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.viewButton]} 
-                onPress={() => handleViewDetails(coordinator)}
-              >
-                <MaterialIcons name="visibility" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>View Details</Text>
-              </TouchableOpacity>
-              
-              {coordinator.moaUrl && (
+              <View style={styles.actionButtonsRow}>
                 <TouchableOpacity 
-                  style={[styles.actionButton, styles.downloadButton]} 
-                  onPress={() => {
-                    console.log('📥 Direct file download pressed');
-                    directFileDownload(coordinator);
-                  }}
+                  style={[styles.actionButton, styles.viewButton]} 
+                  onPress={() => handleViewDetails(coordinator)}
                 >
-                  <MaterialIcons name="download" size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>Download MOA</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {coordinator.partnershipStatus === 'pending' && (
-              <View style={styles.partnershipActionButtons}>
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.acceptButton]} 
-                  onPress={() => {
-                    console.log('🔥 ACCEPT BUTTON CLICKED!', coordinator.id);
-                    handleAcceptPartnershipDirect(coordinator);
-                  }}
-                >
-                  <MaterialIcons name="check" size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>Accept</Text>
+                  <MaterialIcons name="visibility" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>View Details</Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.denyButton]} 
-                  onPress={() => {
-                    console.log('🔥 DENY BUTTON CLICKED!', coordinator.id);
-                    handleDenyPartnershipDirect(coordinator);
-                  }}
-                >
-                  <MaterialIcons name="close" size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>Deny</Text>
-                </TouchableOpacity>
+                {coordinator.moaUrl && (
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.downloadButton]} 
+                    onPress={() => {
+                      console.log('📥 Direct file download pressed');
+                      directFileDownload(coordinator);
+                    }}
+                  >
+                    <MaterialIcons name="download" size={16} color="#fff" />
+                    <Text style={styles.actionButtonText}>Download MOA</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.removeButton, styles.removeButtonFullWidth]} 
+                onPress={() => {
+                  console.log('🔵 Remove button clicked');
+                  handleRemoveCoordinator(coordinator);
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="remove" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+
+            {(() => {
+              // Show buttons ONLY when company hasn't approved yet (needs to accept MOA)
+              // Hide buttons when company has already approved (status is "Waiting You")
+              // Hide buttons when status is "Waiting Coordinator" (coordinator approved, waiting for company)
+              const companyApprovedValue = coordinator.companyApproved;
+              const coordinatorApprovedValue = coordinator.coordinatorApproved;
+              
+              // Use the same strict boolean conversion as getPartnershipStatusText
+              let companyApproved = false;
+              if (companyApprovedValue === true) {
+                companyApproved = true;
+              } else if (typeof companyApprovedValue === 'number' && companyApprovedValue === 1) {
+                companyApproved = true;
+              } else if (typeof companyApprovedValue === 'string') {
+                const strValue = companyApprovedValue as string;
+                companyApproved = strValue.toLowerCase() === 'true' || strValue === '1';
+              }
+              
+              let coordinatorApproved = false;
+              if (coordinatorApprovedValue === true) {
+                coordinatorApproved = true;
+              } else if (typeof coordinatorApprovedValue === 'number' && coordinatorApprovedValue === 1) {
+                coordinatorApproved = true;
+              } else if (typeof coordinatorApprovedValue === 'string') {
+                const strValue = coordinatorApprovedValue as string;
+                coordinatorApproved = strValue.toLowerCase() === 'true' || strValue === '1';
+              }
+              
+              // Check if MOA has been sent (has moaUrl or moaStatus indicates it was sent)
+              const moaSent = !!coordinator.moaUrl || 
+                             coordinator.moaStatus === 'sent' || 
+                             coordinator.moaStatus === 'received' || 
+                             coordinator.moaStatus === 'active' ||
+                             coordinator.moaStatus === 'approved';
+              
+              // Determine status
+              // "Waiting Coordinator" = company approved, waiting for coordinator (companyApproved && !coordinatorApproved)
+              // "Waiting You" = coordinator approved, waiting for company (!companyApproved && coordinatorApproved)
+              const isWaitingCoordinator = companyApproved && !coordinatorApproved;
+              const isWaitingYou = !companyApproved && coordinatorApproved;
+              
+              // Show buttons ONLY if:
+              // - Company hasn't approved yet AND MOA has been sent (needs initial approval)
+              // Hide buttons if:
+              // - Company has approved (status is "Waiting Coordinator")
+              // - Status is "Waiting You" (coordinator approved, waiting for company)
+              // - Both have approved (Partner status)
+              const shouldShowButtons = !companyApproved && moaSent && !coordinatorApproved;
+              
+              console.log('🔍 Button visibility check for coordinator', coordinator.id, ':', {
+                companyApprovedValue,
+                companyApproved,
+                coordinatorApprovedValue,
+                coordinatorApproved,
+                moaSent,
+                moaUrl: coordinator.moaUrl,
+                moaStatus: coordinator.moaStatus,
+                partnershipStatus: coordinator.partnershipStatus,
+                isWaitingYou,
+                isWaitingCoordinator,
+                shouldShowButtons
+              });
+              
+              if (!shouldShowButtons) {
+                console.log('❌ Buttons not showing. Reasons:', {
+                  companyHasApproved: companyApproved,
+                  coordinatorHasApproved: coordinatorApproved,
+                  moaNotSent: !moaSent,
+                  isWaitingYou,
+                  isWaitingCoordinator,
+                  bothApproved: companyApproved && coordinatorApproved
+                });
+                return null;
+              }
+              
+              console.log('✅ Showing Accept/Deny buttons');
+              
+              return (
+                <View style={styles.partnershipActionButtons}>
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.acceptButton]} 
+                    onPress={() => {
+                      console.log('🔥 ACCEPT BUTTON CLICKED!', coordinator.id);
+                      console.log('📋 Accepting MOA from coordinator. After acceptance, status will change to "Waiting You" and buttons will hide.');
+                      handleAcceptPartnershipDirect(coordinator);
+                    }}
+                  >
+                    <MaterialIcons name="check" size={16} color="#fff" />
+                    <Text style={styles.actionButtonText}>Accept MOA</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.denyButton]} 
+                    onPress={() => {
+                      console.log('🔥 DENY BUTTON CLICKED!', coordinator.id);
+                      handleDenyPartnershipDirect(coordinator);
+                    }}
+                  >
+                    <MaterialIcons name="close" size={16} color="#fff" />
+                    <Text style={styles.actionButtonText}>Deny</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
           </View>
         )}
       </View>
@@ -1229,8 +1475,8 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
                 <Text style={styles.sectionTitle}>Status Information</Text>
                 <View style={styles.statusRow}>
                   <Text style={styles.detailLabel}>Partnership Status:</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getPartnershipStatusColor(selectedCoordinator.partnershipStatus) }]}>
-                    <Text style={styles.statusText}>{getPartnershipStatusText(selectedCoordinator.partnershipStatus)}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getPartnershipStatusColor(selectedCoordinator) }]}>
+                    <Text style={styles.statusText}>{getPartnershipStatusText(selectedCoordinator)}</Text>
                   </View>
                 </View>
                 <View style={styles.statusRow}>
@@ -1398,6 +1644,44 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
           </View>
         </Modal>
       )}
+
+      {/* Remove Coordinator Partnership Confirmation Modal */}
+      <Modal
+        visible={showRemoveModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={cancelRemoveCoordinator}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.removeModalContent]}>
+            <MaterialIcons name="warning" size={48} color="#ea4335" style={styles.modalWarningIcon} />
+            <Text style={[styles.modalTitle, { color: '#FBFBFB', marginBottom: 12 }]}>Remove Partnership</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to remove the partnership and MOA with {coordinatorToRemove?.firstName} {coordinatorToRemove?.lastName}? This will remove the partnership relationship, but the coordinator will remain in the system. You can establish a new partnership later if needed.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalCancelButton]} 
+                onPress={cancelRemoveCoordinator}
+                disabled={removing}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalDeleteButton]} 
+                onPress={confirmRemoveCoordinator}
+                disabled={removing}
+              >
+                {removing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonText}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -1547,10 +1831,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   expandedActionButtons: {
+    flexDirection: 'column',
+    gap: 8,
+    marginTop: 16,
+  },
+  actionButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
-    marginTop: 16,
+  },
+  removeButtonFullWidth: {
+    width: '100%',
   },
   partnershipActionButtons: {
     flexDirection: 'row',
@@ -1695,6 +1986,9 @@ const styles = StyleSheet.create({
   },
   denyButton: {
     backgroundColor: '#ea4335',
+  },
+  removeButton: {
+    backgroundColor: '#878787', // Muted gray
   },
   actionButtonText: {
     color: '#fff',
@@ -1948,6 +2242,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  // Remove Partnership Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  removeModalContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+  },
+  modalWarningIcon: {
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    lineHeight: 20,
+    marginBottom: 24,
+    opacity: 0.9,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: '#878787',
+  },
+  modalDeleteButton: {
+    backgroundColor: '#ea4335',
+  },
+  modalButtonText: {
+    color: '#FBFBFB',
+    fontSize: 14,
+    fontWeight: '600',
   },
   locationButton: {
     flex: 1,

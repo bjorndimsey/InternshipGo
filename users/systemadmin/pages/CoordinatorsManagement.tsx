@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,31 +11,75 @@ import {
   Dimensions,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiService, Coordinator } from '../../../lib/api';
+import { EmailService } from '../../../lib/emailService';
 
 const { width } = Dimensions.get('window');
 
-// Remove the local interface since we're importing it from api.ts
+// Responsive helper functions
+const getResponsiveSize = (size: number) => {
+  const scale = width / 375;
+  return Math.max(size * scale, size * 0.8);
+};
+
+const getResponsiveFontSize = (size: number) => {
+  const scale = width / 375;
+  return Math.max(size * scale, size * 0.85);
+};
+
+const isSmallScreen = width < 768;
+
+interface CoordinatorData {
+  id: string;
+  user_id?: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  program?: string;
+  department?: string;
+  university?: string;
+  profilePicture?: string;
+  status: 'active' | 'inactive';
+  is_active?: boolean;
+  joinDate?: string;
+  isAdminCoordinator?: boolean;
+  adminId?: string;
+  adminPermissions?: {
+    can_manage_coordinators: boolean;
+    can_manage_interns: boolean;
+    can_manage_companies: boolean;
+    can_view_reports: boolean;
+    can_manage_events?: boolean;
+    can_manage_notifications?: boolean;
+  };
+  assignedInterns?: number;
+}
 
 export default function CoordinatorsManagement() {
-  const [coordinators, setCoordinators] = useState<Coordinator[]>([]);
-  const [filteredCoordinators, setFilteredCoordinators] = useState<Coordinator[]>([]);
+  const [coordinators, setCoordinators] = useState<CoordinatorData[]>([]);
+  const [filteredCoordinators, setFilteredCoordinators] = useState<CoordinatorData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedCoordinator, setSelectedCoordinator] = useState<Coordinator | null>(null);
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    program: '',
-    address: '',
-    password: ''
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedCoordinator, setSelectedCoordinator] = useState<CoordinatorData | null>(null);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [warningModalData, setWarningModalData] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [successModalData, setSuccessModalData] = useState<{ title: string; message: string } | null>(null);
+  const [dimensions, setDimensions] = useState({ width, height: Dimensions.get('window').height });
+  const [tooltip, setTooltip] = useState<{ visible: boolean; text: string; x: number; y: number; buttonWidth?: number }>({
+    visible: false,
+    text: '',
+    x: 0,
+    y: 0,
   });
+  const buttonRefs = useRef<{ [key: string]: any }>({});
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchCoordinators();
@@ -45,19 +89,50 @@ export default function CoordinatorsManagement() {
     filterCoordinators();
   }, [searchQuery, coordinators]);
 
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions({ width: window.width, height: window.height });
+    });
+    return () => subscription?.remove();
+  }, []);
+
   const fetchCoordinators = async () => {
     try {
       setLoading(true);
       const response = await apiService.getCoordinators();
       
       if (response.success && response.coordinators) {
-        setCoordinators(response.coordinators);
+        const coordinatorsArray = Array.isArray(response.coordinators) ? response.coordinators : [];
+        const mappedCoordinators: CoordinatorData[] = coordinatorsArray.map((coord: any) => ({
+          id: coord.id?.toString() || '',
+          user_id: coord.userId?.toString() || coord.user_id?.toString() || '',
+          name: coord.name || `${coord.firstName || ''} ${coord.lastName || ''}`.trim() || 'N/A',
+          firstName: coord.firstName || coord.first_name,
+          lastName: coord.lastName || coord.last_name,
+          email: coord.email || '',
+          phone: coord.phone || coord.phone_number,
+          program: coord.program || '',
+          department: coord.department || coord.program || '',
+          university: coord.university || '',
+          profilePicture: coord.profilePicture || coord.profile_picture,
+          status: (coord.status === 'inactive' || coord.is_active === false) ? 'inactive' : 'active',
+          is_active: coord.status !== 'inactive' && coord.is_active !== false,
+          joinDate: coord.joinDate || coord.created_at,
+          isAdminCoordinator: coord.isAdminCoordinator || false,
+          adminId: coord.adminId,
+          adminPermissions: coord.adminPermissions,
+          assignedInterns: coord.assignedInterns || 0,
+        }));
+        setCoordinators(mappedCoordinators);
       } else {
-        throw new Error(response.message || 'Failed to fetch coordinators');
+        const errorMessage = typeof response.message === 'string' ? response.message : 'Failed to fetch coordinators';
+        Alert.alert('Error', errorMessage);
+        setCoordinators([]);
       }
     } catch (error) {
       console.error('Error fetching coordinators:', error);
-      Alert.alert('Error', 'Failed to fetch coordinators');
+      Alert.alert('Error', 'Failed to fetch coordinators. Please try again.');
+      setCoordinators([]);
     } finally {
       setLoading(false);
     }
@@ -66,285 +141,547 @@ export default function CoordinatorsManagement() {
   const filterCoordinators = () => {
     let filtered = coordinators;
 
-    // Filter by search query
     if (searchQuery) {
-      filtered = filtered.filter(coordinator =>
-        coordinator.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coordinator.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coordinator.program.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coordinator.department.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter(coordinator => {
+        const fullName = `${coordinator.firstName || ''} ${coordinator.lastName || ''}`.toLowerCase();
+        return (
+          fullName.includes(searchQuery.toLowerCase()) ||
+          coordinator.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          coordinator.program?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          coordinator.department?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      });
     }
 
     setFilteredCoordinators(filtered);
   };
 
-  const handleAddCoordinator = () => {
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      program: '',
-      address: '',
-      password: ''
-    });
-    setShowAddModal(true);
-  };
-
-  const handleEditCoordinator = (coordinator: Coordinator) => {
+  const handleViewCoordinator = (coordinator: CoordinatorData) => {
     setSelectedCoordinator(coordinator);
-    setFormData({
-      firstName: coordinator.firstName,
-      lastName: coordinator.lastName,
-      email: coordinator.email,
-      phone: coordinator.phone,
-      program: coordinator.program,
-      address: coordinator.address,
-      password: ''
-    });
-    setShowEditModal(true);
+    setShowViewModal(true);
   };
 
-  const handleViewCoordinator = (coordinator: Coordinator) => {
-    const adminInfo = coordinator.isAdminCoordinator 
-      ? `\nAdmin Status: Active\nAdmin ID: ${coordinator.adminId}\nPermissions: ${JSON.stringify(coordinator.adminPermissions, null, 2)}`
-      : '\nAdmin Status: Not an Admin';
-      
-    Alert.alert(
-      'Coordinator Details',
-      `Name: ${coordinator.name}\nEmail: ${coordinator.email}\nPhone: ${coordinator.phone}\nProgram: ${coordinator.program}\nDepartment: ${coordinator.department}\nUniversity: ${coordinator.university}\nAssigned Interns: ${coordinator.assignedInterns}\nAdmin Coordinator: ${coordinator.isAdminCoordinator ? 'Yes' : 'No'}${adminInfo}\nStatus: ${coordinator.status}\nJoin Date: ${new Date(coordinator.joinDate).toLocaleDateString()}`,
-      [{ text: 'OK' }]
-    );
-  };
+  const handleToggleStatus = async (coordinator: CoordinatorData) => {
+    console.log('🔄 handleToggleStatus called for coordinator:', coordinator.id, coordinator.name);
+    const newStatus: 'active' | 'inactive' = coordinator.status === 'active' ? 'inactive' : 'active';
+    const isActive = newStatus === 'active';
+    const statusText = newStatus === 'active' ? 'enable' : 'disable';
+    
+    console.log('🔄 Current status:', coordinator.status, 'New status:', newStatus, 'isActive:', isActive);
+    
+    // Show warning modal
+    setWarningModalData({
+      title: `${statusText === 'enable' ? 'Enable' : 'Disable'} Coordinator`,
+      message: `Are you sure you want to ${statusText} ${coordinator.name}? ${!isActive ? 'They will not be able to login until re-enabled.' : 'They can now login to the system.'}`,
+      onConfirm: async () => {
+        setShowWarningModal(false);
+        try {
+          console.log('🔄 Calling API to update coordinator status...');
+          if (!coordinator.id) {
+            setSuccessModalData({
+              title: 'Error',
+              message: 'Coordinator ID is missing. Please try again.'
+            });
+            setShowSuccessModal(true);
+            return;
+          }
 
-  const handleDeleteCoordinator = async (coordinator: Coordinator) => {
-    Alert.alert(
-      'Delete Coordinator',
-      `Are you sure you want to delete ${coordinator.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await apiService.deleteCoordinator(coordinator.id);
-              if (response.success) {
-                setCoordinators(coordinators.filter(c => c.id !== coordinator.id));
-                Alert.alert('Success', 'Coordinator deleted successfully');
-              } else {
-                Alert.alert('Error', response.message || 'Failed to delete coordinator');
+          const response = await apiService.updateCoordinatorStatus(coordinator.id, isActive);
+          console.log('🔄 API response:', response);
+          
+          if (response.success) {
+            // Update local state using functional updates
+            setCoordinators(prevCoordinators => {
+              const updated = prevCoordinators.map(c => 
+                c.id === coordinator.id ? { 
+                  ...c, 
+                  status: newStatus,
+                  is_active: isActive
+                } : c
+              );
+              console.log('🔄 Updated coordinators:', updated.find(c => c.id === coordinator.id));
+              return updated;
+            });
+            
+            // Also update filtered coordinators immediately
+            setFilteredCoordinators(prevFiltered => {
+              const updated = prevFiltered.map(c => 
+                c.id === coordinator.id ? { 
+                  ...c, 
+                  status: newStatus,
+                  is_active: isActive
+                } : c
+              );
+              console.log('🔄 Updated filtered coordinators:', updated.find(c => c.id === coordinator.id));
+              return updated;
+            });
+            
+            // Send email notification if account is disabled
+            if (!isActive) {
+              try {
+                const coordinatorEmail = coordinator.email?.trim();
+                const coordinatorName = coordinator.name || `${coordinator.firstName || ''} ${coordinator.lastName || ''}`.trim() || 'User';
+                
+                if (!coordinatorEmail) {
+                  console.warn('⚠️ Coordinator email is missing, cannot send disabled email');
+                } else {
+                  console.log('📧 Preparing to send disabled email to coordinator:', coordinatorEmail);
+                  const emailResult = await EmailService.sendAccountDisabledEmail(
+                    coordinatorEmail,
+                    coordinatorName
+                  );
+                  
+                  if (emailResult.success) {
+                    console.log('✅ Account disabled email sent successfully to:', coordinatorEmail);
+                  } else {
+                    console.warn('⚠️ Failed to send account disabled email to:', coordinatorEmail, 'Error:', emailResult.error);
+                    // Don't fail the operation if email fails
+                  }
+                }
+              } catch (emailError) {
+                console.error('Error sending account disabled email:', emailError);
+                // Don't fail the operation if email fails
               }
-            } catch (error) {
-              console.error('Error deleting coordinator:', error);
-              Alert.alert('Error', 'Failed to delete coordinator');
             }
-          },
-        },
-      ]
+            
+            // Show success modal
+            setSuccessModalData({
+              title: 'Success',
+              message: `Coordinator ${statusText}d successfully. ${!isActive ? 'They cannot login until re-enabled. An email notification has been sent.' : 'They can now login.'}`
+            });
+            setShowSuccessModal(true);
+          } else {
+            console.error('🔄 API error:', response.message);
+            setSuccessModalData({
+              title: 'Error',
+              message: response.message || 'Failed to update coordinator status. Please try again.'
+            });
+            setShowSuccessModal(true);
+          }
+        } catch (error) {
+          console.error('🔄 Error updating coordinator status:', error);
+          setSuccessModalData({
+            title: 'Error',
+            message: 'Failed to update coordinator status. Please try again.'
+          });
+          setShowSuccessModal(true);
+        }
+      }
+    });
+    setShowWarningModal(true);
+  };
+
+  const handleToggleAdminStatus = async (coordinator: CoordinatorData) => {
+    console.log('👑 handleToggleAdminStatus called for coordinator:', coordinator.id, coordinator.name);
+    const newAdminStatus = !coordinator.isAdminCoordinator;
+    const actionText = newAdminStatus ? 'assign' : 'unassign';
+    
+    // Show warning modal
+    setWarningModalData({
+      title: `${newAdminStatus ? 'Assign' : 'Unassign'} Admin Coordinator`,
+      message: `Are you sure you want to ${actionText} admin coordinator status to ${coordinator.name}? ${newAdminStatus ? 'They will have admin privileges and can manage coordinators, interns, companies, and view reports.' : 'They will lose admin privileges.'}`,
+      onConfirm: async () => {
+        setShowWarningModal(false);
+        try {
+          console.log('👑 Calling API to toggle admin status...');
+          if (!coordinator.id) {
+            setSuccessModalData({
+              title: 'Error',
+              message: 'Coordinator ID is missing. Please try again.'
+            });
+            setShowSuccessModal(true);
+            return;
+          }
+
+          // Get current user ID (system admin) for assignedBy
+          // TODO: Get actual system admin user ID from auth context
+          const assignedBy = 1; // Default to 1 for system admin
+          
+          const response = await apiService.toggleCoordinatorAdminStatus(coordinator.id, newAdminStatus, assignedBy);
+          console.log('👑 API response:', response);
+          
+          if (response.success) {
+            // Update local state using functional updates
+            setCoordinators(prevCoordinators => {
+              const updated = prevCoordinators.map(c => 
+                c.id === coordinator.id ? { 
+                  ...c, 
+                  isAdminCoordinator: newAdminStatus,
+                  adminPermissions: newAdminStatus ? {
+                    can_manage_coordinators: true,
+                    can_manage_interns: true,
+                    can_manage_companies: true,
+                    can_view_reports: true,
+                    can_manage_events: true,
+                    can_manage_notifications: true
+                  } : undefined
+                } : c
+              );
+              console.log('👑 Updated coordinators:', updated.find(c => c.id === coordinator.id));
+              return updated;
+            });
+            
+            // Also update filtered coordinators immediately
+            setFilteredCoordinators(prevFiltered => {
+              const updated = prevFiltered.map(c => 
+                c.id === coordinator.id ? { 
+                  ...c, 
+                  isAdminCoordinator: newAdminStatus,
+                  adminPermissions: newAdminStatus ? {
+                    can_manage_coordinators: true,
+                    can_manage_interns: true,
+                    can_manage_companies: true,
+                    can_view_reports: true,
+                    can_manage_events: true,
+                    can_manage_notifications: true
+                  } : undefined
+                } : c
+              );
+              console.log('👑 Updated filtered coordinators:', updated.find(c => c.id === coordinator.id));
+              return updated;
+            });
+            
+            // Show success modal
+            setSuccessModalData({
+              title: 'Success',
+              message: `Admin coordinator status ${actionText}ed successfully for ${coordinator.name}.`
+            });
+            setShowSuccessModal(true);
+          } else {
+            console.error('👑 API error:', response.message);
+            setSuccessModalData({
+              title: 'Error',
+              message: response.message || `Failed to ${actionText} admin coordinator status. Please try again.`
+            });
+            setShowSuccessModal(true);
+          }
+        } catch (error) {
+          console.error('👑 Error toggling admin status:', error);
+          setSuccessModalData({
+            title: 'Error',
+            message: `Failed to ${actionText} admin coordinator status. Please try again.`
+          });
+          setShowSuccessModal(true);
+        }
+      }
+    });
+    setShowWarningModal(true);
+  };
+
+  const handleDeleteCoordinator = (coordinator: CoordinatorData) => {
+    console.log('🗑️ handleDeleteCoordinator called for coordinator:', coordinator.id, coordinator.name);
+    
+    // Show warning modal
+    setWarningModalData({
+      title: 'Delete Coordinator',
+      message: `Are you sure you want to delete ${coordinator.name}? This action cannot be undone and will permanently remove the coordinator and their account from the system.`,
+      onConfirm: async () => {
+        setShowWarningModal(false);
+        try {
+          console.log('🗑️ Calling API to delete coordinator...');
+          if (!coordinator.id) {
+            setSuccessModalData({
+              title: 'Error',
+              message: 'Coordinator ID is missing. Please try again.'
+            });
+            setShowSuccessModal(true);
+            return;
+          }
+
+          const response = await apiService.deleteCoordinator(coordinator.id);
+          console.log('🗑️ API response:', response);
+          
+          if (response.success) {
+            // Update local state using functional updates
+            setCoordinators(prevCoordinators => prevCoordinators.filter(c => c.id !== coordinator.id));
+            // Also update filtered coordinators
+            setFilteredCoordinators(prevFiltered => prevFiltered.filter(c => c.id !== coordinator.id));
+            
+            // Show success modal
+            setSuccessModalData({
+              title: 'Success',
+              message: `Coordinator ${coordinator.name} has been deleted successfully.`
+            });
+            setShowSuccessModal(true);
+          } else {
+            console.error('🗑️ API error:', response.message);
+            setSuccessModalData({
+              title: 'Error',
+              message: response.message || 'Failed to delete coordinator. Please try again.'
+            });
+            setShowSuccessModal(true);
+          }
+        } catch (error) {
+          console.error('🗑️ Error deleting coordinator:', error);
+          setSuccessModalData({
+            title: 'Error',
+            message: 'Failed to delete coordinator. Please try again.'
+          });
+          setShowSuccessModal(true);
+        }
+      }
+    });
+    setShowWarningModal(true);
+  };
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'active': return '#10b981';
+      case 'inactive': return '#ef4444';
+      default: return '#10b981';
+    }
+  };
+
+  const getFullName = (coordinator: CoordinatorData) => {
+    return coordinator.name || `${coordinator.firstName || ''} ${coordinator.lastName || ''}`.trim() || 'N/A';
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  const showTooltip = (text: string, event: any, buttonKey?: string) => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    
+    let x = 0;
+    let y = 0;
+    let buttonWidth = 36;
+    const tooltipHeight = 40;
+    const arrowHeight = 6;
+    const spacing = 4;
+    
+    if (Platform.OS === 'web') {
+      if (event?.target) {
+        const rect = event.target.getBoundingClientRect();
+        buttonWidth = rect.width;
+        
+        if (event.clientX !== undefined) {
+          x = event.clientX;
+        } else {
+          x = rect.left + rect.width / 2;
+        }
+        
+        const totalHeight = tooltipHeight + arrowHeight + spacing;
+        
+        if (event.clientY !== undefined) {
+          const tooltipBottomAtCursor = event.clientY;
+          const tooltipTopAtCursor = tooltipBottomAtCursor - tooltipHeight - arrowHeight;
+          
+          if (tooltipTopAtCursor < rect.top - totalHeight) {
+            y = event.clientY - tooltipHeight - arrowHeight;
+          } else {
+            y = rect.top - totalHeight;
+          }
+        } else {
+          y = rect.top - totalHeight;
+        }
+      } else if (event?.clientX !== undefined && event?.clientY !== undefined) {
+        x = event.clientX;
+        y = event.clientY - tooltipHeight - arrowHeight - spacing;
+      }
+    } else if (event?.nativeEvent) {
+      const buttonRef = buttonKey ? buttonRefs.current[buttonKey] : null;
+      if (buttonRef) {
+        buttonRef.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+          buttonWidth = width;
+          setTooltip({
+            visible: true,
+            text,
+            x: px + width / 2,
+            y: py - tooltipHeight - arrowHeight - spacing,
+            buttonWidth: width,
+          });
+        });
+        return;
+      } else {
+        const { pageX, pageY } = event.nativeEvent;
+        x = pageX || 0;
+        y = (pageY || 0) - tooltipHeight - arrowHeight - spacing;
+      }
+    }
+    
+    setTooltip({
+      visible: true,
+      text,
+      x,
+      y,
+      buttonWidth,
+    });
+  };
+
+  const hideTooltip = () => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }, 150);
+  };
+
+  const handleButtonPress = (action: () => void, tooltipText: string) => {
+    hideTooltip();
+    action();
+  };
+
+  const renderCoordinatorTable = () => {
+    return (
+      <View style={styles.tableContainer}>
+        {/* Table Header */}
+        <View style={styles.tableHeader}>
+          <View style={[styles.tableHeaderCell, styles.tableCellName]}>
+            <Text style={styles.tableHeaderText}>Name</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellEmail]}>
+            <Text style={styles.tableHeaderText}>Email</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellProgram]}>
+            <Text style={styles.tableHeaderText}>Program</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellDepartment]}>
+            <Text style={styles.tableHeaderText}>Department</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellStatus]}>
+            <Text style={styles.tableHeaderText}>Status</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellActions]}>
+            <Text style={styles.tableHeaderText}>Actions</Text>
+          </View>
+        </View>
+        
+        {/* Table Rows */}
+        {filteredCoordinators.map((coordinator, index) => (
+          <View key={coordinator.id} style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}>
+            <View style={[styles.tableCell, styles.tableCellName]}>
+              <View style={styles.tableCellNameContent}>
+                <View style={styles.tableProfileContainer}>
+                  {coordinator.profilePicture ? (
+                    <Image source={{ uri: coordinator.profilePicture }} style={styles.tableProfileImage} />
+                  ) : (
+                    <View style={styles.tableProfilePlaceholder}>
+                      <Text style={styles.tableProfileText}>
+                        {coordinator.firstName?.charAt(0)?.toUpperCase() || 'C'}
+                        {coordinator.lastName?.charAt(0)?.toUpperCase() || 'O'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.tableCellNameTextContainer}>
+                  <Text style={styles.tableCellNameText} numberOfLines={1}>
+                    {getFullName(coordinator)}
+                  </Text>
+                  {coordinator.isAdminCoordinator && (
+                    <View style={styles.adminBadge}>
+                      <MaterialIcons name="admin-panel-settings" size={12} color="#9c27b0" />
+                      <Text style={styles.adminBadgeText}>Admin</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellEmail]}>
+              <Text style={styles.tableCellText} numberOfLines={1}>{coordinator.email || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellProgram]}>
+              <Text style={styles.tableCellText} numberOfLines={1}>{coordinator.program || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellDepartment]}>
+              <Text style={styles.tableCellText} numberOfLines={1}>{coordinator.department || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellStatus]}>
+              <View style={[styles.tableStatusBadge, { backgroundColor: getStatusColor(coordinator.status) }]}>
+                <Text style={styles.tableStatusText}>{(coordinator.status || 'active').toUpperCase()}</Text>
+              </View>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellActions]}>
+              <View style={styles.tableActionButtons}>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`view-${coordinator.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionView]} 
+                  onPress={() => handleButtonPress(() => handleViewCoordinator(coordinator), 'View Details')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e, `view-${coordinator.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('View Details', e, `view-${coordinator.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('View Details', e, `view-${coordinator.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="visibility" size={16} color="#3b82f6" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`toggle-${coordinator.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionToggle]} 
+                  onPress={() => handleButtonPress(() => handleToggleStatus(coordinator), coordinator.status === 'active' ? 'Disable Coordinator' : 'Enable Coordinator')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip(coordinator.status === 'active' ? 'Disable Coordinator' : 'Enable Coordinator', e, `toggle-${coordinator.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip(coordinator.status === 'active' ? 'Disable Coordinator' : 'Enable Coordinator', e, `toggle-${coordinator.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip(coordinator.status === 'active' ? 'Disable Coordinator' : 'Enable Coordinator', e, `toggle-${coordinator.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons 
+                    name={coordinator.status === 'active' ? 'block' : 'check-circle'} 
+                    size={16} 
+                    color={coordinator.status === 'active' ? '#f59e0b' : '#10b981'} 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`admin-${coordinator.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionAdmin, coordinator.isAdminCoordinator && styles.tableActionAdminActive]} 
+                  onPress={() => handleButtonPress(() => handleToggleAdminStatus(coordinator), coordinator.isAdminCoordinator ? 'Unassign Admin Coordinator' : 'Assign Admin Coordinator')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip(coordinator.isAdminCoordinator ? 'Unassign Admin Coordinator' : 'Assign Admin Coordinator', e, `admin-${coordinator.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip(coordinator.isAdminCoordinator ? 'Unassign Admin Coordinator' : 'Assign Admin Coordinator', e, `admin-${coordinator.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip(coordinator.isAdminCoordinator ? 'Unassign Admin Coordinator' : 'Assign Admin Coordinator', e, `admin-${coordinator.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons 
+                    name={coordinator.isAdminCoordinator ? 'admin-panel-settings' : 'person-add'} 
+                    size={16} 
+                    color={coordinator.isAdminCoordinator ? '#9c27b0' : '#9c27b0'} 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  ref={(ref) => { buttonRefs.current[`delete-${coordinator.id}`] = ref; }}
+                  style={[styles.tableActionButton, styles.tableActionDelete]} 
+                  onPress={() => handleButtonPress(() => handleDeleteCoordinator(coordinator), 'Delete Coordinator')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Coordinator', e, `delete-${coordinator.id}`)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Coordinator', e, `delete-${coordinator.id}`)}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('Delete Coordinator', e, `delete-${coordinator.id}`),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="delete" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ))}
+      </View>
     );
   };
-
-  const handleToggleAdminStatus = async (coordinator: Coordinator) => {
-    console.log('🔧 handleToggleAdminStatus called for coordinator:', coordinator.name, 'isAdmin:', coordinator.isAdminCoordinator);
-    
-    // For testing, let's bypass the Alert and directly assign admin
-    console.log('🔧 TESTING: Bypassing Alert dialog and directly assigning admin...');
-    
-    try {
-      console.log('🔧 Making API call...');
-      setLoading(true);
-      
-      const response = await apiService.toggleCoordinatorAdminStatus(
-        coordinator.id, 
-        !coordinator.isAdminCoordinator,
-        1 // System admin ID - in real app, get from auth context
-      );
-      
-      console.log('🔧 API response:', response);
-      
-      if (response.success) {
-        console.log('🔧 Updating coordinator list...');
-        // Update the coordinator in the list
-        setCoordinators(coordinators.map(c => 
-          c.id === coordinator.id 
-            ? { 
-                ...c, 
-                isAdminCoordinator: !c.isAdminCoordinator,
-                adminId: !c.isAdminCoordinator ? 'new-admin-id' : undefined,
-                adminPermissions: !c.isAdminCoordinator ? {
-                  can_manage_coordinators: true,
-                  can_manage_interns: true,
-                  can_manage_companies: true,
-                  can_view_reports: true
-                } : undefined
-              }
-            : c
-        ));
-        
-        console.log('🔧 SUCCESS: Admin status updated!');
-        Alert.alert(
-          'Success', 
-          `Coordinator admin status ${!coordinator.isAdminCoordinator ? 'enabled' : 'disabled'} successfully`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.error('🔧 API error:', response.message);
-        Alert.alert('Error', response.message || 'Failed to update admin status');
-      }
-    } catch (error) {
-      console.error('🔧 Error toggling admin status:', error);
-      Alert.alert('Error', 'Failed to update admin status');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveCoordinator = async () => {
-    try {
-      if (showAddModal) {
-        // Create new coordinator
-        const response = await apiService.createCoordinator(formData);
-        if (response.success && response.coordinator) {
-          setCoordinators([response.coordinator, ...coordinators]);
-          setShowAddModal(false);
-          Alert.alert('Success', 'Coordinator created successfully');
-        } else {
-          Alert.alert('Error', response.message || 'Failed to create coordinator');
-        }
-      } else if (showEditModal && selectedCoordinator) {
-        // Update existing coordinator
-        const updateData = {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          program: formData.program,
-          address: formData.address
-        };
-        
-        const response = await apiService.updateCoordinator(selectedCoordinator.id, updateData);
-        if (response.success) {
-          // Refresh the coordinators list
-          await fetchCoordinators();
-          setShowEditModal(false);
-          setSelectedCoordinator(null);
-          Alert.alert('Success', 'Coordinator updated successfully');
-        } else {
-          Alert.alert('Error', response.message || 'Failed to update coordinator');
-        }
-      }
-    } catch (error) {
-      console.error('Error saving coordinator:', error);
-      Alert.alert('Error', 'Failed to save coordinator');
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#34a853';
-      case 'inactive': return '#ea4335';
-      default: return '#666';
-    }
-  };
-
-  const CoordinatorCard = ({ coordinator }: { coordinator: Coordinator }) => (
-    <View style={styles.coordinatorCard}>
-      <View style={styles.coordinatorHeader}>
-        <View style={styles.profileContainer}>
-          {coordinator.profilePicture ? (
-            <Image source={{ uri: coordinator.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>{coordinator.name.charAt(0)}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.coordinatorInfo}>
-          <View style={styles.nameContainer}>
-            <Text style={styles.coordinatorName}>{coordinator.name}</Text>
-            {coordinator.isAdminCoordinator && (
-              <View style={styles.adminBadge}>
-                <MaterialIcons name="admin-panel-settings" size={16} color="#fff" />
-                <Text style={styles.adminText}>ADMIN</Text>
-              </View>
-            )}
-          </View>
-          {coordinator.isAdminCoordinator && coordinator.adminPermissions && (
-            <View style={styles.permissionsContainer}>
-              <Text style={styles.permissionsText}>
-                Permissions: {Object.entries(coordinator.adminPermissions)
-                  .filter(([_, value]) => value)
-                  .map(([key, _]) => key.replace('can_', '').replace(/_/g, ' '))
-                  .join(', ')}
-              </Text>
-            </View>
-          )}
-          <Text style={styles.coordinatorDepartment}>{coordinator.program}</Text>
-          <Text style={styles.coordinatorUniversity}>{coordinator.university}</Text>
-          <Text style={styles.assignedInterns}>
-            Assigned Interns: {coordinator.assignedInterns}
-          </Text>
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(coordinator.status) }]}>
-              <Text style={styles.statusText}>{coordinator.status.toUpperCase()}</Text>
-            </View>
-            <Text style={styles.joinDate}>Joined: {new Date(coordinator.joinDate).toLocaleDateString()}</Text>
-          </View>
-        </View>
-      </View>
-      
-      <View style={styles.coordinatorDetails}>
-        <Text style={styles.detailText}>📧 {coordinator.email}</Text>
-        <Text style={styles.detailText}>📱 {coordinator.phone}</Text>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.viewButton]} 
-          onPress={() => handleViewCoordinator(coordinator)}
-        >
-          <MaterialIcons name="visibility" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>View</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.editButton]} 
-          onPress={() => handleEditCoordinator(coordinator)}
-        >
-          <MaterialIcons name="edit" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, coordinator.isAdminCoordinator ? styles.removeAdminButton : styles.assignAdminButton]} 
-          onPress={() => {
-            console.log('🔧 Admin button pressed for:', coordinator.name);
-            handleToggleAdminStatus(coordinator);
-          }}
-        >
-          <MaterialIcons name={coordinator.isAdminCoordinator ? "remove" : "add"} size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>
-            {coordinator.isAdminCoordinator ? 'Remove Admin' : 'Assign Admin'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]} 
-          onPress={() => handleDeleteCoordinator(coordinator)}
-        >
-          <MaterialIcons name="delete" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285f4" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading coordinators...</Text>
       </View>
     );
@@ -352,178 +689,246 @@ export default function CoordinatorsManagement() {
 
   return (
     <View style={styles.container}>
-      {/* Header Actions */}
-      <View style={styles.headerActions}>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddCoordinator}>
-          <MaterialIcons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Add Coordinator</Text>
-        </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Coordinators Management</Text>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
+      {/* Search Section */}
+      <View style={styles.searchSection}>
         <View style={styles.searchInputContainer}>
-          <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <MaterialIcons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search coordinators..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
+            placeholderTextColor="#9ca3af"
           />
         </View>
       </View>
 
-      {/* Coordinators List */}
-      <ScrollView style={styles.coordinatorsList} showsVerticalScrollIndicator={false}>
+      {/* Coordinators Table */}
+      <View style={styles.tableWrapper}>
         {filteredCoordinators.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="people" size={64} color="#ccc" />
+            <MaterialIcons name="people" size={64} color="#6b7280" />
             <Text style={styles.emptyStateTitle}>No coordinators found</Text>
             <Text style={styles.emptyStateText}>
               {searchQuery 
                 ? 'Try adjusting your search criteria'
-                : 'Add your first coordinator to get started'
+                : 'No coordinators registered yet'
               }
             </Text>
           </View>
         ) : (
-          filteredCoordinators.map((coordinator) => (
-            <CoordinatorCard key={coordinator.id} coordinator={coordinator} />
-          ))
+          <ScrollView 
+            style={styles.coordinatorsList} 
+            showsVerticalScrollIndicator={false}
+            horizontal={dimensions.width < 768}
+            showsHorizontalScrollIndicator={dimensions.width < 768}
+            contentContainerStyle={dimensions.width < 768 ? { minWidth: 1000 } : undefined}
+          >
+            {renderCoordinatorTable()}
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
 
-      {/* Add/Edit Modal */}
+      {/* View Modal */}
       <Modal
-        visible={showAddModal || showEditModal}
+        visible={showViewModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => {
-          setShowAddModal(false);
-          setShowEditModal(false);
+          setShowViewModal(false);
           setSelectedCoordinator(null);
         }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {showAddModal ? 'Add New Coordinator' : 'Edit Coordinator'}
-            </Text>
-            <Text style={styles.modalSubtitle}>
-              {showAddModal ? 'Fill in the coordinator details below' : 'Update the coordinator information'}
-            </Text>
-            
-            {/* Form fields */}
-            <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>First Name *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.firstName}
-                  onChangeText={(text) => setFormData({...formData, firstName: text})}
-                  placeholder="Enter first name"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Last Name *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.lastName}
-                  onChangeText={(text) => setFormData({...formData, lastName: text})}
-                  placeholder="Enter last name"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.email}
-                  onChangeText={(text) => setFormData({...formData, email: text})}
-                  placeholder="Enter email address"
-                  placeholderTextColor="#999"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.phone}
-                  onChangeText={(text) => setFormData({...formData, phone: text})}
-                  placeholder="Enter phone number"
-                  placeholderTextColor="#999"
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Program *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.program}
-                  onChangeText={(text) => setFormData({...formData, program: text})}
-                  placeholder="Enter program"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Address *</Text>
-                <TextInput
-                  style={[styles.textInput, styles.textArea]}
-                  value={formData.address}
-                  onChangeText={(text) => setFormData({...formData, address: text})}
-                  placeholder="Enter address"
-                  placeholderTextColor="#999"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              {showAddModal && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Password *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formData.password}
-                    onChangeText={(text) => setFormData({...formData, password: text})}
-                    placeholder="Enter password"
-                    placeholderTextColor="#999"
-                    secureTextEntry
-                  />
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Coordinator Details</Text>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={styles.closeModalButton}
                 onPress={() => {
-                  setShowAddModal(false);
-                  setShowEditModal(false);
+                  setShowViewModal(false);
                   setSelectedCoordinator(null);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <MaterialIcons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
-              
+            </View>
+            {selectedCoordinator && (
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.detailsContainer}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Name:</Text>
+                    <Text style={styles.detailValue}>{getFullName(selectedCoordinator)}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Email:</Text>
+                    <Text style={styles.detailValue}>{selectedCoordinator.email || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Phone:</Text>
+                    <Text style={styles.detailValue}>{selectedCoordinator.phone || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Program:</Text>
+                    <Text style={styles.detailValue}>{selectedCoordinator.program || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Department:</Text>
+                    <Text style={styles.detailValue}>{selectedCoordinator.department || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>University:</Text>
+                    <Text style={styles.detailValue}>{selectedCoordinator.university || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Status:</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedCoordinator.status) }]}>
+                      <Text style={styles.statusText}>{(selectedCoordinator.status || 'active').toUpperCase()}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Join Date:</Text>
+                    <Text style={styles.detailValue}>{formatDate(selectedCoordinator.joinDate)}</Text>
+                  </View>
+                  {selectedCoordinator.isAdminCoordinator && (
+                    <>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Admin Status:</Text>
+                        <Text style={styles.detailValue}>Active</Text>
+                      </View>
+                      {selectedCoordinator.adminPermissions && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Permissions:</Text>
+                          <Text style={styles.detailValue}>
+                            {Object.entries(selectedCoordinator.adminPermissions)
+                              .filter(([_, value]) => value)
+                              .map(([key, _]) => key.replace('can_', '').replace(/_/g, ' '))
+                              .join(', ')}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+            <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSaveCoordinator}
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowViewModal(false);
+                  setSelectedCoordinator(null);
+                }}
               >
-                <Text style={styles.saveButtonText}>Save</Text>
+                <Text style={styles.cancelButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Warning Modal */}
+      <Modal
+        visible={showWarningModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowWarningModal(false);
+          setWarningModalData(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.warningModalHeader}>
+              <MaterialIcons name="warning" size={32} color="#f59e0b" />
+              <Text style={styles.warningModalTitle}>
+                {warningModalData?.title || 'Warning'}
+              </Text>
+            </View>
+            <Text style={styles.warningModalMessage}>
+              {warningModalData?.message || ''}
+            </Text>
+            <View style={styles.warningModalButtons}>
+              <TouchableOpacity
+                style={[styles.warningModalButton, styles.warningModalButtonCancel]}
+                onPress={() => {
+                  setShowWarningModal(false);
+                  setWarningModalData(null);
+                }}
+              >
+                <Text style={styles.warningModalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.warningModalButton, styles.warningModalButtonConfirm]}
+                onPress={() => {
+                  if (warningModalData?.onConfirm) {
+                    warningModalData.onConfirm();
+                  }
+                }}
+              >
+                <Text style={styles.warningModalButtonConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          setSuccessModalData(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.successModalHeader}>
+              <MaterialIcons name="check-circle" size={32} color="#10b981" />
+              <Text style={styles.successModalTitle}>
+                {successModalData?.title || 'Success'}
+              </Text>
+            </View>
+            <Text style={styles.successModalMessage}>
+              {successModalData?.message || ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.successModalButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                setSuccessModalData(null);
+              }}
+            >
+              <Text style={styles.successModalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Tooltip */}
+      {tooltip.visible && (
+        <View 
+          style={[
+            styles.tooltip,
+            {
+              left: tooltip.x,
+              top: tooltip.y,
+              transform: [{ translateX: -50 }],
+            }
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.tooltipText}>{tooltip.text}</Text>
+          <View style={styles.tooltipArrowDown} />
+        </View>
+      )}
     </View>
   );
 }
@@ -531,7 +936,7 @@ export default function CoordinatorsManagement() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1f1f23',
   },
   loadingContainer: {
     flex: 1,
@@ -542,311 +947,471 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#9ca3af',
   },
-  headerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 20,
-    backgroundColor: '#fff',
+  header: {
+    backgroundColor: '#2A2A2E',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#3a3a3e',
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4285f4',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
   },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  searchContainer: {
-    backgroundColor: '#fff',
-    padding: 20,
+  searchSection: {
+    backgroundColor: '#2A2A2E',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#3a3a3e',
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    paddingHorizontal: 15,
+    backgroundColor: '#1f1f23',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1a1a2e',
+    color: '#FBFBFB',
+  },
+  tableWrapper: {
+    flex: 1,
+    backgroundColor: '#1f1f23',
+    width: '100%',
   },
   coordinatorsList: {
     flex: 1,
-    padding: 20,
   },
-  coordinatorCard: {
-    backgroundColor: '#fff',
+  tableContainer: {
+    backgroundColor: '#2A2A2E',
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    overflow: 'hidden',
+    marginLeft: 24,
+    marginRight: 24,
+    marginVertical: 20,
+    minWidth: isSmallScreen ? 1000 : undefined,
+    width: isSmallScreen ? undefined : '100%',
+    alignSelf: 'stretch',
   },
-  coordinatorHeader: {
+  tableHeader: {
     flexDirection: 'row',
-    marginBottom: 15,
+    backgroundColor: '#151419',
+    borderBottomWidth: 2,
+    borderBottomColor: '#F56E0F',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
-  profileContainer: {
-    marginRight: 15,
-  },
-  profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  profilePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#e0e0e0',
+  tableHeaderCell: {
+    paddingHorizontal: 12,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  tableHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3a3a3e',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    minHeight: 72,
     alignItems: 'center',
   },
-  profileText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#666',
+  tableRowEven: {
+    backgroundColor: '#1f1f23',
   },
-  coordinatorInfo: {
+  tableCell: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  tableCellName: {
+    flex: isSmallScreen ? 0 : 2,
+    width: isSmallScreen ? 200 : undefined,
+    minWidth: 200,
+  },
+  tableCellEmail: {
+    flex: isSmallScreen ? 0 : 2.5,
+    width: isSmallScreen ? 200 : undefined,
+    minWidth: 200,
+  },
+  tableCellProgram: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 150 : undefined,
+    minWidth: 150,
+  },
+  tableCellDepartment: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 150 : undefined,
+    minWidth: 150,
+  },
+  tableCellStatus: {
+    flex: isSmallScreen ? 0 : 1,
+    width: isSmallScreen ? 90 : undefined,
+    minWidth: 90,
+  },
+  tableCellActions: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 150 : undefined,
+    minWidth: 150,
+  },
+  tableCellNameContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  nameContainer: {
+  tableProfileContainer: {
+    marginRight: 12,
+  },
+  tableProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#3a3a3e',
+  },
+  tableProfilePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F56E0F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#3a3a3e',
+  },
+  tableProfileText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  tableCellNameTextContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  coordinatorName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginRight: 8,
+  tableCellNameText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    flexShrink: 1,
   },
   adminBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fbbc04',
+    backgroundColor: 'rgba(156, 39, 176, 0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#9c27b0',
+    gap: 4,
   },
-  adminText: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginLeft: 2,
-  },
-  permissionsContainer: {
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  permissionsText: {
+  adminBadgeText: {
     fontSize: 10,
-    color: '#666',
-    fontStyle: 'italic',
+    fontWeight: '700',
+    color: '#9c27b0',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  coordinatorDepartment: {
+  tableCellText: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: '#9ca3af',
+    fontWeight: '500',
   },
-  coordinatorUniversity: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  assignedInterns: {
-    fontSize: 14,
-    color: '#4285f4',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  tableStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 12,
+    alignSelf: 'flex-start',
   },
-  statusText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
+  tableStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  joinDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  coordinatorDetails: {
-    marginBottom: 15,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  actionButtons: {
+  tableActionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
     gap: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    flex: 1,
-    minWidth: 80,
+  },
+  tableActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#1f1f23',
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
   },
-  viewButton: {
-    backgroundColor: '#34a853',
+  tableActionView: {
+    borderColor: '#3b82f6',
   },
-  editButton: {
-    backgroundColor: '#fbbc04',
+  tableActionToggle: {
+    borderColor: '#f59e0b',
   },
-  assignAdminButton: {
-    backgroundColor: '#9c27b0',
+  tableActionDelete: {
+    borderColor: '#ef4444',
   },
-  removeAdminButton: {
-    backgroundColor: '#ff9800',
+  tableActionAdmin: {
+    borderColor: '#9c27b0',
   },
-  deleteButton: {
-    backgroundColor: '#ea4335',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-    marginLeft: 4,
+  tableActionAdminActive: {
+    backgroundColor: 'rgba(156, 39, 176, 0.1)',
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 60,
+    backgroundColor: '#2A2A2E',
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#FBFBFB',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    color: '#9ca3af',
     textAlign: 'center',
     lineHeight: 22,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#2A2A2E',
     borderRadius: 12,
-    padding: 30,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 500,
     maxHeight: '80%',
-  },
-  formContainer: {
-    maxHeight: 400,
-    marginBottom: 20,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a2e',
-    marginBottom: 6,
-  },
-  textInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: '#1a1a2e',
-    backgroundColor: '#f8f9fa',
+    borderColor: '#3a3a3e',
   },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3a3a3e',
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#FBFBFB',
   },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 30,
-    textAlign: 'center',
+  closeModalButton: {
+    padding: 4,
   },
-  modalActions: {
+  modalBody: {
+    padding: 20,
+  },
+  detailsContainer: {
+    gap: 16,
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3a3a3e',
   },
-  modalButton: {
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9ca3af',
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 8,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FBFBFB',
+    flex: 2,
+    textAlign: 'right',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-end',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#3a3a3e',
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  saveButton: {
-    backgroundColor: '#4285f4',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#F56E0F',
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#ffffff',
   },
-  saveButtonText: {
+  // Tooltip Styles
+  tooltip: {
+    position: 'absolute',
+    backgroundColor: '#1f1f23',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 10000,
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
+    maxWidth: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tooltipText: {
+    color: '#FBFBFB',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  tooltipArrowDown: {
+    position: 'absolute',
+    top: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#1f1f23',
+  },
+  // Warning Modal Styles
+  confirmModalContent: {
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 400,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
+  },
+  warningModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  warningModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    flex: 1,
+  },
+  warningModalMessage: {
+    fontSize: 16,
+    color: '#9ca3af',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  warningModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  warningModalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  warningModalButtonCancel: {
+    backgroundColor: '#1f1f23',
+    borderWidth: 2,
+    borderColor: '#3a3a3e',
+  },
+  warningModalButtonConfirm: {
+    backgroundColor: '#F56E0F',
+  },
+  warningModalButtonCancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#9ca3af',
+  },
+  warningModalButtonConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  // Success Modal Styles
+  successModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  successModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FBFBFB',
+    flex: 1,
+  },
+  successModalMessage: {
+    fontSize: 16,
+    color: '#9ca3af',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  successModalButton: {
+    backgroundColor: '#F56E0F',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  successModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

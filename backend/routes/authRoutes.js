@@ -32,4 +32,13 @@ router.post('/update-location', AuthController.updateLocation);
 // GET /api/auth/locations - Get all users' locations
 router.get('/locations', AuthController.getUserLocations);
 
+// POST /api/auth/account-appeal - Send account appeal
+router.post('/account-appeal', AuthController.sendAccountAppeal);
+
+// GET /api/auth/appeals - Get all appeals
+router.get('/appeals', AuthController.getAllAppeals);
+
+// PUT /api/auth/appeals/:id/status - Update appeal status
+router.put('/appeals/:id/status', AuthController.updateAppealStatus);
+
 module.exports = router;

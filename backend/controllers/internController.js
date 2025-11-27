@@ -61,10 +61,155 @@ class InternController {
       const result = await query('interns', 'insert', internData);
 
       if (result.data && result.data.length > 0) {
+        const newInternId = result.data[0].id;
+        let enrolledClassesCount = 0;
+        let enrollmentErrors = [];
+        
+        // After successfully adding intern, assign existing requirements and enroll in matching classes
+        try {
+          // Get the coordinator's id from their user_id
+          const coordinatorResult = await query('coordinators', 'select', null, { user_id: coordinatorUserId });
+          const coordinator = coordinatorResult.data && coordinatorResult.data.length > 0 ? coordinatorResult.data[0] : null;
+          
+          if (coordinator) {
+            // Automatically enroll student in existing classes with matching school year
+            try {
+              // Find all classes created by this coordinator with matching school year
+              const classesResult = await query('classes', 'select', null, {
+                coordinator_id: coordinator.id, // Use coordinators.id
+                school_year: schoolYear,
+                status: 'active' // Only enroll in active classes
+              });
+              
+              const matchingClasses = classesResult.data || [];
+              console.log(`📚 Found ${matchingClasses.length} classes with school year ${schoolYear} for coordinator ${coordinator.id}`);
+              
+              // Enroll student in each matching class
+              for (const classItem of matchingClasses) {
+                try {
+                  // Check if student is already enrolled in this class
+                  const existingEnrollmentResult = await query('class_enrollments', 'select', null, {
+                    class_id: classItem.id,
+                    student_id: parseInt(studentId)
+                  });
+                  
+                  if (existingEnrollmentResult.data && existingEnrollmentResult.data.length > 0) {
+                    console.log(`ℹ️ Student ${studentId} is already enrolled in class ${classItem.id}`);
+                    continue; // Skip if already enrolled
+                  }
+                  
+                  // Create enrollment
+                  const enrollmentData = {
+                    class_id: classItem.id,
+                    student_id: parseInt(studentId),
+                    status: 'enrolled'
+                  };
+                  
+                  const enrollmentResult = await query('class_enrollments', 'insert', enrollmentData);
+                  
+                  if (enrollmentResult.data && enrollmentResult.data.length > 0) {
+                    enrolledClassesCount++;
+                    console.log(`✅ Automatically enrolled student ${studentId} in class "${classItem.class_name}" (${classItem.class_code})`);
+                  }
+                } catch (enrollError) {
+                  console.error(`❌ Error enrolling student ${studentId} in class ${classItem.id}:`, enrollError);
+                  enrollmentErrors.push(`Class ${classItem.class_name}: ${enrollError.message}`);
+                }
+              }
+              
+              console.log(`📚 Successfully enrolled student ${studentId} in ${enrolledClassesCount} out of ${matchingClasses.length} matching classes`);
+            } catch (classEnrollError) {
+              console.error('❌ Error during automatic class enrollment:', classEnrollError);
+              enrollmentErrors.push(`Class enrollment error: ${classEnrollError.message}`);
+            }
+            
+            // Find all unique requirement_ids that belong to other interns in the same class and coordinator
+            // Get all interns in the same class and coordinator
+            const classInternsResult = await query('interns', 'select', null, { 
+              coordinator_id: coordinatorUserId,
+              school_year: schoolYear
+            });
+            const classInterns = classInternsResult.data || [];
+            
+            // Get student IDs for these interns (excluding the newly added one)
+            const classStudentIds = classInterns
+              .filter(intern => intern.id !== newInternId)
+              .map(intern => intern.student_id);
+            
+            if (classStudentIds.length > 0) {
+              // Find all unique requirement_ids from existing students in this class
+              // Since school_year is not in student_requirements table, we find requirements
+              // by looking at students who are in the same class (already filtered above)
+              const existingRequirements = [];
+              for (const classStudentId of classStudentIds) {
+                // Query requirements for this student and coordinator
+                const reqResult = await query('student_requirements', 'select', null, {
+                  student_id: classStudentId,
+                  coordinator_id: coordinator.id
+                });
+                if (reqResult.data && reqResult.data.length > 0) {
+                  existingRequirements.push(...reqResult.data);
+                }
+              }
+              
+              // Get unique requirement_ids (group by requirement_id to get the latest version)
+              const uniqueRequirements = new Map();
+              existingRequirements.forEach(req => {
+                const reqId = req.requirement_id;
+                if (!uniqueRequirements.has(reqId)) {
+                  uniqueRequirements.set(reqId, req);
+                }
+              });
+              
+              // Assign each unique requirement to the new intern
+              const assignPromises = Array.from(uniqueRequirements.values()).map(async (req) => {
+                // Check if requirement already exists for this student
+                const existingCheck = await query('student_requirements', 'select', null, {
+                  student_id: studentId,
+                  requirement_id: req.requirement_id
+                });
+                
+                if (!existingCheck.data || existingCheck.data.length === 0) {
+                  // Assign the requirement to the new intern
+                  // Note: school_year is not stored in student_requirements table
+                  const newRequirementData = {
+                    student_id: studentId,
+                    requirement_id: req.requirement_id,
+                    requirement_name: req.requirement_name,
+                    requirement_description: req.requirement_description,
+                    is_required: req.is_required,
+                    due_date: req.due_date,
+                    file_url: req.file_url,
+                    file_public_id: req.file_public_id || null,
+                    completed: false,
+                    coordinator_id: coordinator.id,
+                    notes: null
+                  };
+                  
+                  await query('student_requirements', 'insert', newRequirementData);
+                  console.log(`✅ Assigned requirement "${req.requirement_name}" to new intern`);
+                }
+              });
+              
+              await Promise.all(assignPromises);
+              console.log(`✅ Assigned ${uniqueRequirements.size} existing requirements to new intern`);
+            }
+          }
+        } catch (reqError) {
+          // Log error but don't fail the intern addition
+          console.error('⚠️ Error assigning existing requirements to new intern:', reqError);
+        }
+        
+        const responseMessage = enrolledClassesCount > 0
+          ? `Student added as intern successfully. ${enrolledClassesCount} class${enrolledClassesCount !== 1 ? 'es' : ''} automatically enrolled.`
+          : 'Student added as intern successfully.';
+        
         return res.json({
           success: true,
-          message: 'Student added as intern successfully',
-          internId: result.data[0].id
+          message: responseMessage,
+          internId: newInternId,
+          autoEnrolledClasses: enrolledClassesCount,
+          enrollmentErrors: enrollmentErrors.length > 0 ? enrollmentErrors : undefined
         });
       } else {
         return res.status(500).json({
@@ -119,7 +264,10 @@ class InternController {
       }
 
       // Get interns for this coordinator (using user_id)
+      console.log(`🔍 Querying interns for coordinator user_id: ${coordinatorUserId}`);
       const internsResult = await query('interns', 'select', null, { coordinator_id: coordinatorUserId });
+      
+      console.log(`📊 Found ${internsResult.data?.length || 0} interns for coordinator ${coordinatorUserId}`);
       
       if (!internsResult.data || internsResult.data.length === 0) {
         return res.json({

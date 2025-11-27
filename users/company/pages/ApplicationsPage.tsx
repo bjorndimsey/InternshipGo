@@ -52,6 +52,9 @@ interface Application {
   student_profile_picture?: string;
   student_latitude?: number;
   student_longitude?: number;
+  // Academic year and coordinator
+  academic_year?: string;
+  coordinator_name?: string;
   // Company details from joins
   company_name?: string;
   industry?: string;
@@ -554,21 +557,31 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
       console.log('📥 API Response Message:', response.message);
 
       if (response.success) {
-        console.log('✅ Application rejected successfully, updating UI immediately...');
+        console.log('✅ Application rejected successfully, removing from UI...');
         
-        // Update the application data immediately in the state
-        setApplications(prevApplications => 
-          prevApplications.map(app => 
-            app.id === application.id 
-              ? { ...app, status: 'rejected' as const }
-              : app
-          )
-        );
+        // If application was deleted, remove it from state
+        if ((response as any).deleted) {
+          setApplications(prevApplications => 
+            prevApplications.filter(app => app.id !== application.id)
+          );
+          setFilteredApplications(prevFiltered => 
+            prevFiltered.filter(app => app.id !== application.id)
+          );
+          console.log('🗑️ Application removed from UI');
+        } else {
+          // Otherwise update status (shouldn't happen with new backend, but keep for safety)
+          setApplications(prevApplications => 
+            prevApplications.map(app => 
+              app.id === application.id 
+                ? { ...app, status: 'rejected' as const }
+                : app
+            )
+          );
+        }
         
-        console.log('🔄 UI updated immediately, application status should now show as rejected');
         Alert.alert(
           'Success', 
-          'Application rejected successfully! The status has been updated. If this was previously an approved application, a slot has been restored to the company.',
+          'Application rejected and removed successfully! If this was previously an approved application, a slot has been restored to the company.',
           [
             {
               text: 'OK',
@@ -598,7 +611,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
   const handleRejectApplication = async (application: Application) => {
     Alert.alert(
       'Reject Application',
-      `Reject ${application.first_name} ${application.last_name}'s application for ${application.position}?`,
+      `Reject ${application.first_name} ${application.last_name}'s application for ${application.position}? This will permanently delete the application.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -614,12 +627,24 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
               );
               
               if (response.success) {
-                setApplications(applications.map(app => 
-                  app.id === application.id 
-                    ? { ...app, status: 'rejected' as const }
-                    : app
-                ));
-                Alert.alert('Success', 'Application rejected');
+                // If application was deleted, remove it from state
+                if ((response as any).deleted) {
+                  setApplications(prevApplications => 
+                    prevApplications.filter(app => app.id !== application.id)
+                  );
+                  setFilteredApplications(prevFiltered => 
+                    prevFiltered.filter(app => app.id !== application.id)
+                  );
+                } else {
+                  // Fallback: update status (shouldn't happen with new backend)
+                  setApplications(applications.map(app => 
+                    app.id === application.id 
+                      ? { ...app, status: 'rejected' as const }
+                      : app
+                  ));
+                }
+                Alert.alert('Success', 'Application rejected and removed');
+                fetchCompanySlots();
               } else {
                 Alert.alert('Error', 'Failed to reject application');
               }
@@ -778,40 +803,7 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
             </View>
 
             <View style={styles.expandedActionButtons}>
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.viewButton]} 
-                onPress={() => handleViewDetails(application)}
-              >
-                <MaterialIcons name="visibility" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>View Details</Text>
-              </TouchableOpacity>
-              
-              {application.resume_url && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.downloadButton]} 
-                  onPress={() => {
-                    console.log('📥 Resume download button pressed');
-                    handleDownloadResume(application);
-                  }}
-                >
-                  <MaterialIcons name="download" size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>Resume</Text>
-                </TouchableOpacity>
-              )}
-              
-              {application.transcript_url && (
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.transcriptButton]} 
-                  onPress={() => {
-                    console.log('📥 Transcript download button pressed');
-                    handleDownloadTranscript(application);
-                  }}
-                >
-                  <MaterialIcons name="school" size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>Transcript</Text>
-                </TouchableOpacity>
-              )}
-              
+              {/* Approve and Reject buttons first (when applicable) */}
               {application.status === 'pending' || application.status === 'under-review' ? (
                 <>
                   <TouchableOpacity 
@@ -837,6 +829,43 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
                   </TouchableOpacity>
                 </>
               ) : null}
+              
+              {/* View Details button */}
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.viewButton]} 
+                onPress={() => handleViewDetails(application)}
+              >
+                <MaterialIcons name="visibility" size={16} color="#fff" />
+                <Text style={styles.actionButtonText}>View Details</Text>
+              </TouchableOpacity>
+              
+              {/* Resume button */}
+              {application.resume_url && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.downloadButton]} 
+                  onPress={() => {
+                    console.log('📥 Resume download button pressed');
+                    handleDownloadResume(application);
+                  }}
+                >
+                  <MaterialIcons name="download" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Resume</Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Transcript button */}
+              {application.transcript_url && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.transcriptButton]} 
+                  onPress={() => {
+                    console.log('📥 Transcript download button pressed');
+                    handleDownloadTranscript(application);
+                  }}
+                >
+                  <MaterialIcons name="school" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Transcript</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -1012,48 +1041,128 @@ export default function ApplicationsPage({ currentUser }: ApplicationsPageProps)
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {selectedApplication && (
                 <View>
-                  <Text style={styles.modalSectionTitle}>Personal Information</Text>
-                  <Text style={styles.modalText}>Name: {selectedApplication.first_name} {selectedApplication.last_name}</Text>
-                  <Text style={styles.modalText}>Student ID: {selectedApplication.id_number || selectedApplication.student_id}</Text>
-                  <Text style={styles.modalText}>Email: {selectedApplication.student_email || 'N/A'}</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Academic Information</Text>
-                  <Text style={styles.modalText}>Major: {selectedApplication.major || 'N/A'}</Text>
-                  <Text style={styles.modalText}>Academic Year: {selectedApplication.year || 'N/A'}</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Application Details</Text>
-                  <Text style={styles.modalText}>Position: {selectedApplication.position}</Text>
-                  <Text style={styles.modalText}>Department: {selectedApplication.department || 'N/A'}</Text>
-                  <Text style={styles.modalText}>Application Date: {new Date(selectedApplication.applied_at).toLocaleDateString()}</Text>
-                  <Text style={styles.modalText}>Status: {getStatusText(selectedApplication.status)}</Text>
-                  
+                  {/* Profile Header Section */}
+                  <View style={styles.modalProfileHeader}>
+                    {selectedApplication.student_profile_picture ? (
+                      <Image 
+                        source={{ uri: selectedApplication.student_profile_picture }} 
+                        style={styles.modalProfileImage}
+                      />
+                    ) : (
+                      <View style={styles.modalProfilePlaceholder}>
+                        <Text style={styles.modalProfileText}>
+                          {selectedApplication.first_name?.charAt(0) || 'S'}{selectedApplication.last_name?.charAt(0) || 'T'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.modalProfileInfo}>
+                      <Text style={styles.modalProfileName}>
+                        {selectedApplication.first_name} {selectedApplication.last_name}
+                      </Text>
+                      <Text style={styles.modalProfileId}>{selectedApplication.id_number || selectedApplication.student_id}</Text>
+                      <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedApplication.status) }]}>
+                        <Text style={styles.modalStatusText}>{getStatusText(selectedApplication.status)}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Personal Information Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="person" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Personal Information</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Email:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.student_email || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Academic Information Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="school" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Academic Information</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Major:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.major || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Year:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.year || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Academic Year:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.academic_year || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Assigned Coordinator:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.coordinator_name || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Application Details Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="work" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Application Details</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Position:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.position}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Department:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.department || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Applied:</Text>
+                      <Text style={styles.modalInfoValue}>{new Date(selectedApplication.applied_at).toLocaleDateString()}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Expected Start:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.expected_start_date || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Expected End:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedApplication.expected_end_date || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Additional Information Sections */}
                   {selectedApplication.cover_letter && (
-                    <>
-                      <Text style={styles.modalSectionTitle}>Cover Letter</Text>
-                      <Text style={styles.modalText}>{selectedApplication.cover_letter}</Text>
-                    </>
+                    <View style={styles.modalSection}>
+                      <View style={styles.modalSectionHeader}>
+                        <MaterialIcons name="description" size={20} color="#F56E0F" />
+                        <Text style={styles.modalSectionTitle}>Cover Letter</Text>
+                      </View>
+                      <Text style={styles.modalTextContent}>{selectedApplication.cover_letter}</Text>
+                    </View>
                   )}
                   
                   {selectedApplication.motivation && (
-                    <>
-                      <Text style={styles.modalSectionTitle}>Motivation</Text>
-                      <Text style={styles.modalText}>{selectedApplication.motivation}</Text>
-                    </>
+                    <View style={styles.modalSection}>
+                      <View style={styles.modalSectionHeader}>
+                        <MaterialIcons name="lightbulb" size={20} color="#F56E0F" />
+                        <Text style={styles.modalSectionTitle}>Motivation</Text>
+                      </View>
+                      <Text style={styles.modalTextContent}>{selectedApplication.motivation}</Text>
+                    </View>
                   )}
                   
                   {selectedApplication.availability && (
-                    <>
-                      <Text style={styles.modalSectionTitle}>Availability</Text>
-                      <Text style={styles.modalText}>{selectedApplication.availability}</Text>
-                    </>
+                    <View style={styles.modalSection}>
+                      <View style={styles.modalSectionHeader}>
+                        <MaterialIcons name="schedule" size={20} color="#F56E0F" />
+                        <Text style={styles.modalSectionTitle}>Availability</Text>
+                      </View>
+                      <Text style={styles.modalTextContent}>{selectedApplication.availability}</Text>
+                    </View>
                   )}
-                  
-                  <Text style={styles.modalSectionTitle}>Expected Dates</Text>
-                  <Text style={styles.modalText}>Start: {selectedApplication.expected_start_date || 'N/A'}</Text>
-                  <Text style={styles.modalText}>End: {selectedApplication.expected_end_date || 'N/A'}</Text>
                 </View>
               )}
             </ScrollView>
@@ -1260,7 +1369,8 @@ const styles = StyleSheet.create({
   },
   expandedActionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
     gap: 8,
     marginTop: 16,
   },
@@ -1415,11 +1525,10 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 8,
-    flex: 1,
-    minWidth: '45%',
+    width: '48%',
     justifyContent: 'center',
   },
   viewButton: {
@@ -1557,20 +1666,113 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: 20,
-    maxHeight: 400,
+    maxHeight: 500,
   },
-  modalSectionTitle: {
-    fontSize: 16,
+  modalProfileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    marginBottom: 20,
+  },
+  modalProfileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+  },
+  modalProfilePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2A2A2E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  modalProfileText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#F56E0F',
+  },
+  modalProfileInfo: {
+    flex: 1,
+  },
+  modalProfileName: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#FBFBFB',
-    marginTop: 16,
+    marginBottom: 4,
+  },
+  modalProfileId: {
+    fontSize: 14,
+    color: '#F56E0F',
     marginBottom: 8,
+    fontWeight: '500',
+  },
+  modalStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  modalStatusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  modalSection: {
+    marginBottom: 24,
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.1)',
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  modalSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F56E0F',
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  modalInfoLabel: {
+    fontSize: 14,
+    color: '#878787',
+    fontWeight: '500',
+    flex: 1,
+  },
+  modalInfoValue: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    flex: 2,
+    textAlign: 'right',
+    fontWeight: '500',
   },
   modalText: {
     fontSize: 14,
     color: '#878787',
     marginBottom: 4,
     lineHeight: 20,
+  },
+  modalTextContent: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    lineHeight: 22,
+    marginTop: 8,
   },
   modalSkillsList: {
     flexDirection: 'row',

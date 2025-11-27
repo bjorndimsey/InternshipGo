@@ -14,10 +14,15 @@ import {
   Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { apiService } from '../../../lib/api';
 import LocationPicker from '../../../components/LocationPicker';
 import LocationPictures from '../../../components/LocationPictures';
 import CloudinaryService from '../../../lib/cloudinaryService';
+import ESignature from '../../../components/ESignature';
+import { EmailService } from '../../../lib/emailService';
+import OTPVerificationScreen from '../../../screens/OTPVerificationScreen';
+import NewPasswordScreen from '../../../screens/NewPasswordScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -54,6 +59,7 @@ interface StudentProfile {
   work_experience?: string;
   projects?: string;
   achievements?: string;
+  signature?: string | null;
 }
 
 interface UserInfo {
@@ -65,9 +71,11 @@ interface UserInfo {
 
 interface ProfilePageProps {
   currentUser: UserInfo;
+  autoOpenLocationPicker?: boolean;
+  onLocationPickerOpened?: () => void;
 }
 
-export default function ProfilePage({ currentUser }: ProfilePageProps) {
+export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLocationPickerOpened }: ProfilePageProps) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -82,6 +90,11 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<StudentProfile>>({});
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordChangeStep, setPasswordChangeStep] = useState<'otp' | 'password'>('otp');
+  const [isLoadingOTP, setIsLoadingOTP] = useState(false);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -116,6 +129,19 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
       ]).start();
     }
   }, [currentUser]);
+
+  // Auto-open location picker if requested
+  useEffect(() => {
+    if (autoOpenLocationPicker && !showLocationPicker && profile) {
+      // Small delay to ensure profile is loaded
+      setTimeout(() => {
+        setShowLocationPicker(true);
+        if (onLocationPickerOpened) {
+          onLocationPickerOpened();
+        }
+      }, 500);
+    }
+  }, [autoOpenLocationPicker, profile, onLocationPickerOpened]);
 
   // Shimmer animation for skeleton loading
   useEffect(() => {
@@ -185,6 +211,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           work_experience: response.user.work_experience || '',
           projects: response.user.projects || '',
           achievements: response.user.achievements || '',
+          signature: response.user.signature || response.user.esignature || null,
         };
         
         setProfile(studentProfile);
@@ -256,12 +283,128 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
     }
   };
 
-  const handleChangePassword = () => {
-    Alert.alert(
-      'Change Password',
-      'Password change functionality will be implemented soon.',
-      [{ text: 'OK' }]
-    );
+  const handleChangePassword = async () => {
+    if (!currentUser?.email) {
+      Alert.alert('Error', 'Unable to get your email address. Please try again.');
+      return;
+    }
+
+    // Check if user is a Google user
+    const isGoogleOAuthUser = currentUser.google_id ? true : false;
+    setIsGoogleUser(isGoogleOAuthUser);
+
+    setIsLoadingOTP(true);
+    try {
+      // Request OTP from backend
+      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Send OTP via EmailJS
+        const emailResult = await EmailService.sendOTPEmail(
+          currentUser.email,
+          data.otp,
+          `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'User'
+        );
+
+        if (emailResult.success) {
+          Toast.show({
+            type: 'success',
+            text1: 'OTP Sent! 📧',
+            text2: 'Check your email for the verification code',
+            position: 'top',
+            visibilityTime: 5000,
+          });
+
+          setPasswordChangeStep('otp');
+          setShowChangePasswordModal(true);
+        } else {
+          Alert.alert(
+            'Email Failed',
+            emailResult.error || 'Failed to send OTP email. Please try again.'
+          );
+        }
+      } else {
+        Alert.alert('Request Failed', data.message || 'Failed to request OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('OTP request error:', error);
+      Alert.alert('Error', 'Unable to send OTP. Please try again.');
+    } finally {
+      setIsLoadingOTP(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!currentUser?.email) {
+      throw new Error('Unable to get your email address');
+    }
+
+    try {
+      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: currentUser.email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const emailResult = await EmailService.sendOTPEmail(
+          currentUser.email,
+          data.otp,
+          `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'User'
+        );
+
+        if (emailResult.success) {
+          return Promise.resolve();
+        } else {
+          throw new Error(emailResult.error || 'Failed to send OTP email');
+        }
+      } else {
+        throw new Error(data.message || 'Failed to request OTP');
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const handleOTPVerified = () => {
+    setPasswordChangeStep('password');
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    Toast.show({
+      type: 'success',
+      text1: 'Password Changed! 🎉',
+      text2: 'Your password has been updated successfully',
+      position: 'top',
+      visibilityTime: 5000,
+    });
+
+    setTimeout(() => {
+      setShowChangePasswordModal(false);
+      setPasswordChangeStep('otp');
+      showSuccess('Password changed successfully!');
+    }, 2000);
+  };
+
+  const handleBackToOTP = () => {
+    setPasswordChangeStep('otp');
+  };
+
+  const handleCloseChangePasswordModal = () => {
+    setShowChangePasswordModal(false);
+    setPasswordChangeStep('otp');
   };
 
   const handleLocationPicker = () => {
@@ -285,6 +428,19 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
 
   const handleCloseLocationPictures = () => {
     setShowLocationPictures(false);
+  };
+
+  const handleSignature = () => {
+    setShowSignatureModal(true);
+  };
+
+  const handleCloseSignature = () => {
+    setShowSignatureModal(false);
+  };
+
+  const handleSignatureSaveSuccess = (signatureUrl: string) => {
+    setShowSignatureModal(false);
+    showSuccess('Signature saved successfully!');
   };
 
   const handleLogout = () => {
@@ -598,7 +754,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <ActivityIndicator size="large" color="#F56E0F" />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
@@ -607,7 +763,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
   if (!profile) {
     return (
       <View style={styles.errorContainer}>
-        <MaterialIcons name="error" size={64} color="#E8A598" />
+        <MaterialIcons name="error" size={64} color="#F56E0F" />
         <Text style={styles.errorTitle}>Error loading profile</Text>
         <Text style={styles.errorText}>Please try again later</Text>
       </View>
@@ -642,10 +798,10 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               disabled={uploadingBackgroundPicture}
             >
               {uploadingBackgroundPicture ? (
-                <ActivityIndicator size="small" color="#1E3A5F" />
+                <ActivityIndicator size="small" color="#F56E0F" />
               ) : (
                 <>
-                  <MaterialIcons name="camera-alt" size={16} color="#1E3A5F" />
+                  <MaterialIcons name="camera-alt" size={16} color="#FBFBFB" />
                   <Text style={styles.editCoverText}>Edit Cover</Text>
                 </>
               )}
@@ -718,7 +874,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="person" size={24} color="#02050a" />
+                    <MaterialIcons name="person" size={24} color="#FBFBFB" />
                   </View>
                   <Text style={styles.cardTitle}>Personal Information</Text>
                 </View>
@@ -732,7 +888,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                   style={styles.cardEditButton} 
                   onPress={() => handleEditSection('personal-info')}
                 >
-                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <MaterialIcons name="add" size={16} color="#FBFBFB" />
                   <Text style={styles.cardEditButtonText}>Edit</Text>
                 </TouchableOpacity>
               </View>
@@ -741,7 +897,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="email" size={24} color="#02050a" />
+                    <MaterialIcons name="email" size={24} color="#FBFBFB" />
                   </View>
                   <Text style={styles.cardTitle}>Contact Information</Text>
                 </View>
@@ -758,7 +914,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                   style={styles.cardEditButton} 
                   onPress={() => handleEditSection('personal-info')}
                 >
-                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <MaterialIcons name="add" size={16} color="#FBFBFB" />
                   <Text style={styles.cardEditButtonText}>Edit</Text>
                 </TouchableOpacity>
               </View>
@@ -771,7 +927,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="build" size={24} color="#02050a" />
+                    <MaterialIcons name="build" size={24} color="#FBFBFB" />
                   </View>
                   <Text style={styles.cardTitle}>Skills & Interests</Text>
                 </View>
@@ -786,7 +942,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                   style={styles.cardEditButton} 
                   onPress={() => handleEditSection('skills-interests')}
                 >
-                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <MaterialIcons name="add" size={16} color="#FBFBFB" />
                   <Text style={styles.cardEditButtonText}>Edit</Text>
                 </TouchableOpacity>
               </View>
@@ -795,7 +951,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIcon}>
-                    <MaterialIcons name="link" size={24} color="#02050a" />
+                    <MaterialIcons name="link" size={24} color="#FBFBFB" />
                   </View>
                   <Text style={styles.cardTitle}>Social Links</Text>
                 </View>
@@ -817,7 +973,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                   style={styles.cardEditButton} 
                   onPress={() => handleEditSection('social-links')}
                 >
-                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <MaterialIcons name="add" size={16} color="#FBFBFB" />
                   <Text style={styles.cardEditButtonText}>Edit</Text>
                 </TouchableOpacity>
               </View>
@@ -831,19 +987,24 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
       <Animated.View style={[styles.settingsSection, { transform: [{ scale: scaleAnim }] }]}>
         <Text style={styles.settingsTitle}>Settings</Text>
         <TouchableOpacity style={styles.settingItem} onPress={handleLocationPicker}>
-          <MaterialIcons name="location-on" size={20} color="#F4D03F" />
+          <MaterialIcons name="location-on" size={20} color="#F56E0F" />
           <Text style={styles.settingText}>Set Location</Text>
-          <MaterialIcons name="chevron-right" size={20} color="#F4D03F" />
+          <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.settingItem} onPress={handleLocationPictures}>
-          <MaterialIcons name="photo-camera" size={20} color="#F4D03F" />
+          <MaterialIcons name="photo-camera" size={20} color="#F56E0F" />
           <Text style={styles.settingText}>Location Pictures</Text>
-          <MaterialIcons name="chevron-right" size={20} color="#F4D03F" />
+          <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
-          <MaterialIcons name="lock" size={20} color="#F4D03F" />
+          <MaterialIcons name="lock" size={20} color="#F56E0F" />
           <Text style={styles.settingText}>Change Password</Text>
-          <MaterialIcons name="chevron-right" size={20} color="#F4D03F" />
+          <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.settingItem} onPress={handleSignature}>
+          <MaterialIcons name="edit" size={20} color="#F56E0F" />
+          <Text style={styles.settingText}>Signature</Text>
+          <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
         </TouchableOpacity>
       </Animated.View>
 
@@ -867,7 +1028,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
                   setEditingSection(null);
                 }}
               >
-                <MaterialIcons name="close" size={24} color="#F4D03F" />
+                <MaterialIcons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
 
@@ -1159,7 +1320,7 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
             <View style={styles.successIconContainer}>
-              <MaterialIcons name="check-circle" size={64} color="#2D5A3D" />
+              <MaterialIcons name="check-circle" size={80} color="#34a853" />
             </View>
             <Text style={styles.successTitle}>Success!</Text>
             <Text style={styles.successMessage}>{successMessage}</Text>
@@ -1203,6 +1364,46 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
           }}
         />
       </Modal>
+
+      {/* Signature Modal */}
+      {currentUser && (
+        <ESignature
+          userId={currentUser.id}
+          currentSignature={profile?.signature || null}
+          visible={showSignatureModal}
+          onClose={handleCloseSignature}
+          onSaveSuccess={handleSignatureSaveSuccess}
+        />
+      )}
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={handleCloseChangePasswordModal}
+      >
+        {passwordChangeStep === 'otp' && currentUser && (
+          <OTPVerificationScreen
+            email={currentUser.email}
+            onVerifySuccess={handleOTPVerified}
+            onBack={handleCloseChangePasswordModal}
+            onResendOTP={handleResendOTP}
+          />
+        )}
+
+        {passwordChangeStep === 'password' && currentUser && (
+          <NewPasswordScreen
+            email={currentUser.email}
+            onPasswordResetSuccess={handlePasswordChangeSuccess}
+            onBack={handleBackToOTP}
+            isGoogleUser={isGoogleUser}
+          />
+        )}
+      </Modal>
+
+      {/* Toast Component */}
+      <Toast />
     </Animated.ScrollView>
   );
 }
@@ -1210,19 +1411,19 @@ export default function ProfilePage({ currentUser }: ProfilePageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#2A2A2E', // Dark background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   errorContainer: {
@@ -1230,18 +1431,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#F5F1E8',
+    backgroundColor: '#151419', // Dark background
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#E8A598', // Soft coral
+    color: '#F56E0F', // Primary orange
     marginTop: 16,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     textAlign: 'center',
     fontWeight: '400',
   },
@@ -1260,13 +1461,13 @@ const styles = StyleSheet.create({
   coverPhotoPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     justifyContent: 'center',
     alignItems: 'center',
   },
   coverPhotoPlaceholderText: {
     fontSize: width < 768 ? 16 : 18,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginTop: 12,
     fontWeight: '600',
   },
@@ -1274,13 +1475,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: width < 768 ? 16 : 20,
     right: width < 768 ? 16 : 20,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 12 : 16,
     paddingVertical: width < 768 ? 8 : 10,
     borderRadius: width < 768 ? 20 : 24,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1288,19 +1489,19 @@ const styles = StyleSheet.create({
   },
   editCoverText: {
     fontSize: width < 768 ? 12 : 14,
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 6,
     fontWeight: 'bold',
   },
   // Profile Section Styles
   profileSection: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: width < 768 ? 16 : 24,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1326,12 +1527,12 @@ const styles = StyleSheet.create({
     width: width < 768 ? 80 : 100,
     height: width < 768 ? 80 : 100,
     borderRadius: width < 768 ? 40 : 50,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1340,13 +1541,13 @@ const styles = StyleSheet.create({
   profileText: {
     fontSize: width < 768 ? 32 : 40,
     fontWeight: 'bold',
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
   },
   profileUploadButton: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#F56E0F', // Primary orange
     borderRadius: width < 768 ? 16 : 20,
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
@@ -1354,7 +1555,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1373,7 +1574,7 @@ const styles = StyleSheet.create({
   },
   studentProgram: {
     fontSize: width < 768 ? 14 : 16,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     fontWeight: '600',
   },
   editProfileButton: {
@@ -1394,13 +1595,13 @@ const styles = StyleSheet.create({
   },
   // About Section Styles
   aboutSection: {
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#2A2A2E', // Dark background
     padding: width < 768 ? 16 : 24,
   },
   aboutTitle: {
     fontSize: width < 768 ? 24 : 28,
     fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
+    color: '#FBFBFB', // Light text
     marginBottom: width < 768 ? 16 : 20,
     fontFamily: 'System',
   },
@@ -1423,12 +1624,12 @@ const styles = StyleSheet.create({
     maxWidth: width < 768 ? '48%' : '45%',
   },
   infoCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 12 : 16,
     padding: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
-    shadowColor: '#000',
+    borderColor: '#F56E0F', // Primary orange border
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1463,7 +1664,7 @@ const styles = StyleSheet.create({
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
     borderRadius: width < 768 ? 16 : 18,
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -1484,7 +1685,7 @@ const styles = StyleSheet.create({
   },
   cardSubtitle: {
     fontSize: width < 768 ? 11 : 13,
-    color: '#F4D03F', // Bright yellow
+    color: '#F56E0F', // Primary orange
     marginBottom: width < 768 ? 2 : 4,
     lineHeight: width < 768 ? 14 : 16,
     fontWeight: '500',
@@ -1493,13 +1694,13 @@ const styles = StyleSheet.create({
   cardEditButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 8 : 12,
     paddingVertical: width < 768 ? 4 : 6,
     borderRadius: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
+    borderColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1508,13 +1709,13 @@ const styles = StyleSheet.create({
   },
   cardEditButtonText: {
     fontSize: width < 768 ? 10 : 12,
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 4,
     fontWeight: 'bold',
   },
   // Settings Section
   settingsSection: {
-    backgroundColor: '#1E3A5F', // Forest green
+    backgroundColor: '#1B1B1E', // Dark secondary background
     marginTop: 20,
     padding: width < 768 ? 16 : 24,
   },
@@ -1550,10 +1751,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#fff',
     borderRadius: 12,
     width: '100%',
-    maxHeight: '80%',
+    maxHeight: '90%',
+    minHeight: '60%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1561,25 +1763,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff', // White text
-    fontFamily: 'System',
+    color: '#1a1a2e',
   },
   closeModalButton: {
     padding: 4,
   },
   modalBody: {
     padding: 20,
-    maxHeight: 400,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    flex: 1,
   },
   modalNote: {
     fontSize: 16,
-    color: '#02050a',
+    color: '#666',
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '500',
@@ -1588,38 +1788,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 20,
     gap: 12,
-    backgroundColor: '#1E3A5F', // Deep navy blue
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#F4D03F', // Bright yellow text
-    fontWeight: 'bold',
+    color: '#666',
+    fontWeight: '500',
   },
   saveButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#2D5A3D', // Forest green
+    backgroundColor: '#4285f4',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   saveButtonText: {
     fontSize: 16,
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   // Success Modal Styles
   successModalOverlay: {
@@ -1630,52 +1824,46 @@ const styles = StyleSheet.create({
     padding: width < 768 ? 20 : 40,
   },
   successModalContent: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    borderRadius: width < 768 ? 20 : 24,
-    padding: width < 768 ? 32 : 40,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
     alignItems: 'center',
-    maxWidth: width < 768 ? width - 40 : 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
+    maxWidth: 350,
+    width: '100%',
     elevation: 10,
-  },
-  successIconContainer: {
-    marginBottom: width < 768 ? 20 : 24,
-  },
-  successTitle: {
-    fontSize: width < 768 ? 24 : 28,
-    fontWeight: 'bold',
-    color: '#fff', // White text
-    marginBottom: width < 768 ? 12 : 16,
-    textAlign: 'center',
-    fontFamily: 'System',
-  },
-  successMessage: {
-    fontSize: width < 768 ? 16 : 18,
-    color: '#F4D03F', // Bright yellow
-    textAlign: 'center',
-    lineHeight: width < 768 ? 24 : 26,
-    marginBottom: width < 768 ? 24 : 32,
-    fontWeight: '500',
-  },
-  successButton: {
-    backgroundColor: '#2D5A3D', // Forest green
-    paddingHorizontal: width < 768 ? 32 : 40,
-    paddingVertical: width < 768 ? 14 : 16,
-    borderRadius: width < 768 ? 12 : 14,
-    shadowColor: '#2D5A3D',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 6,
-    minWidth: width < 768 ? 120 : 140,
+  },
+  successIconContainer: {
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 25,
+  },
+  successButton: {
+    backgroundColor: '#34a853',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
+    minWidth: 120,
   },
   successButtonText: {
     color: '#fff',
-    fontSize: width < 768 ? 16 : 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
   },
   // Section Header Styles
@@ -1694,13 +1882,13 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
     paddingHorizontal: width < 768 ? 8 : 12,
     paddingVertical: width < 768 ? 4 : 6,
     borderRadius: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
+    borderColor: '#F56E0F',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1710,7 +1898,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: width < 768 ? 10 : 12,
-    color: '#02050a', // Dark navy text
+    color: '#FBFBFB', // Light text
     marginLeft: 2,
     fontWeight: 'bold',
   },
@@ -1720,20 +1908,19 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: width < 768 ? 14 : 16,
-    fontWeight: 'bold',
-    color: '#1E3A5F', // Deep navy blue
-    marginBottom: width < 768 ? 6 : 8,
+    fontWeight: '500',
+    color: '#1a1a2e',
+    marginBottom: 8,
   },
   textInput: {
-    borderWidth: 2,
-    borderColor: '#F4D03F', // Bright yellow border
-    borderRadius: width < 768 ? 8 : 10,
-    paddingHorizontal: width < 768 ? 12 : 16,
-    paddingVertical: width < 768 ? 12 : 14,
-    fontSize: width < 768 ? 14 : 16,
-    color: '#02050a', // Dark navy text
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#1a1a2e',
     backgroundColor: '#fff',
-    fontWeight: '500',
   },
   textArea: {
     height: width < 768 ? 80 : 100,
@@ -1741,12 +1928,12 @@ const styles = StyleSheet.create({
   },
   // Skeleton Loading Styles
   skeletonInfoCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: width < 768 ? 12 : 16,
     padding: width < 768 ? 12 : 16,
     borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
+    borderColor: '#F56E0F', // Primary orange
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1767,14 +1954,14 @@ const styles = StyleSheet.create({
   skeletonCardIcon: {
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: width < 768 ? 16 : 18,
     marginRight: 8,
   },
   skeletonCardTitle: {
     width: '60%',
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
   },
   skeletonCardContent: {
@@ -1786,14 +1973,14 @@ const styles = StyleSheet.create({
   skeletonCardSubtitle: {
     width: '80%',
     height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 3,
     marginBottom: width < 768 ? 2 : 4,
   },
   skeletonCardEditButton: {
     width: 60,
     height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: width < 768 ? 12 : 16,
     alignSelf: 'center',
   },
@@ -1801,7 +1988,7 @@ const styles = StyleSheet.create({
   skeletonCoverPhoto: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     justifyContent: 'center',
     alignItems: 'center',
     opacity: 0.7,
@@ -1809,25 +1996,25 @@ const styles = StyleSheet.create({
   skeletonCoverPhotoIcon: {
     width: 64,
     height: 64,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: 32,
     marginBottom: 12,
   },
   skeletonCoverPhotoText: {
     width: 120,
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 8,
   },
   // Profile Section Skeleton Styles
   skeletonProfileSection: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#1B1B1E', // Dark secondary background
     padding: width < 768 ? 16 : 24,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1841,11 +2028,11 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: width < 768 ? 80 : 100,
     height: width < 768 ? 80 : 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: width < 768 ? 40 : 50,
     borderWidth: 4,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1855,13 +2042,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.3)',
     borderRadius: width < 768 ? 16 : 20,
     width: width < 768 ? 32 : 36,
     height: width < 768 ? 32 : 36,
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1874,14 +2061,14 @@ const styles = StyleSheet.create({
   skeletonStudentName: {
     width: '70%',
     height: width < 768 ? 24 : 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 6,
     marginBottom: width < 768 ? 4 : 6,
   },
   skeletonStudentProgram: {
     width: '50%',
     height: width < 768 ? 14 : 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 4,
   },
 });

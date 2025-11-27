@@ -12,6 +12,7 @@ function normalizeUserResponse(user) {
     google_id: user.google_id,
     profile_picture: user.profile_picture,
     background_picture: user.background_picture,
+    signature: user.signature,
     is_active: user.is_active,
     latitude: user.latitude,
     longitude: user.longitude,
@@ -47,7 +48,24 @@ function normalizeUserResponse(user) {
         preferred_location: user.preferred_location,
         work_experience: user.work_experience,
         projects: user.projects,
-        achievements: user.achievements
+        achievements: user.achievements,
+        // Personal info fields from student_personal_info table
+        sex: user.sex,
+        civil_status: user.civil_status,
+        religion: user.religion,
+        citizenship: user.citizenship,
+        permanent_address: user.permanent_address,
+        present_address: user.present_address,
+        academic_year: user.academic_year,
+        father_name: user.father_name,
+        father_occupation: user.father_occupation,
+        mother_name: user.mother_name,
+        mother_occupation: user.mother_occupation,
+        emergency_contact_name: user.emergency_contact_name,
+        emergency_contact_relationship: user.emergency_contact_relationship,
+        emergency_contact_number: user.emergency_contact_number,
+        // Note: emergency_contact_address removed - it now uses permanent_address value
+        photo_url: user.photo_url
       };
     
     case 'Coordinator':
@@ -102,7 +120,8 @@ function normalizeUserResponse(user) {
         work_environment: user.work_environment,
         available_intern_slots: user.available_intern_slots,
         total_intern_capacity: user.total_intern_capacity,
-        current_intern_count: user.current_intern_count
+        current_intern_count: user.current_intern_count,
+        custom_certificate_template_url: user.custom_certificate_template_url
       };
     
     case 'System Admin':
@@ -205,6 +224,14 @@ class AuthController {
         });
       }
 
+      // Check if user account is active
+      if (!user.is_active) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been disabled. Please contact the administrator.'
+        });
+      }
+
       // Verify password
       const isValidPassword = await User.verifyPassword(password, user.password_hash);
       if (!isValidPassword) {
@@ -302,6 +329,8 @@ class AuthController {
       // Normalize the response based on user type
       const normalizedUser = normalizeUserResponse(user);
       console.log('🔍 Normalized user:', normalizedUser);
+      console.log('🔍 User signature field:', user.signature);
+      console.log('🔍 Normalized user signature field:', normalizedUser?.signature);
 
       res.json({
         success: true,
@@ -366,6 +395,20 @@ class AuthController {
         );
       }
       
+      // Update signature in users table if provided
+      if (updateData.signature || updateData.esignature) {
+        const { query } = require('../config/supabase');
+        const signatureUrl = updateData.signature || updateData.esignature;
+        await query('users', 'update', 
+          { 
+            signature: signatureUrl,
+            updated_at: new Date().toISOString()
+          }, 
+          { id: user.id }
+        );
+        console.log('✅ Signature updated in users table:', signatureUrl);
+      }
+      
       // Update based on user type
       if (user.user_type === 'Company') {
         // Update company profile
@@ -386,6 +429,7 @@ class AuthController {
           available_intern_slots: updateData.availableInternSlots ? parseInt(updateData.availableInternSlots) : 0,
           total_intern_capacity: updateData.totalInternCapacity ? parseInt(updateData.totalInternCapacity) : 0,
           current_intern_count: updateData.currentInternCount ? parseInt(updateData.currentInternCount) : 0,
+          custom_certificate_template_url: updateData.customCertificateTemplateUrl,
           updated_at: new Date().toISOString()
         };
         
@@ -530,6 +574,33 @@ class AuthController {
 
       console.log('Checking Google user for email:', email);
 
+      // First, check if user exists (without filtering by is_active)
+      // This allows us to detect disabled accounts
+      const { query } = require('../config/supabase');
+      const userResult = await query('users', 'select', null, { email });
+      
+      if (!userResult.data || userResult.data.length === 0) {
+        console.log('❌ Google user not found for email:', email);
+        return res.json({
+          success: false,
+          message: 'Google user not found',
+          user: null
+        });
+      }
+
+      const userRecord = userResult.data[0];
+      
+      // Check if user account is active BEFORE trying to get full user data
+      if (!userRecord.is_active) {
+        console.log('❌ Google user account is disabled:', userRecord.email);
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been disabled. Please contact the administrator.',
+          user: null
+        });
+      }
+
+      // User exists and is active, get full user data
       const user = await User.findByEmail(email);
       
       if (user) {
@@ -542,10 +613,11 @@ class AuthController {
           user: normalizedUser
         });
       } else {
-        console.log('❌ Google user not found for email:', email);
-        return res.json({
+        // This shouldn't happen if user exists and is active, but handle it anyway
+        console.log('❌ Error getting user data for email:', email);
+        return res.status(500).json({
           success: false,
-          message: 'Google user not found',
+          message: 'Error retrieving user data',
           user: null
         });
       }
@@ -554,6 +626,190 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+      });
+    }
+  }
+
+  // Send account appeal
+  static async sendAccountAppeal(req, res) {
+    try {
+      const { email, message } = req.body;
+
+      if (!email || !message) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email and message are required'
+        });
+      }
+
+      console.log('📧 Account appeal received from:', email);
+
+      // Store the appeal in the database
+      const { query } = require('../config/supabase');
+      
+      try {
+        // Try to insert into account_appeals table
+        // If the table doesn't exist, it will throw an error and we'll log it
+        const appealData = {
+          email: email.trim(),
+          message: message.trim(),
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const result = await query('account_appeals', 'insert', appealData);
+        
+        if (result.error) {
+          // Table might not exist, log the appeal instead
+          console.log('📧 Appeal Details (logged - table may not exist):', {
+            email,
+            message,
+            timestamp: new Date().toISOString()
+          });
+          console.log('⚠️ Note: Create account_appeals table to store appeals in database');
+        } else {
+          console.log('✅ Appeal stored in database:', result.data);
+        }
+      } catch (error) {
+        // Table doesn't exist, log the appeal
+        console.log('📧 Appeal Details (logged - table does not exist):', {
+          email,
+          message,
+          timestamp: new Date().toISOString()
+        });
+        console.log('⚠️ Error storing appeal in database:', error.message);
+        console.log('⚠️ To store appeals in database, create account_appeals table with columns:');
+        console.log('   - id (serial/auto-increment)');
+        console.log('   - email (varchar)');
+        console.log('   - message (text)');
+        console.log('   - status (varchar, default: "pending")');
+        console.log('   - created_at (timestamp)');
+        console.log('   - updated_at (timestamp)');
+        console.log('   - reviewed_by (integer, nullable, foreign key to users.id)');
+        console.log('   - reviewed_at (timestamp, nullable)');
+      }
+
+      res.json({
+        success: true,
+        message: 'Your appeal has been received. The administrator will review it and contact you soon.'
+      });
+    } catch (error) {
+      console.error('Error sending account appeal:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send appeal. Please try again later.',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+      });
+    }
+  }
+
+  // Get all appeals
+  static async getAllAppeals(req, res) {
+    try {
+      const { query } = require('../config/supabase');
+      
+      const result = await query('account_appeals', 'select', null, {});
+      
+      if (result.error) {
+        // Table might not exist, return empty array
+        console.log('⚠️ account_appeals table does not exist or error occurred:', result.error);
+        return res.json({
+          success: true,
+          appeals: [],
+          message: 'No appeals found'
+        });
+      }
+
+      res.json({
+        success: true,
+        appeals: result.data || [],
+        message: 'Appeals fetched successfully'
+      });
+    } catch (error) {
+      console.error('Error fetching appeals:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch appeals',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+      });
+    }
+  }
+
+  // Update appeal status
+  static async updateAppealStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!status || !['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Status must be either "approved" or "rejected"'
+        });
+      }
+
+      const { query } = require('../config/supabase');
+      
+      // Get the appeal first to get the email
+      const appealResult = await query('account_appeals', 'select', null, { id: parseInt(id) });
+      
+      if (appealResult.error || !appealResult.data || appealResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Appeal not found'
+        });
+      }
+
+      const appeal = appealResult.data[0];
+      
+      // Update appeal status
+      const updateData = {
+        status: status,
+        updated_at: new Date().toISOString(),
+        reviewed_at: new Date().toISOString(),
+        // reviewed_by: req.user?.id || null, // Uncomment when auth middleware is added
+      };
+
+      const updateResult = await query('account_appeals', 'update', updateData, { id: parseInt(id) });
+      
+      if (updateResult.error) {
+        throw updateResult.error;
+      }
+
+      // If approved, enable the user's account
+      if (status === 'approved') {
+        try {
+          // Find user by email
+          const userResult = await query('users', 'select', null, { email: appeal.email });
+          
+          if (userResult.data && userResult.data.length > 0) {
+            const user = userResult.data[0];
+            
+            // Update user's is_active status
+            await query('users', 'update', { 
+              is_active: true,
+              updated_at: new Date().toISOString()
+            }, { id: user.id });
+            
+            console.log('✅ User account enabled:', appeal.email);
+          }
+        } catch (userError) {
+          console.error('Error enabling user account:', userError);
+          // Don't fail the appeal update if user update fails
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Appeal ${status} successfully${status === 'approved' ? '. User account has been enabled.' : '.'}`
+      });
+    } catch (error) {
+      console.error('Error updating appeal status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update appeal status',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
       });
     }

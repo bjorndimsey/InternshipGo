@@ -39,6 +39,15 @@ interface Intern {
   student_longitude?: number;
   // Student identification
   id_number?: string;
+  // Internship dates
+  started_at?: string;
+  finished_at?: string;
+  // Academic year and coordinator
+  academic_year?: string;
+  coordinator_name?: string;
+  // Attendance stats
+  attendance_present_days?: number;
+  attendance_total_hours?: number;
   // Additional fields for display
   attendance?: {
     present: number;
@@ -74,7 +83,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [loading, setLoading] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showLocationMap, setShowLocationMap] = useState(false);
   const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
@@ -83,6 +91,21 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const [pageAnimation] = useState(new Animated.Value(0));
   const [statsAnimation] = useState(new Animated.Value(0));
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>('all');
+  const [showAcademicYearModal, setShowAcademicYearModal] = useState(false);
+
+  // Generate academic year options from 2020 to 2034
+  const generateAcademicYearOptions = () => {
+    const startYear = 2020;
+    const endYear = 2034;
+    const options = [];
+    for (let year = startYear; year <= endYear; year++) {
+      options.push(`${year}-${year + 1}`);
+    }
+    return options;
+  };
+
+  const academicYearOptions = generateAcademicYearOptions();
 
   useEffect(() => {
     fetchInterns();
@@ -91,7 +114,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
 
   useEffect(() => {
     filterInterns();
-  }, [searchQuery, interns]);
+  }, [searchQuery, interns, selectedAcademicYear]);
 
   const fetchInterns = async () => {
     try {
@@ -130,12 +153,21 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
           expected_start_date: app.expected_start_date,
           expected_end_date: app.expected_end_date,
           applied_at: app.applied_at,
-          status: 'active' as const, // All approved applications are considered active interns
+          status: app.finished_at ? 'inactive' : 'active', // Set to inactive if finished
           // Location data
           student_latitude: app.student_latitude,
           student_longitude: app.student_longitude,
           // Student identification
           id_number: app.id_number || 'N/A',
+          // Internship dates
+          started_at: app.started_at || null,
+          finished_at: app.finished_at || null,
+          // Academic year and coordinator
+          academic_year: app.academic_year || null,
+          coordinator_name: app.coordinator_name || null,
+          // Attendance stats
+          attendance_present_days: app.attendance_present_days || 0,
+          attendance_total_hours: app.attendance_total_hours || 0,
           // Default values for display
           attendance: {
             present: 0,
@@ -205,6 +237,14 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   const filterInterns = () => {
     let filtered = interns;
 
+    // Filter by academic year
+    if (selectedAcademicYear !== 'all') {
+      filtered = filtered.filter(intern => 
+        intern.academic_year === selectedAcademicYear
+      );
+    }
+
+    // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(intern =>
         intern.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -300,10 +340,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     }
   };
 
-  const handleAttendance = (intern: Intern) => {
-    setSelectedIntern(intern);
-    setShowAttendanceModal(true);
-  };
 
   const handleViewDetails = (intern: Intern) => {
     setSelectedIntern(intern);
@@ -327,7 +363,10 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     );
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string, finishedAt?: string | null) => {
+    if (finishedAt) {
+      return '#4285f4'; // Blue for completed/finished
+    }
     switch (status) {
       case 'active': return '#34a853';
       case 'inactive': return '#ea4335';
@@ -337,7 +376,10 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, finishedAt?: string | null) => {
+    if (finishedAt) {
+      return 'Completed';
+    }
     switch (status) {
       case 'active': return 'Active';
       case 'inactive': return 'Inactive';
@@ -435,7 +477,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
   };
 
   const InternCard = ({ intern }: { intern: Intern }) => {
-    const attendancePercentage = getAttendancePercentage(intern.attendance);
     const isExpanded = expandedCard === intern.id;
     
     return (
@@ -477,8 +518,15 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               <Text style={styles.department}>{intern.department || 'N/A'}</Text>
             </View>
             <View style={styles.statusContainer}>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status) }]}>
-                <Text style={styles.statusText}>{getStatusText(intern.status)}</Text>
+              <View style={styles.statusBadgeContainer}>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(intern.status, intern.finished_at) }]}>
+                  <Text style={styles.statusText}>{getStatusText(intern.status, intern.finished_at)}</Text>
+                </View>
+                {intern.finished_at && (
+                  <View style={styles.finishedIndicator}>
+                    <MaterialIcons name="check-circle" size={16} color="#4285f4" />
+                  </View>
+                )}
               </View>
               <MaterialIcons 
                 name={isExpanded ? "expand-less" : "expand-more"} 
@@ -486,32 +534,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
                 color="#F56E0F" 
                 style={styles.expandIcon}
               />
-            </View>
-          </View>
-
-          <View style={styles.internDetails}>
-            <View style={styles.attendanceContainer}>
-              <Text style={styles.attendanceLabel}>Attendance Progress:</Text>
-              <ProgressBar 
-                progress={attendancePercentage} 
-                color={attendancePercentage >= 90 ? '#34a853' : '#F56E0F'} 
-              />
-              <Text style={styles.attendanceDetails}>
-                {intern.attendance?.present || 0} present, {intern.attendance?.absent || 0} absent, {intern.attendance?.late || 0} late
-              </Text>
-            </View>
-
-            <View style={styles.performanceContainer}>
-              <View style={styles.performanceHeader}>
-                <Text style={styles.performanceLabel}>Performance:</Text>
-                <View style={styles.ratingContainer}>
-                  <MaterialIcons name="star" size={16} color="#F56E0F" />
-                  <Text style={styles.ratingText}>{intern.performance?.rating || 0}/5</Text>
-                </View>
-              </View>
-              <Text style={styles.performanceFeedback} numberOfLines={2}>
-                {intern.performance?.feedback || 'No feedback available yet'}
-              </Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -546,15 +568,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               >
                 <MaterialIcons name="location-on" size={16} color="#fff" />
                 <Text style={styles.actionButtonText}>Location</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.attendanceButton]} 
-                onPress={() => handleAttendance(intern)}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="event-note" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>Attendance</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -621,13 +634,27 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
             />
           </View>
         </View>
+        
+        {/* Academic Year Filter Button */}
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowAcademicYearModal(true)}
+          >
+            <MaterialIcons name="filter-list" size={20} color="#F56E0F" />
+            <Text style={styles.filterButtonText}>
+              {selectedAcademicYear === 'all' ? 'All Academic Years' : selectedAcademicYear}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#F56E0F" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Stats */}
       <View style={styles.statsContainer}>
         {showSkeleton ? (
           // Show skeleton stats
-          Array.from({ length: 4 }).map((_, index) => (
+          Array.from({ length: 2 }).map((_, index) => (
             <View key={`skeleton-stat-${index}`} style={styles.skeletonStatItem}>
               <View style={styles.skeletonStatNumber} />
               <View style={styles.skeletonStatLabel} />
@@ -675,48 +702,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               </Text>
               <Text style={styles.statLabel}>Active</Text>
             </Animated.View>
-            <Animated.View 
-              style={[
-                styles.statItem,
-                {
-                  opacity: statsAnimation,
-                  transform: [
-                    {
-                      scale: statsAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={[styles.statNumber, { color: '#4285f4' }]}>
-                {filteredInterns.filter(i => i.status === 'completed').length}
-              </Text>
-              <Text style={styles.statLabel}>Completed</Text>
-            </Animated.View>
-            <Animated.View 
-              style={[
-                styles.statItem,
-                {
-                  opacity: statsAnimation,
-                  transform: [
-                    {
-                      scale: statsAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.8, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={[styles.statNumber, { color: '#fbbc04' }]}>
-                {filteredInterns.filter(i => getAttendancePercentage(i.attendance) >= 90).length}
-              </Text>
-              <Text style={styles.statLabel}>Good Attendance</Text>
-            </Animated.View>
           </>
         )}
       </View>
@@ -746,73 +731,6 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         )}
       </ScrollView>
 
-      {/* Attendance Modal */}
-      <Modal
-        visible={showAttendanceModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAttendanceModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Attendance - {selectedIntern?.first_name} {selectedIntern?.last_name}
-              </Text>
-              <TouchableOpacity
-                style={styles.closeModalButton}
-                onPress={() => setShowAttendanceModal(false)}
-              >
-                <MaterialIcons name="close" size={24} color="#878787" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.attendanceContent}>
-              {selectedIntern && (
-                <View>
-                  <View style={styles.attendanceStats}>
-                    <View style={styles.attendanceStatItem}>
-                      <Text style={styles.attendanceStatNumber}>{selectedIntern.attendance?.present || 0}</Text>
-                      <Text style={styles.attendanceStatLabel}>Present</Text>
-                    </View>
-                    <View style={styles.attendanceStatItem}>
-                      <Text style={styles.attendanceStatNumber}>{selectedIntern.attendance?.absent || 0}</Text>
-                      <Text style={styles.attendanceStatLabel}>Absent</Text>
-                    </View>
-                    <View style={styles.attendanceStatItem}>
-                      <Text style={styles.attendanceStatNumber}>{selectedIntern.attendance?.late || 0}</Text>
-                      <Text style={styles.attendanceStatLabel}>Late</Text>
-                    </View>
-                    <View style={styles.attendanceStatItem}>
-                      <Text style={styles.attendanceStatNumber}>{selectedIntern.attendance?.totalDays || 0}</Text>
-                      <Text style={styles.attendanceStatLabel}>Total Days</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.attendancePercentageContainer}>
-                    <Text style={styles.attendancePercentageLabel}>Attendance Percentage:</Text>
-                    <Text style={styles.attendancePercentageValue}>
-                      {getAttendancePercentage(selectedIntern.attendance)}%
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.attendanceActions}>
-                    <TouchableOpacity style={styles.markPresentButton}>
-                      <MaterialIcons name="check" size={20} color="#fff" />
-                      <Text style={styles.markPresentText}>Mark Present</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.markAbsentButton}>
-                      <MaterialIcons name="close" size={20} color="#fff" />
-                      <Text style={styles.markAbsentText}>Mark Absent</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* View Full Details Modal */}
       <Modal
         visible={showDetailsModal}
@@ -834,44 +752,127 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {selectedIntern && (
                 <View>
-                  <Text style={styles.modalSectionTitle}>Personal Information</Text>
-                  <Text style={styles.modalText}>Name: {selectedIntern.first_name} {selectedIntern.last_name}</Text>
-                  <Text style={styles.modalText}>Student ID: {selectedIntern.id_number || selectedIntern.student_id}</Text>
-                  <Text style={styles.modalText}>Email: {selectedIntern.student_email}</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Academic Information</Text>
-                  <Text style={styles.modalText}>Major: {selectedIntern.major}</Text>
-                  <Text style={styles.modalText}>Academic Year: {selectedIntern.year}</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Internship Details</Text>
-                  <Text style={styles.modalText}>Position: {selectedIntern.position}</Text>
-                  <Text style={styles.modalText}>Department: {selectedIntern.department || 'N/A'}</Text>
-                  <Text style={styles.modalText}>Status: {getStatusText(selectedIntern.status)}</Text>
-                  <Text style={styles.modalText}>Start Date: {selectedIntern.expected_start_date || 'N/A'}</Text>
-                  <Text style={styles.modalText}>End Date: {selectedIntern.expected_end_date || 'N/A'}</Text>
-                  <Text style={styles.modalText}>Applied: {new Date(selectedIntern.applied_at).toLocaleDateString()}</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Performance</Text>
-                  <Text style={styles.modalText}>Rating: {selectedIntern.performance?.rating || 0}/5</Text>
-                  <Text style={styles.modalText}>Feedback: {selectedIntern.performance?.feedback || 'No feedback available yet'}</Text>
-                  <Text style={styles.modalText}>Last Review: {selectedIntern.performance?.lastReview || 'N/A'}</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Attendance</Text>
-                  <Text style={styles.modalText}>Present: {selectedIntern.attendance?.present || 0} days</Text>
-                  <Text style={styles.modalText}>Absent: {selectedIntern.attendance?.absent || 0} days</Text>
-                  <Text style={styles.modalText}>Late: {selectedIntern.attendance?.late || 0} days</Text>
-                  <Text style={styles.modalText}>Total Days: {selectedIntern.attendance?.totalDays || 0} days</Text>
-                  <Text style={styles.modalText}>Attendance Rate: {getAttendancePercentage(selectedIntern.attendance)}%</Text>
-                  
-                  <Text style={styles.modalSectionTitle}>Documents</Text>
-                  <Text style={styles.modalText}>Resume: {selectedIntern.documents?.resume ? '✓ Available' : '✗ Not Available'}</Text>
-                  <Text style={styles.modalText}>Transcript: {selectedIntern.documents?.transcript ? '✓ Available' : '✗ Not Available'}</Text>
-                  <Text style={styles.modalText}>Recommendation Letter: {selectedIntern.documents?.recommendationLetter ? '✓ Available' : '✗ Not Available'}</Text>
-                  <Text style={styles.modalText}>Medical Clearance: {selectedIntern.documents?.medicalClearance ? '✓ Available' : '✗ Not Available'}</Text>
-                  <Text style={styles.modalText}>Insurance: {selectedIntern.documents?.insurance ? '✓ Available' : '✗ Not Available'}</Text>
+                  {/* Profile Header Section */}
+                  <View style={styles.modalProfileHeader}>
+                    {selectedIntern.student_profile_picture ? (
+                      <Image 
+                        source={{ uri: selectedIntern.student_profile_picture }} 
+                        style={styles.modalProfileImage}
+                      />
+                    ) : (
+                      <View style={styles.modalProfilePlaceholder}>
+                        <Text style={styles.modalProfileText}>
+                          {selectedIntern.first_name.charAt(0)}{selectedIntern.last_name.charAt(0)}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.modalProfileInfo}>
+                      <Text style={styles.modalProfileName}>
+                        {selectedIntern.first_name} {selectedIntern.last_name}
+                      </Text>
+                      <Text style={styles.modalProfileId}>{selectedIntern.id_number || selectedIntern.student_id}</Text>
+                      <View style={styles.modalStatusBadgeContainer}>
+                        <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedIntern.status, selectedIntern.finished_at) }]}>
+                          <Text style={styles.modalStatusText}>{getStatusText(selectedIntern.status, selectedIntern.finished_at)}</Text>
+                        </View>
+                        {selectedIntern.finished_at && (
+                          <View style={styles.modalFinishedIndicator}>
+                            <MaterialIcons name="check-circle" size={18} color="#4285f4" />
+                            <Text style={styles.modalFinishedText}>Completed</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Personal Information Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="person" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Personal Information</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Email:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.student_email}</Text>
+                    </View>
+                  </View>
+
+                  {/* Academic Information Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="school" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Academic Information</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Major:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.major}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Year:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.year}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Academic Year:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.academic_year || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Coordinator:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.coordinator_name || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Internship Details Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="work" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Internship Details</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Position:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.position}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Department:</Text>
+                      <Text style={styles.modalInfoValue}>{selectedIntern.department || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Start Date:</Text>
+                      <Text style={styles.modalInfoValue}>
+                        {selectedIntern.started_at ? new Date(selectedIntern.started_at).toLocaleDateString() : 'Not started yet'}
+                      </Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Finish Date:</Text>
+                      <Text style={styles.modalInfoValue}>
+                        {selectedIntern.finished_at ? new Date(selectedIntern.finished_at).toLocaleDateString() : 'Not finished yet'}
+                      </Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalInfoLabel}>Applied:</Text>
+                      <Text style={styles.modalInfoValue}>{new Date(selectedIntern.applied_at).toLocaleDateString()}</Text>
+                    </View>
+                  </View>
+
+                  {/* Attendance Section */}
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <MaterialIcons name="event" size={20} color="#F56E0F" />
+                      <Text style={styles.modalSectionTitle}>Attendance</Text>
+                    </View>
+                    <View style={styles.modalAttendanceStats}>
+                      <View style={styles.modalAttendanceStat}>
+                        <Text style={styles.modalAttendanceStatValue}>{selectedIntern.attendance_present_days || 0}</Text>
+                        <Text style={styles.modalAttendanceStatLabel}>Present Days</Text>
+                      </View>
+                      <View style={styles.modalAttendanceStat}>
+                        <Text style={styles.modalAttendanceStatValue}>{(selectedIntern.attendance_total_hours || 0).toFixed(1)}</Text>
+                        <Text style={styles.modalAttendanceStatLabel}>Total Hours</Text>
+                      </View>
+                    </View>
+                  </View>
                 </View>
               )}
             </ScrollView>
@@ -903,6 +904,90 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
         currentUserLocation={currentUserLocation || undefined}
       />
 
+      {/* Academic Year Filter Modal */}
+      <Modal
+        visible={showAcademicYearModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAcademicYearModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.academicYearModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter by Academic Year</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAcademicYearModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#878787" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.academicYearModalBody} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[
+                  styles.academicYearOption,
+                  selectedAcademicYear === 'all' && styles.academicYearOptionSelected
+                ]}
+                onPress={() => {
+                  setSelectedAcademicYear('all');
+                  setShowAcademicYearModal(false);
+                }}
+              >
+                <Text style={[
+                  styles.academicYearOptionText,
+                  selectedAcademicYear === 'all' && styles.academicYearOptionTextSelected
+                ]}>
+                  All Academic Years
+                </Text>
+                {selectedAcademicYear === 'all' && (
+                  <MaterialIcons name="check" size={20} color="#F56E0F" />
+                )}
+              </TouchableOpacity>
+              {academicYearOptions.map((year) => {
+                // Check if there are interns in this academic year
+                const hasInterns = interns.some(intern => intern.academic_year === year);
+                return (
+                  <TouchableOpacity
+                    key={year}
+                    style={[
+                      styles.academicYearOption,
+                      selectedAcademicYear === year && styles.academicYearOptionSelected,
+                      !hasInterns && styles.academicYearOptionDisabled
+                    ]}
+                    onPress={() => {
+                      setSelectedAcademicYear(year);
+                      setShowAcademicYearModal(false);
+                    }}
+                    disabled={false} // Allow selection even if no interns currently
+                  >
+                    <View style={styles.academicYearOptionContent}>
+                      <Text style={[
+                        styles.academicYearOptionText,
+                        selectedAcademicYear === year && styles.academicYearOptionTextSelected,
+                        !hasInterns && styles.academicYearOptionTextDisabled
+                      ]}>
+                        {year}
+                      </Text>
+                      {!hasInterns && (
+                        <Text style={styles.academicYearOptionCount}>(0)</Text>
+                      )}
+                      {hasInterns && (
+                        <Text style={styles.academicYearOptionCount}>
+                          ({interns.filter(intern => intern.academic_year === year).length})
+                        </Text>
+                      )}
+                    </View>
+                    {selectedAcademicYear === year && (
+                      <MaterialIcons name="check" size={20} color="#F56E0F" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Remove Confirmation Modal */}
       <Modal
         visible={showRemoveConfirmModal}
@@ -922,7 +1007,7 @@ export default function InternsPage({ currentUser }: InternsPageProps) {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
+            <View style={[styles.modalBody, { padding: 20 }]}>
               <Text style={styles.modalText}>
                 Are you sure you want to remove {selectedIntern?.first_name} {selectedIntern?.last_name} from the internship program?
               </Text>
@@ -1150,6 +1235,11 @@ const styles = StyleSheet.create({
   statusContainer: {
     alignItems: 'flex-end',
   },
+  statusBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1159,6 +1249,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  finishedIndicator: {
+    marginLeft: 4,
   },
   internDetails: {
     marginBottom: 15,
@@ -1518,19 +1611,148 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: 20,
-    maxHeight: 400,
+    maxHeight: 500,
   },
-  modalSectionTitle: {
-    fontSize: 16,
+  modalProfileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 110, 15, 0.2)',
+    marginBottom: 20,
+  },
+  modalProfileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+  },
+  modalProfilePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2A2A2E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  modalProfileText: {
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#F56E0F',
-    marginTop: 16,
+  },
+  modalProfileInfo: {
+    flex: 1,
+  },
+  modalProfileName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+    marginBottom: 4,
+  },
+  modalProfileId: {
+    fontSize: 14,
+    color: '#F56E0F',
     marginBottom: 8,
+    fontWeight: '500',
+  },
+  modalStatusBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  modalStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  modalStatusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  modalFinishedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(66, 133, 244, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  modalFinishedText: {
+    fontSize: 12,
+    color: '#4285f4',
+    fontWeight: '600',
+  },
+  modalSection: {
+    marginBottom: 24,
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.1)',
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  modalSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F56E0F',
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  modalInfoLabel: {
+    fontSize: 14,
+    color: '#878787',
+    fontWeight: '500',
+    flex: 1,
+  },
+  modalInfoValue: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    flex: 2,
+    textAlign: 'right',
+    fontWeight: '500',
+  },
+  modalAttendanceStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+  },
+  modalAttendanceStat: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    minWidth: 120,
+  },
+  modalAttendanceStatValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#F56E0F',
+    marginBottom: 4,
+  },
+  modalAttendanceStatLabel: {
+    fontSize: 12,
+    color: '#878787',
+    fontWeight: '500',
   },
   modalText: {
     fontSize: 14,
     color: '#FBFBFB',
-    marginBottom: 4,
+    marginBottom: 12,
     lineHeight: 20,
   },
   modalFooter: {
@@ -1550,6 +1772,77 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     color: '#FBFBFB',
+    fontWeight: '500',
+  },
+  filterContainer: {
+    marginTop: 15,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.3)',
+    gap: 8,
+  },
+  filterButtonText: {
+    fontSize: 16,
+    color: '#FBFBFB',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'center',
+  },
+  academicYearModalContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  academicYearModalBody: {
+    maxHeight: 400,
+  },
+  academicYearOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  academicYearOptionSelected: {
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+  },
+  academicYearOptionDisabled: {
+    opacity: 0.6,
+  },
+  academicYearOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  academicYearOptionText: {
+    fontSize: 16,
+    color: '#FBFBFB',
+  },
+  academicYearOptionTextSelected: {
+    color: '#F56E0F',
+    fontWeight: '600',
+  },
+  academicYearOptionTextDisabled: {
+    color: '#878787',
+  },
+  academicYearOptionCount: {
+    fontSize: 14,
+    color: '#878787',
     fontWeight: '500',
   },
 });

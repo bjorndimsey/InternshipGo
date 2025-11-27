@@ -10,5 +10,7 @@ router.get('/company/:companyId', ApplicationController.getCompanyApplications);
 router.get('/company/:companyId/approved', ApplicationController.getApprovedApplications);
 router.get('/:id', ApplicationController.getApplicationById);
 router.put('/:id/status', ApplicationController.updateApplicationStatus);
+router.post('/:id/start', ApplicationController.startInternship);
+router.post('/:id/finish', ApplicationController.finishInternship);
 
 module.exports = router;

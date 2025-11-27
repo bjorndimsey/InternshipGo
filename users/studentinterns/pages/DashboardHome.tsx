@@ -30,7 +30,7 @@ const calculateMatchingScore = (student: any, company: any): { score: number; re
   const courseScore = calculateCourseMatch(student, company);
   totalScore += courseScore * 0.4;
   if (courseScore > 0) {
-    reasons.push(`Course relevance: ${Math.round(courseScore * 100)}%`);
+    reasons.push(`Course match: ${Math.round(courseScore * 100)}%`);
   }
   
   // 30% - Skills Match
@@ -44,15 +44,13 @@ const calculateMatchingScore = (student: any, company: any): { score: number; re
   const experienceScore = calculateExperienceMatch(student, company);
   totalScore += experienceScore * 0.15;
   if (experienceScore > 0) {
-    reasons.push(`Experience relevance: ${Math.round(experienceScore * 100)}%`);
+    reasons.push(`Experience match: ${Math.round(experienceScore * 100)}%`);
   }
   
-  // 10% - System Inferred Relevance
+  // 10% - System Inferred Relevance (calculated but not displayed)
   const systemScore = calculateSystemRelevance(student, company);
   totalScore += systemScore * 0.1;
-  if (systemScore > 0) {
-    reasons.push(`System relevance: ${Math.round(systemScore * 100)}%`);
-  }
+  // System relevance is included in calculation but not shown in display
   
   console.log(`🔍 Matching calculation for ${company.name}:`, {
     courseScore,
@@ -355,6 +353,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   
   // Animation values for stats
   const [animatedStats, setAnimatedStats] = useState({
@@ -524,87 +523,57 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
         })));
         
         // Filter out companies where student has approved applications
-        if (currentUser && studentProfile) {
-          const studentId = studentProfile.student_id || studentProfile.id || currentUser.id;
-          console.log('🔍 Filtering out companies with approved applications for student:', studentId);
-          console.log('👤 Current user ID:', currentUser.id);
-          console.log('👤 Student profile ID:', studentProfile.id);
-          console.log('👤 Student profile student_id:', studentProfile.student_id);
-          console.log('👤 Final student ID being used:', studentId);
-          
-          try {
-            // TEMPORARY: Test with known student ID 19 who has approved applications
-            console.log('🧪 TESTING: Also checking with student ID 19 (known to have approved applications)');
-            const testResponse = await apiService.getStudentApplications('19');
-            console.log('🧪 Test response for student 19:', testResponse);
+        if (currentUser) {
+          // Use currentUser.id directly as applications table uses user_id as student_id
+          const userId = currentUser.id;
+          console.log('🔍 Filtering out companies with approved applications for user:', userId);
             
-            // Get all student applications once
-            const applicationResponse = await apiService.getStudentApplications(studentId);
+          try {
+            // Get all student applications (API expects user_id)
+            const applicationResponse = await apiService.getStudentApplications(userId);
             console.log('📋 Student applications response:', applicationResponse);
             
-            // Use test data if current student has no applications (for testing purposes)
-            let applicationsToUse = applicationResponse.applications || [];
-            if (applicationsToUse.length === 0 && testResponse.success && testResponse.applications) {
-              console.log('🧪 Using test data from student 19 for demonstration');
-              applicationsToUse = testResponse.applications;
-            }
-            
-            if (applicationResponse.success && applicationsToUse.length > 0) {
-              console.log('📋 All applications found:', applicationsToUse.length);
-              console.log('📊 All application details:', applicationsToUse.map((app: any) => ({
-                id: app.id,
-                company_id: app.company_id,
-                status: app.status,
-                applied_at: app.applied_at,
-                student_id: app.student_id
-              })));
-              
-              const approvedApplications = applicationsToUse.filter((app: any) => 
+            if (applicationResponse.success && applicationResponse.applications && applicationResponse.applications.length > 0) {
+              // Filter to get only approved applications
+              const approvedApplications = applicationResponse.applications.filter((app: any) => 
                 app.status === 'approved'
               );
               console.log('✅ Approved applications found:', approvedApplications.length);
-              console.log('📊 Approved application details:', approvedApplications.map((app: any) => ({
+              console.log('📋 Approved applications details:', approvedApplications.map((app: any) => ({
+                id: app.id,
                 company_id: app.company_id,
-                status: app.status,
-                applied_at: app.applied_at
+                status: app.status
               })));
               
+              if (approvedApplications.length > 0) {
               // Get list of company IDs with approved applications
               const approvedCompanyIds = approvedApplications.map((app: any) => app.company_id);
               console.log('🏢 Company IDs with approved applications:', approvedCompanyIds);
               console.log('🏢 Company IDs types:', approvedCompanyIds.map((id: any) => typeof id));
               
-              // Filter out companies where student has approved application AND no available slots
+                // Filter out companies where student has approved application
               const originalCount = companies.length;
               console.log('🏢 Original companies before filtering:', companies.map((c: any) => ({ id: c.id, name: c.name, idType: typeof c.id })));
-              console.log('🎯 Approved company IDs to check:', approvedCompanyIds);
               
               companies = companies.filter((company: any) => {
                 // Convert both to strings for comparison to handle type mismatches
                 const companyIdStr = String(company.id);
                 const hasApprovedApplication = approvedCompanyIds.some((approvedId: any) => String(approvedId) === companyIdStr);
-                const availableSlots = company.availableInternSlots || company.availableSlots || 0;
                 
-                console.log(`🔍 Checking company ${company.name} (ID: ${company.id}) - has approved application: ${hasApprovedApplication}, available slots: ${availableSlots}`);
-                
-                // Only hide if student has approved application AND no available slots
-                const shouldHide = hasApprovedApplication && availableSlots === 0;
-                
-                if (shouldHide) {
-                  console.log(`❌ Hiding company ${company.name} (ID: ${company.id}) - student has approved application and no available slots`);
-                } else if (hasApprovedApplication && availableSlots > 0) {
-                  console.log(`✅ Keeping company ${company.name} (ID: ${company.id}) - student has approved application but slots available: ${availableSlots}`);
-                } else if (!hasApprovedApplication) {
-                  console.log(`✅ Keeping company ${company.name} (ID: ${company.id}) - no approved application`);
+                if (hasApprovedApplication) {
+                    console.log(`❌ Hiding company ${company.name} (ID: ${company.id}, type: ${typeof company.id}) - student has approved application`);
                 }
                 
-                return !shouldHide;
+                return !hasApprovedApplication;
               });
               
               console.log(`📊 Companies filtered: ${originalCount} → ${companies.length} (removed ${originalCount - companies.length})`);
               console.log('🏢 Remaining companies after filtering:', companies.map((c: any) => ({ id: c.id, name: c.name })));
             } else {
-              console.log('⚠️ No applications found or API error:', applicationResponse.message);
+                console.log('ℹ️ No approved applications found, showing all companies');
+              }
+            } else {
+              console.log('ℹ️ No applications found or API error, showing all companies');
             }
           } catch (error) {
             console.error('❌ Error fetching student applications:', error);
@@ -809,6 +778,18 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   const handleApply = (company: Company) => {
     setSelectedCompanyForApplication(company);
     setShowResumeModal(true);
+  };
+
+  const toggleCardExpansion = (companyId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
   };
 
   const handleApplicationSubmitted = () => {
@@ -1092,149 +1073,181 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
     );
   };
 
-  const CompanyCard = ({ company }: { company: Company }) => (
-    <View style={styles.companyCard}>
-      <View style={styles.companyHeader}>
-        <View style={styles.profileContainer}>
-          {company.profilePicture ? (
-            <Image source={{ uri: company.profilePicture }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileText}>{company.name.charAt(0)}</Text>
+  const CompanyCard = ({ company }: { company: Company }) => {
+    const isExpanded = expandedCards.has(company.id);
+    
+    return (
+      <View style={styles.companyCard}>
+        <View style={styles.companyHeader}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.profileContainer}>
+              {company.profilePicture ? (
+                <Image source={{ uri: company.profilePicture }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileText}>{company.name.charAt(0)}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.companyInfo}>
+              <Text style={styles.companyName}>{company.name}</Text>
+              <Text style={styles.companyIndustry}>{company.industry}</Text>
+              <View style={styles.slotsContainerHeader}>
+                <Text style={styles.slotLabelHeader}>Available Slots : </Text>
+                <Text style={styles.slotValueHeader}>
+                  {company.availableInternSlots || company.availableSlots}/{company.totalInternCapacity || company.totalSlots}
+                </Text>
+              </View>
+            </View>
+            {/* Matching Score Box - Right side on desktop, hidden on mobile (shown below) */}
+            {width >= 768 && (company.matchingScore !== undefined || company.distanceText) && (
+              <View style={styles.matchingBoxCollapsed}>
+                <View style={styles.matchingScoreContainerCollapsed}>
+                  {company.matchingScore !== undefined && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <MaterialIcons name="trending-up" size={16} color="#34a853" />
+                      <Text style={styles.matchingScoreTextCollapsed}>
+                        {Math.round(company.matchingScore * 100)}% Match
+                      </Text>
+                    </View>
+                  )}
+                  {company.distanceText && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <MaterialIcons name="location-on" size={16} color="#4285f4" />
+                      <Text style={styles.distanceTextCollapsed}>
+                        {company.distanceText}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {company.matchingReasons && company.matchingReasons.length > 0 && (
+                  <View style={styles.matchingReasonsContainerCollapsed}>
+                    {company.matchingReasons.slice(0, 2).map((reason, index) => (
+                      <Text key={index} style={styles.matchingReasonTextCollapsed}>
+                        • {reason}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+            <TouchableOpacity 
+              style={styles.favoriteButton}
+              onPress={() => handleToggleFavorite(company.id)}
+            >
+              <AnimatedHeart 
+                companyId={company.id}
+                isFavorite={company.isFavorite}
+              />
+            </TouchableOpacity>
+          </View>
+          {/* Matching Score Box - Below on mobile only */}
+          {width < 768 && (company.matchingScore !== undefined || company.distanceText) && (
+            <View style={styles.matchingBoxCollapsed}>
+              <View style={styles.matchingScoreContainerCollapsed}>
+                {company.matchingScore !== undefined && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialIcons name="trending-up" size={14} color="#34a853" />
+                    <Text style={styles.matchingScoreTextCollapsed}>
+                      {Math.round(company.matchingScore * 100)}% Match
+                    </Text>
+                  </View>
+                )}
+                {company.distanceText && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialIcons name="location-on" size={14} color="#4285f4" />
+                    <Text style={styles.distanceTextCollapsed}>
+                      {company.distanceText}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {company.matchingReasons && company.matchingReasons.length > 0 && (
+                <View style={styles.matchingReasonsContainerCollapsed}>
+                  {company.matchingReasons.slice(0, 2).map((reason, index) => (
+                    <Text key={index} style={styles.matchingReasonTextCollapsed}>
+                      • {reason}
+                    </Text>
+                  ))}
+                </View>
+              )}
             </View>
           )}
         </View>
-        <View style={styles.companyInfo}>
-          <Text style={styles.companyName}>{company.name}</Text>
-          <Text style={styles.companyIndustry}>{company.industry}</Text>
-          <View style={styles.ratingContainer}>
-            <MaterialIcons name="star" size={16} color="#fbbc04" />
-            <Text style={styles.ratingText}>{company.rating}</Text>
+
+        {/* Expanded Content */}
+        {isExpanded && (
+          <View style={styles.companyDetails}>
+            <View style={styles.locationContainer}>
+              <MaterialIcons name="location-on" size={16} color="#666" />
+              <Text style={styles.locationText}>{company.location || company.address}</Text>
+            </View>
+
+            <View style={styles.moaContainer}>
+              <Text style={styles.moaLabel}>MOA Status:</Text>
+              <View style={[styles.moaBadge, { backgroundColor: getMOAStatusColor(company.moaStatus) }]}>
+                <Text style={styles.moaText}>{getMOAStatusText(company.moaStatus)}</Text>
+              </View>
+              {company.moaExpiryDate && (
+                <Text style={styles.moaDate}>Expires: {company.moaExpiryDate}</Text>
+              )}
+            </View>
+
+            <Text style={styles.description} numberOfLines={2}>
+              {company.description}
+            </Text>
           </View>
-        </View>
+        )}
+
+        {/* Action Buttons - Only visible when expanded */}
+        {isExpanded && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.viewButton]} 
+              onPress={() => handleViewDetails(company)}
+            >
+              <MaterialIcons name="visibility" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>View Details</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.actionButton, 
+                styles.applyButton,
+                (company.availableInternSlots || company.availableSlots) === 0 && styles.disabledButton
+              ]} 
+              onPress={() => handleApply(company)}
+              disabled={(company.availableInternSlots || company.availableSlots) === 0}
+            >
+              <MaterialIcons 
+                name="send" 
+                size={16} 
+                color={(company.availableInternSlots || company.availableSlots) > 0 ? "#02050a" : "#fff"} 
+              />
+              <Text style={[
+                styles.actionButtonText,
+                (company.availableInternSlots || company.availableSlots) > 0 && styles.applyButtonText
+              ]}>
+                {(company.availableInternSlots || company.availableSlots) === 0 ? 'Full' : 'Apply'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Expand/Collapse Button */}
         <TouchableOpacity 
-          style={styles.favoriteButton}
-          onPress={() => handleToggleFavorite(company.id)}
+          style={styles.expandButton}
+          onPress={() => toggleCardExpansion(company.id)}
         >
-          <AnimatedHeart 
-            companyId={company.id}
-            isFavorite={company.isFavorite}
+          <MaterialIcons 
+            name={isExpanded ? "expand-less" : "expand-more"} 
+            size={24} 
+            color="#F56E0F" 
           />
         </TouchableOpacity>
       </View>
-
-      {/* Matching Score and Distance Display */}
-      {(company.matchingScore !== undefined || company.distanceText) && (
-        <View style={styles.matchingContainer}>
-          <View style={styles.matchingScoreContainer}>
-            {company.matchingScore !== undefined && (
-              <>
-                <MaterialIcons name="trending-up" size={16} color="#34a853" />
-                <Text style={styles.matchingScoreText}>
-                  {Math.round(company.matchingScore * 100)}% Match
-                </Text>
-              </>
-            )}
-            {company.distanceText && (
-              <>
-                <MaterialIcons name="location-on" size={16} color="#4285f4" style={{ marginLeft: 16 }} />
-                <Text style={styles.distanceText}>
-                  {company.distanceText}
-                </Text>
-              </>
-            )}
-          </View>
-          {company.matchingReasons && company.matchingReasons.length > 0 && (
-            <View style={styles.matchingReasonsContainer}>
-              {company.matchingReasons.slice(0, 2).map((reason, index) => (
-                <Text key={index} style={styles.matchingReasonText}>
-                  • {reason}
-                </Text>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
-
-      <View style={styles.companyDetails}>
-        <View style={styles.locationContainer}>
-          <MaterialIcons name="location-on" size={16} color="#666" />
-          <Text style={styles.locationText}>{company.location || company.address}</Text>
-        </View>
-        
-        <View style={styles.slotsContainer}>
-          <View style={styles.slotInfo}>
-            <Text style={styles.slotLabel}>Available Slots</Text>
-            <Text style={styles.slotValue}>
-              {company.availableInternSlots || company.availableSlots}/{company.totalInternCapacity || company.totalSlots}
-            </Text>
-          </View>
-          <View style={styles.slotBar}>
-            <View 
-              style={[
-                styles.slotFill, 
-                { 
-                  width: `${((company.availableInternSlots || company.availableSlots) / (company.totalInternCapacity || company.totalSlots)) * 100}%`,
-                  backgroundColor: (company.availableInternSlots || company.availableSlots) > 0 ? '#34a853' : '#ea4335'
-                }
-              ]} 
-            />
-          </View>
-          {(company.currentInternCount !== undefined) && (
-            <Text style={styles.currentInternsText}>
-              Current Interns: {company.currentInternCount}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.moaContainer}>
-          <Text style={styles.moaLabel}>MOA Status:</Text>
-          <View style={[styles.moaBadge, { backgroundColor: getMOAStatusColor(company.moaStatus) }]}>
-            <Text style={styles.moaText}>{getMOAStatusText(company.moaStatus)}</Text>
-          </View>
-          {company.moaExpiryDate && (
-            <Text style={styles.moaDate}>Expires: {company.moaExpiryDate}</Text>
-          )}
-        </View>
-
-        <Text style={styles.description} numberOfLines={2}>
-          {company.description}
-        </Text>
-      </View>
-
-       <View style={styles.actionButtons}>
-         <TouchableOpacity 
-           style={[styles.actionButton, styles.viewButton]} 
-           onPress={() => handleViewDetails(company)}
-         >
-           <MaterialIcons name="visibility" size={16} color="#fff" />
-           <Text style={styles.actionButtonText}>View Details</Text>
-         </TouchableOpacity>
-         
-         <TouchableOpacity 
-           style={[
-             styles.actionButton, 
-             styles.applyButton,
-             (company.availableInternSlots || company.availableSlots) === 0 && styles.disabledButton
-           ]} 
-           onPress={() => handleApply(company)}
-           disabled={(company.availableInternSlots || company.availableSlots) === 0}
-         >
-           <MaterialIcons 
-             name="send" 
-             size={16} 
-             color={(company.availableInternSlots || company.availableSlots) > 0 ? "#02050a" : "#fff"} 
-           />
-           <Text style={[
-             styles.actionButtonText,
-             (company.availableInternSlots || company.availableSlots) > 0 && styles.applyButtonText
-           ]}>
-             {(company.availableInternSlots || company.availableSlots) === 0 ? 'Full' : 'Apply'}
-           </Text>
-         </TouchableOpacity>
-       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -1266,17 +1279,17 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
         ) : (
           <>
             <View style={styles.statCard}>
-              <MaterialIcons name="business-center" size={32} color="#F4D03F" />
+              <MaterialIcons name="business-center" size={32} color="#F56E0F" />
               <Text style={styles.statNumber}>{animatedStats.companyCount}</Text>
               <Text style={styles.statLabel}>Partner Companies</Text>
             </View>
             <View style={styles.statCard}>
-              <MaterialIcons name="work" size={32} color="#2D5A3D" />
+              <MaterialIcons name="work" size={32} color="#F56E0F" />
               <Text style={styles.statNumber}>{animatedStats.availableSlots}</Text>
               <Text style={styles.statLabel}>Available Slots</Text>
             </View>
             <View style={styles.statCard}>
-              <MaterialIcons name="favorite" size={32} color="#E8A598" />
+              <MaterialIcons name="favorite" size={32} color="#F56E0F" />
               <Text style={styles.statNumber}>{animatedStats.favoritesCount}</Text>
               <Text style={styles.statLabel}>Favorites</Text>
             </View>
@@ -1287,14 +1300,14 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       {/* Search Bar */}
       <View style={styles.searchSection}>
         <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={24} color="#F4D03F" />
+          <MaterialIcons name="search" size={24} color="#F56E0F" />
           <TextInput
             style={styles.searchInput}
             placeholder="Search companies, industries, or locations..."
-            placeholderTextColor="#666"
+            placeholderTextColor="#878787"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            selectionColor="#1E3A5F"
+            selectionColor="#F56E0F"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity 
@@ -1323,7 +1336,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
           </Text>
           {studentProfile && !searchQuery && (
             <Text style={styles.matchingInfoText}>
-              Only approved partner companies are shown. Companies are ranked by relevance to your {studentProfile.program} program, skills, and proximity to your location. Companies where you have approved applications and no available slots are hidden.
+              Only approved partner companies are shown. Companies are ranked by relevance to your {studentProfile.program} program, skills, and proximity to your location. Companies where you have approved applications are hidden.
             </Text>
           )}
         </View>
@@ -1344,7 +1357,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
               {searchQuery 
                 ? `No companies match your search for "${searchQuery}". Try different keywords or check your spelling.`
                 : studentProfile 
-                  ? 'No new internship opportunities available. Only approved partner companies are shown, and companies where you have approved applications with no available slots are hidden.'
+                  ? 'No new internship opportunities available. Only approved partner companies are shown, and companies where you have approved applications are hidden.'
                   : 'No approved partner companies available. Check back later for new internship opportunities.'
               }
             </Text>
@@ -1587,7 +1600,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F1E8', // Soft cream background
+    backgroundColor: '#F5F1E8', // Dark background
   },
   loadingContainer: {
     flex: 1,
@@ -1599,27 +1612,24 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#02050a',
+    color: '#FBFBFB', // Light text
     fontWeight: '500',
   },
   welcomeSection: {
-    padding: 24,
-    backgroundColor: '#F5F1E8',
-    marginBottom: 24,
+    padding: width < 768 ? 16 : 24, // Responsive padding
+    backgroundColor: '#2A2A2E', // Dark secondary background
+    marginBottom: 20,
   },
   welcomeTitle: {
-    fontSize: 28,
+    fontSize: width < 768 ? 20 : 24, // Smaller on mobile
     fontWeight: 'bold',
-    color: '#02050a',
-    marginBottom: 12,
-    fontFamily: 'System',
+    color: '#fff',
+    marginBottom: 8,
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: '#02050a',
-    lineHeight: 24,
-    opacity: 0.8,
-    fontWeight: '400',
+    fontSize: width < 768 ? 14 : 16, // Smaller on mobile
+    color: '#F56E0F', // Orange accent
+    lineHeight: width < 768 ? 20 : 22, // Adjusted line height
   },
   statsSection: {
     flexDirection: 'row',
@@ -1629,15 +1639,17 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep navy blue
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#1B1B1E', // Dark secondary background
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    elevation: 2,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchSection: {
     paddingHorizontal: 20,
@@ -1646,24 +1658,18 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderWidth: 2,
-    borderColor: '#F4D03F',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#02050a',
-    marginLeft: 12,
-    fontWeight: '500',
+    color: '#FBFBFB', // Light text
+    paddingVertical: 12,
   },
   clearSearchButton: {
     padding: 4,
@@ -1685,48 +1691,50 @@ const styles = StyleSheet.create({
   // Skeleton Loading Styles
   skeletonStatCard: {
     flex: 1,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#F5F1E8',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    opacity: 0.7,
+    elevation: 2,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.1)',
   },
   skeletonIcon: {
     width: 32,
     height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 16,
     marginBottom: 12,
   },
   skeletonNumber: {
     width: 60,
-    height: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    height: 24,
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonLabel: {
     width: 80,
-    height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    height: 12,
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
   },
   skeletonCompanyCard: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#F5F1E8',
     borderRadius: 20,
     padding: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
-    opacity: 0.7,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.1)',
   },
   skeletonCompanyHeader: {
     flexDirection: 'row',
@@ -1738,7 +1746,7 @@ const styles = StyleSheet.create({
   skeletonProfileImage: {
     width: 70,
     height: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 35,
   },
   skeletonCompanyInfo: {
@@ -1747,27 +1755,27 @@ const styles = StyleSheet.create({
   skeletonCompanyName: {
     width: '80%',
     height: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonCompanyIndustry: {
     width: '60%',
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonRating: {
     width: 60,
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
   },
   skeletonFavoriteButton: {
     width: 48,
     height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
   skeletonCompanyDetails: {
@@ -1776,28 +1784,28 @@ const styles = StyleSheet.create({
   skeletonLocation: {
     width: '90%',
     height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 12,
   },
   skeletonSlots: {
     width: '70%',
     height: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 12,
   },
   skeletonMOA: {
     width: '50%',
     height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 12,
   },
   skeletonDescription: {
     width: '100%',
     height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -1809,22 +1817,20 @@ const styles = StyleSheet.create({
   skeletonActionButton: {
     flex: 1,
     height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
     borderRadius: 12,
   },
   statNumber: {
-    fontSize: 32,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 12,
-    marginBottom: 8,
+    color: '#F56E0F',
+    marginTop: 8,
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 13,
-    color: '#fff',
+    fontSize: 11,
+    color: '#FBFBFB',
     textAlign: 'center',
-    opacity: 0.9,
-    fontWeight: '500',
   },
   companiesSection: {
     padding: 20,
@@ -1833,88 +1839,103 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#02050a',
-    marginBottom: 8,
-    fontFamily: 'System',
+    color: '#15141',
+    marginBottom: 15,
   },
   sectionSubtitle: {
     fontSize: 16,
-    color: '#02050a',
-    opacity: 0.7,
+    color: '#000', // Light text
     fontWeight: '400',
   },
   companyCard: {
-    backgroundColor: '#1E3A5F', // Deep navy blue
+    backgroundColor: '#1B1B1E', // Dark secondary background
     borderRadius: 20,
     padding: 24,
     marginBottom: 20,
     elevation: 6,
-    shadowColor: '#000',
+    shadowColor: '#F56E0F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
   },
   companyHeader: {
-    flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: width < 768 ? 16 : 20,
+  },
+  headerTopRow: {
+    flexDirection: width < 768 ? 'column' : 'row',
+    alignItems: width < 768 ? 'flex-start' : 'flex-start',
+    gap: width < 768 ? 12 : 12,
+    marginBottom: width < 768 ? 12 : 0,
+    flexWrap: width < 768 ? 'nowrap' : 'nowrap',
   },
   profileContainer: {
-    marginRight: 16,
+    marginRight: width < 768 ? 0 : 16,
+    marginBottom: width < 768 ? 8 : 0,
   },
   profileImage: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    borderWidth: 3,
-    borderColor: '#F4D03F', // Bright yellow border
+    width: width < 768 ? 60 : width < 1024 ? 65 : 70,
+    height: width < 768 ? 60 : width < 1024 ? 65 : 70,
+    borderRadius: width < 768 ? 30 : width < 1024 ? 32.5 : 35,
+    borderWidth: width < 768 ? 2 : 3,
+    borderColor: '#F56E0F', // Primary orange border
   },
   profilePlaceholder: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#2D5A3D', // Forest green
+    width: width < 768 ? 60 : width < 1024 ? 65 : 70,
+    height: width < 768 ? 60 : width < 1024 ? 65 : 70,
+    borderRadius: width < 768 ? 30 : width < 1024 ? 32.5 : 35,
+    backgroundColor: '#2A2A2E', // Dark input/gray background
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#F4D03F',
+    borderWidth: width < 768 ? 2 : 3,
+    borderColor: '#F56E0F',
   },
   profileText: {
-    fontSize: 28,
+    fontSize: width < 768 ? 24 : width < 1024 ? 26 : 28,
     fontWeight: 'bold',
     color: '#fff',
   },
   companyInfo: {
     flex: 1,
+    width: width < 768 ? '100%' : 'auto',
   },
   companyName: {
-    fontSize: 22,
+    fontSize: width < 768 ? 18 : width < 1024 ? 20 : 22,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 6,
+    marginBottom: width < 768 ? 4 : 6,
     fontFamily: 'System',
   },
   companyIndustry: {
-    fontSize: 16,
-    color: '#F4D03F', // Bright yellow
-    marginBottom: 8,
+    fontSize: width < 768 ? 14 : width < 1024 ? 15 : 16,
+    color: '#F56E0F', // Primary orange
+    marginBottom: width < 768 ? 6 : 8,
     fontWeight: '600',
   },
-  ratingContainer: {
+  slotsContainerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
+    flexWrap: 'wrap',
   },
-  ratingText: {
-    fontSize: 16,
+  slotLabelHeader: {
+    fontSize: width < 768 ? 13 : width < 1024 ? 14 : 15,
     color: '#fff',
-    marginLeft: 6,
-    fontWeight: '600',
+    fontWeight: '500',
+  },
+  slotValueHeader: {
+    fontSize: width < 768 ? 13 : width < 1024 ? 14 : 15,
+    fontWeight: 'bold',
+    color: '#F4D03F', // Yellow color for slots
   },
   favoriteButton: {
-    padding: 12,
+    padding: width < 768 ? 8 : 12,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
+    borderRadius: width < 768 ? 10 : 12,
+    alignSelf: width < 768 ? 'flex-end' : 'auto',
+    marginTop: width < 768 ? -50 : 0,
+    marginBottom: width < 768 ? 12 : 0,
   },
   companyDetails: {
     marginBottom: 20,
@@ -1940,9 +1961,56 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
   },
-  slotInfo: {
+  slotsContainerCollapsed: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  matchingBoxCollapsed: {
+    backgroundColor: '#5D4037', // Brown/dark brown color
+    borderRadius: width < 768 ? 10 : 12,
+    padding: width < 768 ? 10 : 12,
+    minWidth: width < 768 ? '100%' : width < 1024 ? 170 : 180,
+    maxWidth: width < 768 ? '100%' : width < 1024 ? 200 : 220,
+    marginRight: width < 768 ? 0 : 8,
+    alignSelf: width < 768 ? 'stretch' : 'flex-start',
+    width: width < 768 ? '100%' : 'auto',
+    flexShrink: 0,
+  },
+  matchingScoreContainerCollapsed: {
+    flexDirection: 'column',
+    gap: width < 768 ? 3 : 4,
+    marginBottom: width < 768 ? 6 : 8,
+  },
+  matchingScoreTextCollapsed: {
+    fontSize: width < 768 ? 12 : width < 1024 ? 13 : 14,
+    fontWeight: 'bold',
+    color: '#F56E0F', // Orange text
+    marginLeft: 6,
+  },
+  distanceTextCollapsed: {
+    fontSize: width < 768 ? 12 : width < 1024 ? 13 : 14,
+    fontWeight: '600',
+    color: '#F56E0F', // Orange text
+    marginLeft: 6,
+  },
+  matchingReasonsContainerCollapsed: {
+    marginTop: width < 768 ? 6 : 8,
+    gap: width < 768 ? 3 : 4,
+  },
+  matchingReasonTextCollapsed: {
+    fontSize: width < 768 ? 11 : 12,
+    color: '#fff',
+    lineHeight: width < 768 ? 14 : 16,
+    opacity: 0.9,
+  },
+  slotInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
   slotLabel: {
@@ -2036,10 +2104,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2D5A3D', // Forest green
   },
   applyButton: {
-    backgroundColor: '#F4D03F', // Bright yellow
+    backgroundColor: '#F56E0F', // Primary orange
   },
   applyButtonText: {
-    color: '#02050a', // Dark navy for yellow button
+    color: '#fff', // White text for orange button
     fontSize: 14,
     fontWeight: 'bold',
     marginLeft: 6,
@@ -2053,6 +2121,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginLeft: 6,
+  },
+  expandButton: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 8,
   },
   emptyState: {
     alignItems: 'center',
@@ -2250,12 +2324,12 @@ const styles = StyleSheet.create({
   },
   // Matching Score Styles
   matchingContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: '#F4D03F',
+    borderLeftColor: '#F56E0F',
   },
   matchingScoreContainer: {
     flexDirection: 'row',
@@ -2265,13 +2339,13 @@ const styles = StyleSheet.create({
   matchingScoreText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F4D03F',
+    color: '#F56E0F', // Primary orange
     marginLeft: 8,
   },
   distanceText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#E8A598', // Soft coral
+    color: '#F56E0F', // Primary orange
     marginLeft: 8,
   },
   matchingReasonsContainer: {
@@ -2285,7 +2359,7 @@ const styles = StyleSheet.create({
   },
   matchingInfoText: {
     fontSize: 13,
-    color: '#02050a',
+    color: '#000', // Light text
     fontStyle: 'italic',
     marginTop: 6,
     opacity: 0.7,
