@@ -437,11 +437,19 @@ export default function AttendanceHistoryPanel({
               contentContainerStyle={styles.tableContainerContent}
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
+              scrollEnabled={true}
+              bounces={true}
+              alwaysBounceVertical={false}
             >
               <ScrollView
                 horizontal={true}
                 showsHorizontalScrollIndicator={true}
                 nestedScrollEnabled={true}
+                scrollEnabled={true}
+                bounces={true}
+                alwaysBounceHorizontal={false}
+                style={styles.horizontalScrollView}
+                contentContainerStyle={styles.horizontalScrollContent}
               >
                 <View style={styles.table}>
                 {/* Table Header */}
@@ -864,6 +872,12 @@ const styles = StyleSheet.create({
   },
   tableContainerContent: {
     paddingBottom: 20,
+  },
+  horizontalScrollView: {
+    flex: 1,
+  },
+  horizontalScrollContent: {
+    minWidth: isMobile ? 800 : '100%',
   },
   table: {
     minWidth: isMobile ? 800 : '100%',
