@@ -1,5 +1,8 @@
 // API configuration and service functions
-const API_BASE_URL = 'http://localhost:3001/api';
+// Use environment variable for production, fallback to localhost for development
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 
+                     process.env.API_BASE_URL || 
+                     'http://localhost:3001/api';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -319,8 +322,11 @@ class ApiService {
     return this.makeRequest(url);
   }
 
-  async getAllCompanies(): Promise<ApiResponse> {
-    return this.makeRequest('/companies');
+  async getAllCompanies(includeAllCompanies?: boolean): Promise<ApiResponse> {
+    const url = includeAllCompanies 
+      ? `/companies?includeAllCompanies=true`
+      : '/companies';
+    return this.makeRequest(url);
   }
 
   // Update company account status (enable/disable)
@@ -394,11 +400,12 @@ class ApiService {
     });
   }
 
-  async removePartnership(companyId: string): Promise<ApiResponse> {
-    console.log('🗑️ API SERVICE - removePartnership called', { companyId });
+  async removePartnership(companyId: string, coordinatorUserId?: string): Promise<ApiResponse> {
+    console.log('🗑️ API SERVICE - removePartnership called', { companyId, coordinatorUserId });
     
     const result = await this.makeRequest(`/companies/${companyId}/remove-partnership`, {
       method: 'PUT',
+      body: coordinatorUserId ? JSON.stringify({ coordinatorUserId }) : undefined,
     });
     
     console.log('🗑️ API SERVICE - removePartnership result:', result);
@@ -1040,6 +1047,60 @@ class ApiService {
     });
     
     console.log('🔍 API SERVICE - assignCoordinatorCampus result:', result);
+    return result;
+  }
+
+  // Company Assignment methods
+  async getAvailableCompaniesForAssignment(coordinatorId: string): Promise<ApiResponse<any[]>> {
+    console.log('🔍 API SERVICE - getAvailableCompaniesForAssignment called with:');
+    console.log('  - coordinatorId:', coordinatorId);
+    console.log('  - URL:', `/coordinators/${coordinatorId}/available-companies`);
+    
+    const result = await this.makeRequest<any[]>(`/coordinators/${coordinatorId}/available-companies`);
+    
+    console.log('🔍 API SERVICE - getAvailableCompaniesForAssignment result:', result);
+    return result;
+  }
+
+  async assignCoordinatorToCompany(coordinatorId: string, companyId: string, assignedBy: string): Promise<ApiResponse> {
+    console.log('🔍 API SERVICE - assignCoordinatorToCompany called with:');
+    console.log('  - coordinatorId:', coordinatorId);
+    console.log('  - companyId:', companyId);
+    console.log('  - assignedBy:', assignedBy);
+    console.log('  - URL:', `/coordinators/${coordinatorId}/assign-company`);
+    
+    const result = await this.makeRequest(`/coordinators/${coordinatorId}/assign-company`, {
+      method: 'POST',
+      body: JSON.stringify({ companyId, assignedBy }),
+    });
+    
+    console.log('🔍 API SERVICE - assignCoordinatorToCompany result:', result);
+    return result;
+  }
+
+  async getCoordinatorAssignedCompanies(coordinatorId: string): Promise<ApiResponse<any[]>> {
+    console.log('🔍 API SERVICE - getCoordinatorAssignedCompanies called with:');
+    console.log('  - coordinatorId:', coordinatorId);
+    console.log('  - URL:', `/coordinators/${coordinatorId}/assigned-companies`);
+    
+    const result = await this.makeRequest<any[]>(`/coordinators/${coordinatorId}/assigned-companies`);
+    
+    console.log('🔍 API SERVICE - getCoordinatorAssignedCompanies result:', result);
+    return result;
+  }
+
+  async unassignCoordinatorFromCompany(coordinatorId: string, companyId: string): Promise<ApiResponse> {
+    console.log('🔍 API SERVICE - unassignCoordinatorFromCompany called with:');
+    console.log('  - coordinatorId:', coordinatorId);
+    console.log('  - companyId:', companyId);
+    console.log('  - URL:', `/coordinators/${coordinatorId}/unassign-company`);
+    
+    const result = await this.makeRequest(`/coordinators/${coordinatorId}/unassign-company`, {
+      method: 'DELETE',
+      body: JSON.stringify({ companyId }),
+    });
+    
+    console.log('🔍 API SERVICE - unassignCoordinatorFromCompany result:', result);
     return result;
   }
 
