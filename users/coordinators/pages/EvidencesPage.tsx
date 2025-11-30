@@ -188,7 +188,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
     }
   };
 
-  const fetchInternEvidences = async (internId: string) => {
+  const fetchInternEvidences = async (internId: string, skipDateFilter: boolean = false) => {
     if (!internId) {
       console.log('⚠️ No intern ID provided');
       setEvidences([]);
@@ -201,11 +201,14 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
       console.log('📅 Selected date:', selectedDate);
       console.log('📅 Month:', selectedDate.getMonth() + 1, 'Year:', selectedDate.getFullYear());
       
-      const response = await apiService.getInternEvidences(internId, currentUser.id, {
-        limit: 100,
-        month: selectedDate.getMonth() + 1,
-        year: selectedDate.getFullYear()
-      });
+      // Build filters - optionally skip date filter to show all evidences
+      const filters: any = { limit: 100 };
+      if (!skipDateFilter) {
+        filters.month = selectedDate.getMonth() + 1;
+        filters.year = selectedDate.getFullYear();
+      }
+      
+      const response = await apiService.getInternEvidences(internId, currentUser.id, filters);
       
       console.log('📋 API Response:', response);
       
@@ -216,6 +219,11 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         
         if (evidencesData.length === 0) {
           console.log('ℹ️ No evidences found for the selected month/year');
+          // If no evidences found for selected month, try fetching all evidences
+          if (!skipDateFilter) {
+            console.log('🔄 Trying to fetch all evidences...');
+            return fetchInternEvidences(internId, true);
+          }
         }
       } else {
         console.log('❌ Failed to fetch evidences:', response.message);
