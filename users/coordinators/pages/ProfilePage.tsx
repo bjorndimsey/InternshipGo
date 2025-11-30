@@ -473,21 +473,13 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
     setIsLoadingOTP(true);
     try {
       // Request OTP from backend
-      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: currentUser.email }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.requestOtp(currentUser.email);
 
       if (data.success) {
         // Send OTP via EmailJS
         const emailResult = await EmailService.sendOTPEmail(
           currentUser.email,
-          data.otp,
+          (data as any).otp,
           currentUser.name || 'User'
         );
 
@@ -525,20 +517,12 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: currentUser.email }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.requestOtp(currentUser.email);
 
       if (data.success) {
         const emailResult = await EmailService.sendOTPEmail(
           currentUser.email,
-          data.otp,
+          (data as any).otp,
           currentUser.name || 'User'
         );
 

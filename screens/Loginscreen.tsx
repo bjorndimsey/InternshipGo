@@ -505,18 +505,7 @@ export default function GoogleLogin({
     setIsLoading(true);
     try {
       // Call real API for email/password login
-      const response = await fetch('http://localhost:3001/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password
-        }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.login(email, password);
       
       // Debug: Log the full API response
       console.log("🔍 Full API Response:", JSON.stringify(data, null, 2));
@@ -526,7 +515,6 @@ export default function GoogleLogin({
       console.log("🔍 User type field (type):", data.user?.type);
       console.log("🔍 User type field (role):", data.user?.role);
       console.log("🔍 All user object keys:", Object.keys(data.user || {}));
-      console.log("🔍 Response status:", response.status);
       console.log("🔍 Response success:", data.success);
 
       if (data.success && data.user) {
@@ -540,12 +528,10 @@ export default function GoogleLogin({
         };
         
         // Get user type from database response - try multiple possible locations
-        let userType = data.user.userType || data.user.user_type || data.user.type || data.user.role || data.user_type || data.type || data.role;
+        let userType = data.user?.userType || data.user?.user_type || data.user?.type || data.user?.role;
         console.log("🎯 Raw user type from DB:", userType);
-        console.log("🎯 Checking data.user.userType:", data.user.userType);
-        console.log("🎯 Checking data.user.user_type:", data.user.user_type);
-        console.log("🎯 Checking data.user_type:", data.user_type);
-        console.log("🎯 Checking data.type:", data.type);
+        console.log("🎯 Checking data.user.userType:", data.user?.userType);
+        console.log("🎯 Checking data.user.user_type:", data.user?.user_type);
         
         
         // Normalize user type to match our frontend expectations
@@ -596,10 +582,9 @@ export default function GoogleLogin({
         console.log("✅ Email Login successful:", userData);
       } else {
         // Check if account is disabled
-        const errorMessage = data.message || 'Invalid email or password';
+        const errorMessage = (data.message as string) || 'Invalid email or password';
         const isDisabled = errorMessage.toLowerCase().includes('disabled') || 
-                          errorMessage.toLowerCase().includes('inactive') ||
-                          response.status === 403;
+                          errorMessage.toLowerCase().includes('inactive');
         
         if (isDisabled) {
           // Show modal for disabled account

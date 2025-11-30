@@ -112,16 +112,8 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
         useNativeDriver: true,
       }).start();
       
-      // Test API connection first
-      console.log('🧪 Testing API connection...');
-      try {
-        const testResponse = await fetch('http://localhost:3001/api/coordinators/test-partnership');
-        const testData = await testResponse.json();
-        console.log('✅ API connection test result:', testData);
-        console.log('🔍 Sample coordinator fields:', Object.keys(testData.sampleCoordinator || {}));
-      } catch (testError) {
-        console.error('❌ API connection test failed:', testError);
-      }
+      // Test API connection first (removed - was using private method)
+      // If needed, can add a public test method to apiService
       
       // Simulate loading delay for skeleton effect
       await new Promise(resolve => setTimeout(resolve, 1500));

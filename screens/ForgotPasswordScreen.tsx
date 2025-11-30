@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { EmailService } from '../lib/emailService';
+import { apiService } from '../lib/api';
 import OTPVerificationScreen from './OTPVerificationScreen';
 import NewPasswordScreen from './NewPasswordScreen';
 
@@ -59,15 +60,7 @@ export default function ForgotPasswordScreen({ onBack, onSuccess }: ForgotPasswo
     setIsLoading(true);
     try {
       // First, check if user exists and request OTP from backend
-      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.requestOtp(email);
 
       if (data.success) {
         // Check if user is a Google OAuth user (no password hash)
@@ -122,15 +115,7 @@ export default function ForgotPasswordScreen({ onBack, onSuccess }: ForgotPasswo
 
   const handleResendOTP = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/auth/request-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.requestOtp(email);
 
       if (data.success) {
         const emailResult = await EmailService.sendOTPEmail(email, data.otp, data.userName || 'User');

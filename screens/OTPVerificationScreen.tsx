@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { apiService } from '../lib/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -88,18 +89,7 @@ export default function OTPVerificationScreen({
     setIsLoading(true);
     try {
       // Call API to verify OTP
-      const response = await fetch('http://localhost:3001/api/auth/verify-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          otp: otpCode
-        }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.verifyOtp(email, otpCode);
 
       if (data.success) {
         Toast.show({

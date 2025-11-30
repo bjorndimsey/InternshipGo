@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { apiService } from '../lib/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -91,19 +92,7 @@ export default function NewPasswordScreen({
     setIsLoading(true);
     try {
       // Call API to reset password
-      const response = await fetch('http://localhost:3001/api/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          newPassword: password,
-          confirmPassword
-        }),
-      });
-
-      const data = await response.json();
+      const data = await apiService.resetPassword(email, password, confirmPassword);
 
       if (data.success) {
         Toast.show({

@@ -2,7 +2,7 @@
 // Use environment variable for production, fallback to localhost for development
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 
                      process.env.API_BASE_URL || 
-                     'http://localhost:3001/api';
+                     'https://internshipgo.site/api';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -218,6 +218,30 @@ class ApiService {
     return this.makeRequest('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    });
+  }
+
+  // Request OTP for password reset
+  async requestOtp(email: string): Promise<ApiResponse> {
+    return this.makeRequest('/auth/request-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  // Verify OTP
+  async verifyOtp(email: string, otp: string): Promise<ApiResponse> {
+    return this.makeRequest('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  }
+
+  // Reset password
+  async resetPassword(email: string, newPassword: string, confirmPassword: string): Promise<ApiResponse> {
+    return this.makeRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, newPassword, confirmPassword }),
     });
   }
 
