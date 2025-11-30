@@ -77,11 +77,23 @@ export default function GoogleLogin({
   const googleWebClientId = Constants.expoConfig?.extra?.googleWebClientId;
   const googleAndroidClientId = Constants.expoConfig?.extra?.googleAndroidClientId;
 
+  // Get the current origin for web redirect URI
+  const getRedirectUri = () => {
+    if (Platform.OS === 'web') {
+      // For web, use the current origin
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://internshipgo.site';
+      return `${origin}`;
+    }
+    // For mobile, Expo handles it automatically
+    return undefined;
+  };
+
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: googleAndroidClientId,
     webClientId: googleWebClientId,
+    // Explicitly set redirect URI for web
+    redirectUri: getRedirectUri(),
     // For iOS, you would add: iosClientId: Constants.expoConfig?.extra?.googleIosClientId,
-    // Let Expo handle the redirect URI automatically
   });
 
   // Initialize page animations
