@@ -177,8 +177,12 @@ const getInternEvidences = async (req, res) => {
 
     // Apply date filters
     if (month && year) {
-      const startDate = new Date(year, month - 1, 1).toISOString();
-      const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
+      // month is 1-12 from frontend, convert to 0-11 for JavaScript Date
+      const monthIndex = parseInt(month) - 1;
+      const startDate = new Date(year, monthIndex, 1).toISOString();
+      // Get last day of the month: new Date(year, monthIndex + 1, 0) gives last day of monthIndex
+      const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999).toISOString();
+      console.log('📅 Date filter:', { month, year, startDate, endDate });
       query = query.gte('submitted_at', startDate).lte('submitted_at', endDate);
     }
 

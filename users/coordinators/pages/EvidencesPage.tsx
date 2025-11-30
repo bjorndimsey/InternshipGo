@@ -146,7 +146,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
     if (selectedIntern) {
       fetchInternEvidences(selectedIntern.user_id);
     }
-  }, [selectedIntern]);
+  }, [selectedIntern, selectedDate]);
 
   useEffect(() => {
     filterEvidences();
@@ -189,9 +189,17 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   };
 
   const fetchInternEvidences = async (internId: string) => {
+    if (!internId) {
+      console.log('⚠️ No intern ID provided');
+      setEvidences([]);
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('📋 Fetching evidences for intern:', internId);
+      console.log('📅 Selected date:', selectedDate);
+      console.log('📅 Month:', selectedDate.getMonth() + 1, 'Year:', selectedDate.getFullYear());
       
       const response = await apiService.getInternEvidences(internId, currentUser.id, {
         limit: 100,
@@ -199,9 +207,16 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         year: selectedDate.getFullYear()
       });
       
-      if (response.success && response.data) {
-        console.log('✅ Evidences fetched successfully:', response.data.length);
-        setEvidences(response.data);
+      console.log('📋 API Response:', response);
+      
+      if (response.success) {
+        const evidencesData = response.data || [];
+        console.log('✅ Evidences fetched successfully:', evidencesData.length);
+        setEvidences(evidencesData);
+        
+        if (evidencesData.length === 0) {
+          console.log('ℹ️ No evidences found for the selected month/year');
+        }
       } else {
         console.log('❌ Failed to fetch evidences:', response.message);
         setEvidences([]);
