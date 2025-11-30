@@ -42,6 +42,17 @@ interface Evidence {
     company_name: string;
     industry: string;
   };
+  users?: {
+    id: string;
+    email: string;
+    profile_picture?: string;
+  };
+  students?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    id_number: string;
+  };
 }
 
 interface Intern {
@@ -360,35 +371,49 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
   };
 
   const renderEvidenceCard = ({ item: evidence }: { item: Evidence }) => {
-    // Find the intern who submitted this evidence
+    // Try to find intern from interns array first, then fallback to evidence data
     const intern = interns.find(i => i.user_id === evidence.user_id);
+    
+    // Get intern info from evidence data (from backend) or from interns array
+    const internName = intern?.student_name || 
+                      (evidence.students ? `${evidence.students.first_name} ${evidence.students.last_name}` : null) ||
+                      'Unknown Intern';
+    const internEmail = intern?.student_email || 
+                       evidence.users?.email || 
+                       'No email';
+    const internIdNumber = intern?.id_number || 
+                          evidence.students?.id_number || 
+                          'N/A';
+    const internProfilePicture = intern?.profile_picture || 
+                                evidence.users?.profile_picture || 
+                                null;
     
     return (
       <View style={styles.evidenceCard}>
         {/* Intern Information */}
         <View style={styles.evidenceInternInfo}>
           <View style={styles.internAvatar}>
-            {intern && intern.profile_picture ? (
+            {internProfilePicture ? (
               <Image 
-                source={{ uri: intern.profile_picture }} 
+                source={{ uri: internProfilePicture }} 
                 style={styles.internAvatarImage}
                 defaultSource={require('../../../assets/icon.png')}
               />
             ) : (
               <Text style={styles.internAvatarText}>
-                {intern && intern.student_name ? intern.student_name.charAt(0).toUpperCase() : '?'}
+                {internName !== 'Unknown Intern' ? internName.charAt(0).toUpperCase() : '?'}
               </Text>
             )}
           </View>
           <View style={styles.internDetails}>
             <Text style={styles.internName} numberOfLines={1}>
-              {intern && intern.student_name ? intern.student_name : 'Unknown Intern'}
+              {internName}
             </Text>
             <Text style={styles.internEmail} numberOfLines={1}>
-              {intern && intern.student_email ? intern.student_email : 'No email'}
+              {internEmail}
             </Text>
             <Text style={styles.internId} numberOfLines={1}>
-              ID: {intern && intern.id_number ? intern.id_number : 'N/A'}
+              ID: {internIdNumber}
             </Text>
           </View>
         </View>

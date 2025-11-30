@@ -197,12 +197,52 @@ const getInternEvidences = async (req, res) => {
       });
     }
 
-    console.log('✅ Intern evidences fetched successfully:', data?.length || 0);
+    // Get unique user IDs from evidences
+    const userIds = [...new Set((data || []).map(evidence => evidence.user_id))];
+    
+    // Fetch user and student data for all unique user IDs
+    let usersData = {};
+    let studentsData = {};
+    
+    if (userIds.length > 0) {
+      // Fetch users
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, email, profile_picture')
+        .in('id', userIds);
+      
+      if (!usersError && users) {
+        users.forEach(user => {
+          usersData[user.id] = user;
+        });
+      }
+      
+      // Fetch students
+      const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select('id, user_id, first_name, last_name, id_number')
+        .in('user_id', userIds);
+      
+      if (!studentsError && students) {
+        students.forEach(student => {
+          studentsData[student.user_id] = student;
+        });
+      }
+    }
+
+    // Enrich evidences with user and student data
+    const enrichedData = (data || []).map(evidence => ({
+      ...evidence,
+      users: usersData[evidence.user_id] || null,
+      students: studentsData[evidence.user_id] || null
+    }));
+
+    console.log('✅ Intern evidences fetched successfully:', enrichedData?.length || 0);
 
     res.json({
       success: true,
-      data: data || [],
-      count: data?.length || 0
+      data: enrichedData || [],
+      count: enrichedData?.length || 0
     });
 
   } catch (error) {
