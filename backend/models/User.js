@@ -21,9 +21,11 @@ class User {
     this.companyName = data.companyName;
     this.industry = data.industry;
     this.phoneNumber = data.phoneNumber;
+    this.university = data.university || 'Davao Oriental State University'; // Default to Davao Oriental State University
     
     // Debug logging for middle name
     console.log('User constructor - middleName:', this.middleName, 'type:', typeof this.middleName);
+    console.log('User constructor - university:', this.university);
   }
 
   // Hash password before saving (skip for Google users)
@@ -80,7 +82,8 @@ class User {
             date_of_birth: this.dateOfBirth || '',
             program: this.program || '',
             major: this.major || '',
-            address: this.address || ''
+            address: this.address || '',
+            university: this.university || 'Davao Oriental State University'
           };
           console.log('Student profileData being inserted:', JSON.stringify(profileData, null, 2));
           await query('students', 'insert', profileData);
@@ -94,7 +97,8 @@ class User {
             last_name: this.lastName || '',
             program: this.program || '',
             phone_number: this.phoneNumber || '',
-            address: this.address || ''
+            address: this.address || '',
+            university: this.university || 'Davao Oriental State University'
           };
           console.log('Coordinator profileData being inserted:', JSON.stringify(profileData, null, 2));
           await query('coordinators', 'insert', profileData);

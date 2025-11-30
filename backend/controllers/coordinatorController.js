@@ -229,10 +229,14 @@ class CoordinatorController {
       const company = companyResult.data[0];
       console.log('📝 Company found:', company.company_name, 'ID:', company.id);
 
-      // Get coordinators who uploaded MOAs for this specific company
-      const coordinatorsResult = await query('coordinators', 'select');
+      // ONLY get coordinators from company_coordinator_partnerships table
+      console.log('🔍 Fetching coordinators from partnerships table for company:', company.id);
+      const partnershipsResult = await query('company_coordinator_partnerships', 'select', ['coordinator_id', 'coordinator_user_id'], {
+        company_id: parseInt(companyId)
+      });
       
-      if (!coordinatorsResult.data || coordinatorsResult.data.length === 0) {
+      if (!partnershipsResult.data || partnershipsResult.data.length === 0) {
+        console.log('ℹ️ No partnerships found for company:', companyId);
         return res.json({
           success: true,
           message: 'Coordinators with MOA fetched successfully',
@@ -240,9 +244,20 @@ class CoordinatorController {
         });
       }
 
+      console.log('🔍 Found', partnershipsResult.data.length, 'partnerships for company');
+
       // Get user data and MOA information for each coordinator
       const coordinators = [];
-      for (const coordinator of coordinatorsResult.data) {
+      for (const partnership of partnershipsResult.data) {
+        // Get coordinator data
+        const coordinatorResult = await query('coordinators', 'select', null, { id: partnership.coordinator_id });
+        
+        if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+          console.log('⚠️ Coordinator not found for partnership:', partnership.coordinator_id);
+          continue;
+        }
+        
+        const coordinator = coordinatorResult.data[0];
         const userResult = await query('users', 'select', null, { id: coordinator.user_id });
         
         if (userResult.data && userResult.data.length > 0) {
@@ -250,42 +265,29 @@ class CoordinatorController {
           
           // Only include coordinators (not other user types)
           if (user.user_type === 'Coordinator') {
-            // PHASE 3: Try to get partnership from junction table first (NEW WAY)
+            // Get partnership data from junction table
             let partnershipData = null;
-            let moaData = null;
             
             try {
-              const partnershipResult = await query('company_coordinator_partnerships', 'select', null, { 
+              const partnershipDetailResult = await query('company_coordinator_partnerships', 'select', null, { 
                 company_id: parseInt(companyId),
                 coordinator_id: coordinator.id 
               });
               
-              if (partnershipResult.data && partnershipResult.data.length > 0) {
-                partnershipData = partnershipResult.data[0];
+              if (partnershipDetailResult.data && partnershipDetailResult.data.length > 0) {
+                partnershipData = partnershipDetailResult.data[0];
                 console.log('✅ Found partnership in junction table for coordinator', coordinator.id);
+              } else {
+                console.log('⚠️ Partnership data not found for coordinator', coordinator.id);
+                continue; // Skip this coordinator if no partnership data
               }
             } catch (error) {
-              console.log('⚠️ Junction table may not exist yet, falling back to old method:', error.message);
-            }
-            
-            // FALLBACK: Get MOA information from companies table (OLD WAY - backward compatibility)
-            if (!partnershipData) {
-              const moaResult = await query('companies', 'select', null, { 
-                id: parseInt(companyId),
-                moa_uploaded_by: coordinator.user_id 
-              });
-              
-              if (moaResult.data && moaResult.data.length > 0) {
-                moaData = moaResult.data[0];
-                console.log('⚠️ Using old companies table data (junction table not found)');
-              }
-            } else {
-              // Use partnership data from junction table
-              moaData = partnershipData;
+              console.log('⚠️ Error fetching partnership data:', error.message);
+              continue; // Skip this coordinator on error
             }
 
-            // Only include this coordinator if they have a partnership/MOA with this company
-            if (partnershipData || moaData) {
+            // Coordinator has a partnership - include them
+            if (partnershipData) {
               // Check if coordinator has admin status
               const adminResult = await query('admin_coordinators', 'select', null, { 
                 coordinator_id: coordinator.id, 
@@ -294,36 +296,20 @@ class CoordinatorController {
               
               const isAdminCoordinator = adminResult.data && adminResult.data.length > 0;
               
-              // Determine MOA status - use partnership data if available, otherwise fallback
-              let moaStatus = partnershipData ? (partnershipData.moa_status || 'pending') : (moaData.moa_status || 'sent');
-              let moaDocument = (partnershipData?.moa_url || moaData?.moa_url) ? 'MOA Document' : null;
+              // Determine MOA status from partnership data
+              let moaStatus = partnershipData.moa_status || 'pending';
+              let moaDocument = partnershipData.moa_url ? 'MOA Document' : null;
               let moaSentDate = null;
               let moaReceivedDate = null;
               let moaExpiryDate = null;
               
-              if (partnershipData) {
-                moaSentDate = partnershipData.moa_uploaded_at ? new Date(partnershipData.moa_uploaded_at).toISOString().split('T')[0] : null;
-                moaReceivedDate = partnershipData.moa_received_date ? new Date(partnershipData.moa_received_date).toISOString().split('T')[0] : null;
-                moaExpiryDate = partnershipData.moa_expiry_date;
-              } else if (moaData) {
-                moaSentDate = moaData.moa_uploaded_at ? new Date(moaData.moa_uploaded_at).toISOString().split('T')[0] : null;
-                moaReceivedDate = moaData.moa_uploaded_at ? new Date(moaData.moa_uploaded_at).toISOString().split('T')[0] : null;
-                moaExpiryDate = moaData.moa_expiry_date;
-              }
+              moaSentDate = partnershipData.moa_uploaded_at ? new Date(partnershipData.moa_uploaded_at).toISOString().split('T')[0] : null;
+              moaReceivedDate = partnershipData.moa_received_date ? new Date(partnershipData.moa_received_date).toISOString().split('T')[0] : null;
+              moaExpiryDate = partnershipData.moa_expiry_date;
               
-              // Get approval status from partnership table (NEW WAY) or fallback to old tables
-              let companyApproved = false;
-              let coordinatorApproved = false;
-              
-              if (partnershipData) {
-                // Read from junction table (per-partnership status)
-                companyApproved = partnershipData.company_approved === true || partnershipData.company_approved === 1;
-                coordinatorApproved = partnershipData.coordinator_approved === true || partnershipData.coordinator_approved === 1;
-              } else if (moaData) {
-                // Fallback to old tables (backward compatibility)
-                companyApproved = coordinator.company_approved === true || coordinator.company_approved === 1;
-                coordinatorApproved = moaData.coordinator_approved === true || moaData.coordinator_approved === 1;
-              }
+              // Get approval status from partnership table
+              let companyApproved = partnershipData.company_approved === true || partnershipData.company_approved === 1;
+              let coordinatorApproved = partnershipData.coordinator_approved === true || partnershipData.coordinator_approved === 1;
               
               // Calculate partnership status based on approval flags
               let partnershipStatus = 'pending';
@@ -334,7 +320,7 @@ class CoordinatorController {
               }
               
               console.log('🔍 Approval status for coordinator', coordinator.id, ':', {
-                source: partnershipData ? 'junction_table' : 'old_tables',
+                source: 'junction_table',
                 companyApproved,
                 coordinatorApproved,
                 calculatedPartnershipStatus: partnershipStatus
@@ -357,8 +343,8 @@ class CoordinatorController {
                 status: user.is_active ? 'active' : 'inactive',
                 moaStatus: moaStatus,
                 moaDocument: moaDocument,
-                moaUrl: partnershipData?.moa_url || moaData?.moa_url || null,
-                moaPublicId: partnershipData?.moa_public_id || moaData?.moa_public_id || null,
+                moaUrl: partnershipData.moa_url || null,
+                moaPublicId: partnershipData.moa_public_id || null,
                 moaSentDate: moaSentDate,
                 moaReceivedDate: moaReceivedDate,
                 moaExpiryDate: moaExpiryDate,
@@ -372,8 +358,6 @@ class CoordinatorController {
               });
               
               console.log('✅ Added coordinator', coordinator.id, 'for company', companyId);
-            } else {
-              console.log('ℹ️ Coordinator', coordinator.id, 'did not upload MOA for company', companyId);
             }
           }
         }
@@ -607,8 +591,8 @@ class CoordinatorController {
               // PHASE 1: Update partnership in junction table (NEW WAY)
               try {
                 const partnershipResult = await query('company_coordinator_partnerships', 'select', ['id'], { 
-                  company_id: company.id, 
-                  coordinator_id: coordinatorId 
+                  company_id: company.id,
+                  coordinator_id: coordinatorId
                 });
 
                 if (partnershipResult.data && partnershipResult.data.length > 0) {
@@ -1543,6 +1527,402 @@ class CoordinatorController {
       res.status(500).json({
         success: false,
         message: 'Failed to remove campus assignment',
+        error: error.message
+      });
+    }
+  }
+
+  // Get companies available for assignment (have MOA with another coordinator, match program-industry)
+  static async getAvailableCompaniesForAssignment(req, res) {
+    try {
+      const { coordinatorId } = req.params;
+      
+      if (!coordinatorId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coordinator ID is required'
+        });
+      }
+
+      // Get coordinator details
+      const coordinatorResult = await query('coordinators', 'select', ['id', 'user_id', 'program'], { id: parseInt(coordinatorId) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      const coordinator = coordinatorResult.data[0];
+      const coordinatorProgram = coordinator.program ? coordinator.program.toLowerCase() : '';
+
+      // Get all companies that have at least one active MOA with any coordinator
+      // First, get all partnerships with active MOA
+      const partnershipsResult = await query('company_coordinator_partnerships', 'select', ['company_id', 'moa_status'], {});
+      
+      // Get unique company IDs that have active MOA
+      const companiesWithMOA = new Set();
+      if (partnershipsResult.data) {
+        partnershipsResult.data.forEach(partnership => {
+          if (partnership.moa_status === 'active' || partnership.moa_status === 'approved') {
+            companiesWithMOA.add(partnership.company_id);
+          }
+        });
+      }
+
+      if (companiesWithMOA.size === 0) {
+        return res.json({
+          success: true,
+          companies: []
+        });
+      }
+
+      // Get all companies
+      const allCompaniesResult = await query('companies', 'select', null, {});
+      if (!allCompaniesResult.data) {
+        return res.json({
+          success: true,
+          companies: []
+        });
+      }
+
+      // Program-industry matching function (flexible keyword-based)
+      const matchesProgramIndustry = (companyIndustry) => {
+        if (!coordinatorProgram || !companyIndustry) return false;
+        
+        const industry = companyIndustry.toLowerCase();
+        
+        // Direct match
+        if (industry.includes(coordinatorProgram)) return true;
+        
+        // Keyword-based matching
+        const programKeywords = {
+          'bsit': ['information technology', 'it', 'computer science', 'software engineering', 'web development', 'mobile development', 'technology', 'tech', 'software', 'programming', 'computer', 'computers', 'laptop', 'laptops', 'designing', 'design', 'print', 'printing', 'graphic design', 'print and designing', 'technical', 'word', 'excel', 'encoding', 'coding', 'programming', 'web design', 'graphic', 'digital design', 'computer programming', 'software development', 'game dev', 'game development', 'gaming', 'game design', 'video game', 'game programming', 'game developer'],
+          'bitm': ['machine', 'motor', 'automotive', 'industrial', 'mechanical', 'manufacturing', 'industrial management', 'industrial technology', 'machine field', 'motor machine', 'automotive technology', 'industrial technology management', 'mechanic', 'machinery', 'automotive engineering'],
+          'bsmath': ['mathematics', 'math', 'mathematical', 'maths'],
+          'bsce': ['civil engineering', 'construction', 'infrastructure', 'architecture', 'structural', 'engineering', 'building', 'construction management', 'civil'],
+          'bsmrs': ['mathematics', 'math', 'statistics', 'research', 'data analysis', 'analytics', 'quantitative', 'statistical analysis', 'statistical', 'mathematical research', 'math research', 'statistical research', 'analytics research']
+        };
+
+        const keywords = programKeywords[coordinatorProgram] || [];
+        return keywords.some(keyword => industry.includes(keyword));
+      };
+
+      // Filter companies: must have MOA with another coordinator AND match program-industry
+      const availableCompanies = [];
+      const coordinatorUserId = coordinator.user_id;
+
+      for (const company of allCompaniesResult.data) {
+        // Check if company has MOA with another coordinator (not this one)
+        if (!companiesWithMOA.has(company.id)) continue;
+
+        // Check if company already has partnership with this coordinator
+        const existingPartnership = await query('company_coordinator_partnerships', 'select', ['id'], {
+          company_id: company.id,
+          coordinator_id: coordinator.id
+        });
+        
+        const isAlreadyAssigned = existingPartnership.data && existingPartnership.data.length > 0;
+        
+        // Check if company has MOA with a different coordinator
+        const otherPartnerships = await query('company_coordinator_partnerships', 'select', ['coordinator_id', 'moa_status'], {
+          company_id: company.id
+        });
+        
+        const hasMOAWithOther = otherPartnerships.data && otherPartnerships.data.some(
+          p => p.coordinator_id !== coordinator.id && (p.moa_status === 'active' || p.moa_status === 'approved')
+        );
+
+        // Must have MOA with another coordinator AND match program-industry
+        if (hasMOAWithOther && matchesProgramIndustry(company.industry)) {
+          // Get user data for company
+          const userResult = await query('users', 'select', ['email', 'profile_picture'], { id: company.user_id });
+          const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
+
+          availableCompanies.push({
+            id: company.id.toString(),
+            name: company.company_name,
+            industry: company.industry,
+            address: company.address,
+            email: user ? user.email : '',
+            profilePicture: user ? user.profile_picture : null,
+            isAlreadyAssigned: isAlreadyAssigned
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        companies: availableCompanies
+      });
+    } catch (error) {
+      console.error('Error getting available companies for assignment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get available companies',
+        error: error.message
+      });
+    }
+  }
+
+  // Assign coordinator to company (auto-approved by admin)
+  static async assignCoordinatorToCompany(req, res) {
+    try {
+      const { id } = req.params; // coordinator id
+      const { companyId, assignedBy } = req.body;
+
+      if (!companyId || !assignedBy) {
+        return res.status(400).json({
+          success: false,
+          message: 'companyId and assignedBy are required'
+        });
+      }
+
+      // Get coordinator details
+      const coordinatorResult = await query('coordinators', 'select', ['id', 'user_id', 'program'], { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      const coordinator = coordinatorResult.data[0];
+      const coordinatorUserId = coordinator.user_id;
+
+      // Get company details
+      const companyResult = await query('companies', 'select', ['id', 'industry'], { id: parseInt(companyId) });
+      if (!companyResult.data || companyResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Company not found'
+        });
+      }
+
+      const company = companyResult.data[0];
+
+      // Check if partnership already exists
+      const existingPartnership = await query('company_coordinator_partnerships', 'select', ['id'], {
+        company_id: parseInt(companyId),
+        coordinator_id: coordinator.id
+      });
+
+      if (existingPartnership.data && existingPartnership.data.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coordinator is already assigned to this company'
+        });
+      }
+
+      // Validate program-industry match
+      const coordinatorProgram = coordinator.program ? coordinator.program.toLowerCase() : '';
+      const companyIndustry = company.industry ? company.industry.toLowerCase() : '';
+
+      const programKeywords = {
+        'bsit': ['information technology', 'it', 'computer science', 'software engineering', 'web development', 'mobile development', 'technology', 'tech', 'software', 'programming', 'computer', 'computers', 'laptop', 'laptops', 'designing', 'design', 'print', 'printing', 'graphic design', 'print and designing', 'technical', 'word', 'excel', 'encoding', 'coding', 'programming', 'web design', 'graphic', 'digital design', 'computer programming', 'software development', 'game dev', 'game development', 'gaming', 'game design', 'video game', 'game programming', 'game developer'],
+        'bitm': ['machine', 'motor', 'automotive', 'industrial', 'mechanical', 'manufacturing', 'industrial management', 'industrial technology', 'machine field', 'motor machine', 'automotive technology', 'industrial technology management', 'mechanic', 'machinery', 'automotive engineering'],
+        'bsmath': ['mathematics', 'math', 'mathematical', 'maths'],
+        'bsce': ['civil engineering', 'construction', 'infrastructure', 'architecture', 'structural', 'engineering', 'building', 'construction management', 'civil'],
+        'bsmrs': ['mathematics', 'math', 'statistics', 'research', 'data analysis', 'analytics', 'quantitative', 'statistical analysis', 'statistical', 'mathematical research', 'math research', 'statistical research', 'analytics research']
+      };
+
+      const keywords = programKeywords[coordinatorProgram] || [];
+      const matchesProgram = coordinatorProgram && companyIndustry && (
+        companyIndustry.includes(coordinatorProgram) ||
+        keywords.some(keyword => companyIndustry.includes(keyword))
+      );
+
+      if (!matchesProgram) {
+        return res.status(400).json({
+          success: false,
+          message: `Coordinator program (${coordinator.program}) does not match company industry (${company.industry})`
+        });
+      }
+
+      // Check if company has a partnership with another coordinator
+      // This ensures the company is already partnered with at least one other coordinator
+      const otherPartnerships = await query('company_coordinator_partnerships', 'select', ['coordinator_id', 'partnership_status', 'coordinator_approved', 'company_approved'], {
+        company_id: parseInt(companyId)
+      });
+
+      // Check if there's any partnership with another coordinator (not the one being assigned)
+      // A partnership is considered valid if both coordinator and company have approved it
+      const hasPartnershipWithOther = otherPartnerships.data && otherPartnerships.data.some(
+        p => {
+          const isOtherCoordinator = p.coordinator_id !== coordinator.id;
+          const coordinatorApproved = p.coordinator_approved === true || p.coordinator_approved === 1 || p.coordinator_approved === 'true' || p.coordinator_approved === '1';
+          const companyApproved = p.company_approved === true || p.company_approved === 1 || p.company_approved === 'true' || p.company_approved === '1';
+          const isApproved = (p.partnership_status === 'approved') || (coordinatorApproved && companyApproved);
+          
+          return isOtherCoordinator && isApproved;
+        }
+      );
+
+      if (!hasPartnershipWithOther) {
+        return res.status(400).json({
+          success: false,
+          message: 'Company must have an approved partnership with another coordinator'
+        });
+      }
+
+      // Create partnership with auto-approval
+      const now = new Date().toISOString();
+      const partnershipData = {
+        company_id: parseInt(companyId),
+        coordinator_id: coordinator.id,
+        coordinator_user_id: coordinatorUserId,
+        coordinator_approved: true,
+        company_approved: true,
+        partnership_status: 'approved',
+        partnership_approved_by: parseInt(assignedBy),
+        partnership_approved_at: now,
+        created_at: now,
+        updated_at: now
+      };
+
+      const partnershipResult = await query('company_coordinator_partnerships', 'insert', partnershipData);
+
+      if (!partnershipResult.data) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create partnership'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Coordinator assigned to company successfully',
+        partnership: partnershipResult.data
+      });
+    } catch (error) {
+      console.error('Error assigning coordinator to company:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to assign coordinator to company',
+        error: error.message
+      });
+    }
+  }
+
+  // Get assigned companies for a coordinator
+  static async getCoordinatorAssignedCompanies(req, res) {
+    try {
+      const { id } = req.params; // coordinator id
+
+      // Get coordinator
+      const coordinatorResult = await query('coordinators', 'select', ['id'], { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      const coordinator = coordinatorResult.data[0];
+
+      // Get all partnerships for this coordinator
+      const partnershipsResult = await query('company_coordinator_partnerships', 'select', null, {
+        coordinator_id: coordinator.id
+      });
+
+      if (!partnershipsResult.data || partnershipsResult.data.length === 0) {
+        return res.json({
+          success: true,
+          companies: []
+        });
+      }
+
+      // Get company details for each partnership
+      const companies = [];
+      for (const partnership of partnershipsResult.data) {
+        const companyResult = await query('companies', 'select', null, { id: partnership.company_id });
+        if (companyResult.data && companyResult.data.length > 0) {
+          const company = companyResult.data[0];
+          
+          // Get user data
+          const userResult = await query('users', 'select', ['email', 'profile_picture'], { id: company.user_id });
+          const user = userResult.data && userResult.data.length > 0 ? userResult.data[0] : null;
+
+          companies.push({
+            id: company.id.toString(),
+            name: company.company_name,
+            industry: company.industry,
+            address: company.address,
+            email: user ? user.email : '',
+            profilePicture: user ? user.profile_picture : null,
+            partnershipStatus: partnership.partnership_status,
+            assignedAt: partnership.created_at,
+            partnershipId: partnership.id.toString() // Include partnership ID for unassigning
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        companies: companies
+      });
+    } catch (error) {
+      console.error('Error getting coordinator assigned companies:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get assigned companies',
+        error: error.message
+      });
+    }
+  }
+
+  // Unassign coordinator from company
+  static async unassignCoordinatorFromCompany(req, res) {
+    try {
+      const { id } = req.params; // coordinator id
+      const { companyId } = req.body;
+
+      if (!companyId) {
+        return res.status(400).json({
+          success: false,
+          message: 'companyId is required'
+        });
+      }
+
+      // Get coordinator
+      const coordinatorResult = await query('coordinators', 'select', ['id'], { id: parseInt(id) });
+      if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Coordinator not found'
+        });
+      }
+
+      const coordinator = coordinatorResult.data[0];
+
+      // Check if partnership exists
+      const partnershipResult = await query('company_coordinator_partnerships', 'select', ['id'], {
+        company_id: parseInt(companyId),
+        coordinator_id: coordinator.id
+      });
+
+      if (!partnershipResult.data || partnershipResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Partnership not found'
+        });
+      }
+
+      // Delete the partnership
+      await query('company_coordinator_partnerships', 'delete', null, {
+        company_id: parseInt(companyId),
+        coordinator_id: coordinator.id
+      });
+
+      res.json({
+        success: true,
+        message: 'Coordinator unassigned from company successfully'
+      });
+    } catch (error) {
+      console.error('Error unassigning coordinator from company:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to unassign coordinator from company',
         error: error.message
       });
     }

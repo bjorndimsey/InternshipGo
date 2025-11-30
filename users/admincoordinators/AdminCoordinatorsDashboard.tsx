@@ -455,7 +455,7 @@ export default function AdminCoordinatorsDashboard({ onLogout, currentUser }: Ad
       case 'Companies':
         return <CompaniesPage currentUser={currentUser} />;
       case 'Coordinators':
-        return <CoordinatorsPage />;
+        return <CoordinatorsPage currentUser={currentUser} />;
       case 'Events':
         return <EventsPage currentUser={currentUser} />;
       case 'Submissions':

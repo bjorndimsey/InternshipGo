@@ -107,18 +107,98 @@ class CompanyController {
     try {
       // Get coordinator user ID from query parameter (if provided)
       const coordinatorUserId = req.query.coordinatorUserId ? parseInt(req.query.coordinatorUserId) : null;
+      // Check if we should include ALL companies (for coordinator dashboard)
+      const includeAllCompanies = req.query.includeAllCompanies === 'true' || req.query.includeAllCompanies === true;
       
-      // If coordinatorUserId is provided, only get companies where this coordinator uploaded MOA
-      // Otherwise, get all companies (for backward compatibility)
-      const queryFilter = coordinatorUserId ? { moa_uploaded_by: coordinatorUserId } : {};
+      // Set to track company IDs we've already processed (to avoid duplicates)
+      const processedCompanyIds = new Set();
+      const companiesToProcess = [];
       
-      console.log('🔍 Fetching companies with filter:', queryFilter);
+      // If includeAllCompanies is true, fetch ALL companies from companies table
+      if (includeAllCompanies) {
+        console.log('🔍 [COORDINATOR DASHBOARD] Fetching ALL companies from companies table');
+        const allCompaniesResult = await query('companies', 'select', null, {});
+        
+        if (allCompaniesResult.data && allCompaniesResult.data.length > 0) {
+          console.log('🔍 [COORDINATOR DASHBOARD] Found', allCompaniesResult.data.length, 'companies in database');
+          companiesToProcess.push(...allCompaniesResult.data);
+          allCompaniesResult.data.forEach(c => processedCompanyIds.add(c.id));
+          console.log('✅ [COORDINATOR DASHBOARD] Added all companies to process:', allCompaniesResult.data.length);
+        } else {
+          console.log('ℹ️ [COORDINATOR DASHBOARD] No companies found in database');
+        }
+      } else if (coordinatorUserId) {
+        // Get coordinator_id from user_id
+        const coordinatorResult = await query('coordinators', 'select', ['id'], { user_id: coordinatorUserId });
+        const coordinatorId = coordinatorResult.data && coordinatorResult.data.length > 0 ? coordinatorResult.data[0].id : null;
+        
+        if (!coordinatorId) {
+          console.log('❌ Coordinator not found for user_id:', coordinatorUserId);
+          return res.json({
+            success: true,
+            message: 'Companies fetched successfully',
+            companies: []
+          });
+        }
+        
+        // ONLY get companies from company_coordinator_partnerships table
+        console.log('🔍 Fetching companies from partnerships table for coordinator:', coordinatorId);
+        const partnershipsResult = await query('company_coordinator_partnerships', 'select', ['company_id'], {
+          coordinator_id: coordinatorId
+        });
+        
+        if (partnershipsResult.data && partnershipsResult.data.length > 0) {
+          const companyIds = partnershipsResult.data.map(p => p.company_id);
+          console.log('🔍 Found', companyIds.length, 'companies via partnerships');
+          
+          // Get companies from partnerships
+          for (const companyId of companyIds) {
+            const companyResult = await query('companies', 'select', null, { id: companyId });
+            if (companyResult.data && companyResult.data.length > 0) {
+              companiesToProcess.push(companyResult.data[0]);
+              processedCompanyIds.add(companyId);
+            }
+          }
+        } else {
+          console.log('ℹ️ No partnerships found for coordinator:', coordinatorId);
+        }
+      } else {
+        // If no coordinatorUserId (e.g., for students), get companies from partnerships table
+        // Show ALL companies that have partnerships (approved or pending) - students can see all
+        console.log('🔍 [STUDENT] Fetching companies from partnerships table (no coordinator filter)');
+        const partnershipsResult = await query('company_coordinator_partnerships', 'select', ['company_id', 'partnership_status'], {});
+        
+        console.log('🔍 [STUDENT] Partnerships query result:', {
+          hasData: !!partnershipsResult.data,
+          dataLength: partnershipsResult.data ? partnershipsResult.data.length : 0,
+          sample: partnershipsResult.data ? partnershipsResult.data.slice(0, 3) : null
+        });
+        
+        if (partnershipsResult.data && partnershipsResult.data.length > 0) {
+          // Get unique company IDs (all companies with any partnership)
+          const uniqueCompanyIds = [...new Set(partnershipsResult.data.map(p => p.company_id))];
+          console.log('🔍 [STUDENT] Found', uniqueCompanyIds.length, 'unique companies with partnerships');
+          console.log('🔍 [STUDENT] Company IDs:', uniqueCompanyIds);
+          
+          // Get companies from partnerships
+          for (const companyId of uniqueCompanyIds) {
+            const companyResult = await query('companies', 'select', null, { id: companyId });
+            if (companyResult.data && companyResult.data.length > 0) {
+              companiesToProcess.push(companyResult.data[0]);
+              processedCompanyIds.add(companyId);
+              console.log('✅ [STUDENT] Added company to process:', companyResult.data[0].company_name, 'ID:', companyId);
+            } else {
+              console.log('⚠️ [STUDENT] Company not found for ID:', companyId);
+            }
+          }
+          console.log('📊 [STUDENT] Total companies to process:', companiesToProcess.length);
+        } else {
+          console.log('ℹ️ [STUDENT] No partnerships found in database');
+        }
+      }
       
-      // Get companies filtered by MOA uploader (if coordinatorUserId provided)
-      const companiesResult = await query('companies', 'select', null, queryFilter);
-      
-      if (!companiesResult.data || companiesResult.data.length === 0) {
-        console.log('No companies found in database');
+      if (companiesToProcess.length === 0) {
+        console.log('No companies found');
         return res.json({
           success: true,
           message: 'Companies fetched successfully',
@@ -126,11 +206,17 @@ class CompanyController {
         });
       }
 
-      console.log('Found companies in database:', companiesResult.data.length);
+      console.log('📊 [STUDENT] Found companies to process:', companiesToProcess.length);
+      console.log('📊 [STUDENT] Company names:', companiesToProcess.map(c => c.company_name));
 
       // Get user data for each company and filter by partnership status and MOA status
       const companies = [];
-      for (const company of companiesResult.data) {
+      let companiesProcessed = 0;
+      let companiesSkipped = 0;
+      
+      for (const company of companiesToProcess) {
+        companiesProcessed++;
+        console.log(`\n🔄 [STUDENT] Processing company ${companiesProcessed}/${companiesToProcess.length}: ${company.company_name} (ID: ${company.id})`);
         console.log('Processing company:', company.id, 'with user_id:', company.user_id, 'moa_uploaded_by:', company.moa_uploaded_by);
         const userResult = await query('users', 'select', null, { id: company.user_id });
         
@@ -141,18 +227,18 @@ class CompanyController {
           // Include all companies (not other user types) regardless of partnership status
           if (user.user_type === 'Company') {
             
-            // PHASE 3: If coordinatorUserId provided, check partnership in junction table
+            // Get partnership data from junction table
             let partnershipData = null;
-            let shouldIncludeCompany = true;
             
-            if (coordinatorUserId) {
+            if (coordinatorUserId && !includeAllCompanies) {
+              // Only check for partnerships if coordinatorUserId is provided AND we're not including all companies
               try {
                 // Get coordinator_id from coordinator_user_id
                 const coordinatorResult = await query('coordinators', 'select', ['id'], { user_id: coordinatorUserId });
                 if (coordinatorResult.data && coordinatorResult.data.length > 0) {
                   const coordinatorId = coordinatorResult.data[0].id;
                   
-                  // Try to get partnership from junction table
+                  // Get partnership from junction table (required - company should only be here if partnership exists)
                   const partnershipResult = await query('company_coordinator_partnerships', 'select', null, { 
                     company_id: company.id,
                     coordinator_id: coordinatorId 
@@ -162,34 +248,48 @@ class CompanyController {
                     partnershipData = partnershipResult.data[0];
                     console.log('✅ Found partnership in junction table for company', company.id);
                   } else {
-                    // Fallback: Check old companies table
-                    if (!company.moa_uploaded_by || company.moa_uploaded_by !== coordinatorUserId) {
-                      console.log(`Skipping company ${company.company_name} - No partnership with coordinator ${coordinatorUserId}`);
-                      shouldIncludeCompany = false;
-                    }
+                    // This shouldn't happen since we only fetch companies with partnerships, but handle it gracefully
+                    console.log(`⚠️ [STUDENT] Warning: Company ${company.company_name} in list but no partnership found`);
+                    companiesSkipped++;
+                    continue; // Skip this company
                   }
                 } else {
-                  // Coordinator not found, fallback to old method
-                  if (!company.moa_uploaded_by || company.moa_uploaded_by !== coordinatorUserId) {
-                    console.log(`Skipping company ${company.company_name} - MOA not uploaded by coordinator ${coordinatorUserId}`);
-                    shouldIncludeCompany = false;
+                  console.log(`⚠️ [STUDENT] Coordinator not found for user_id: ${coordinatorUserId}`);
+                  companiesSkipped++;
+                  continue; // Skip this company
+                }
+              } catch (error) {
+                console.log('⚠️ [STUDENT] Error checking junction table:', error.message);
+                companiesSkipped++;
+                continue; // Skip this company on error
+              }
+            } else if (coordinatorUserId && includeAllCompanies) {
+              // When includeAllCompanies is true, still try to get partnership data if it exists, but don't require it
+              try {
+                const coordinatorResult = await query('coordinators', 'select', ['id'], { user_id: coordinatorUserId });
+                if (coordinatorResult.data && coordinatorResult.data.length > 0) {
+                  const coordinatorId = coordinatorResult.data[0].id;
+                  
+                  // Get partnership from junction table (optional when includeAllCompanies is true)
+                  const partnershipResult = await query('company_coordinator_partnerships', 'select', null, { 
+                    company_id: company.id,
+                    coordinator_id: coordinatorId 
+                  });
+                  
+                  if (partnershipResult.data && partnershipResult.data.length > 0) {
+                    partnershipData = partnershipResult.data[0];
+                    console.log('✅ [COORDINATOR DASHBOARD] Found partnership in junction table for company', company.id);
+                  } else {
+                    console.log(`ℹ️ [COORDINATOR DASHBOARD] Company ${company.company_name} has no partnership with this coordinator, will use default pending status`);
                   }
                 }
               } catch (error) {
-                console.log('⚠️ Error checking junction table, falling back to old method:', error.message);
-                // Fallback to old method
-                if (!company.moa_uploaded_by || company.moa_uploaded_by !== coordinatorUserId) {
-                  shouldIncludeCompany = false;
-                }
+                console.log('⚠️ [COORDINATOR DASHBOARD] Error checking junction table (non-fatal):', error.message);
+                // Don't skip - continue processing with default pending status
               }
             }
-            // Note: If coordinatorUserId is NOT provided, we include all companies and fetch all their partnerships
             
-            if (!shouldIncludeCompany) {
-              continue;
-            }
-            
-            // PHASE 3: Get ALL partnerships for this company from junction table
+            // Get ALL partnerships for this company from junction table
             let allPartnerships = [];
             let partnershipStatus = 'pending';
             let coordinatorApproved = false;
@@ -205,7 +305,17 @@ class CompanyController {
               
               if (allPartnershipsResult.data && allPartnershipsResult.data.length > 0) {
                 allPartnerships = allPartnershipsResult.data;
-                console.log(`✅ Found ${allPartnerships.length} partnership(s) for company ${company.id}`);
+                console.log(`✅ [STUDENT] Found ${allPartnerships.length} partnership(s) for company ${company.company_name} (ID: ${company.id})`);
+                console.log(`📋 [STUDENT] Partnership statuses:`, allPartnerships.map(p => ({
+                  id: p.id,
+                  status: p.partnership_status,
+                  coordinator_approved: p.coordinator_approved,
+                  company_approved: p.company_approved
+                })));
+                
+                // For students (no coordinatorUserId), include all companies with partnerships
+                // (No need to filter by approval status - show all companies with partnerships)
+                console.log(`✅ [STUDENT] Including company ${company.company_name} - has partnerships`);
                 
                 // Fetch coordinator names for all partnerships
                 for (const partnership of allPartnerships) {
@@ -239,34 +349,71 @@ class CompanyController {
                   partnershipStatus = partnershipData.partnership_status || 'pending';
                   coordinatorApproved = partnershipData.coordinator_approved === true || partnershipData.coordinator_approved === 1;
                   companyApproved = partnershipData.company_approved === true || partnershipData.company_approved === 1;
-                  moaStatus = partnershipData.moa_status || 'pending';
+                  // Map partnership_status to moaStatus: 'approved' -> 'active', otherwise 'pending'
+                  moaStatus = partnershipStatus === 'approved' ? 'active' : 'pending';
                   moaExpiryDate = partnershipData.moa_expiry_date;
+                } else if (allPartnerships.length > 0) {
+                  // For students, use the first approved partnership, or first partnership if none approved
+                  const approvedPartnership = allPartnerships.find(p => p.partnership_status === 'approved') || allPartnerships[0];
+                  partnershipStatus = approvedPartnership.partnership_status || 'pending';
+                  coordinatorApproved = approvedPartnership.coordinator_approved === true || approvedPartnership.coordinator_approved === 1;
+                  companyApproved = approvedPartnership.company_approved === true || approvedPartnership.company_approved === 1;
+                  // Map partnership_status to moaStatus: 'approved' -> 'active', otherwise 'pending'
+                  moaStatus = partnershipStatus === 'approved' ? 'active' : 'pending';
+                  moaExpiryDate = approvedPartnership.moa_expiry_date;
+                  console.log(`📊 [STUDENT] Using partnership for ${company.company_name}:`, {
+                    partnershipStatus,
+                    coordinatorApproved,
+                    companyApproved,
+                    moaStatus: `mapped from partnership_status: ${partnershipStatus}`
+                  });
+                } else if (includeAllCompanies) {
+                  // Company has no partnerships - use default pending status for coordinator dashboard
+                  partnershipStatus = 'pending';
+                  moaStatus = 'pending';
+                  coordinatorApproved = false;
+                  companyApproved = false;
+                  moaExpiryDate = null;
+                  console.log(`📊 [COORDINATOR DASHBOARD] Company ${company.company_name} has no partnerships, using default pending status`);
                 } else {
-                  // Use the first partnership or aggregate status
-                  const firstPartnership = allPartnerships[0];
-                  partnershipStatus = firstPartnership.partnership_status || 'pending';
-                  coordinatorApproved = firstPartnership.coordinator_approved === true || firstPartnership.coordinator_approved === 1;
-                  companyApproved = firstPartnership.company_approved === true || firstPartnership.company_approved === 1;
-                  moaStatus = firstPartnership.moa_status || 'pending';
-                  moaExpiryDate = firstPartnership.moa_expiry_date;
+                  // This shouldn't happen, but set defaults just in case
+                  partnershipStatus = 'pending';
+                  moaStatus = 'pending';
+                  coordinatorApproved = false;
+                  companyApproved = false;
+                  moaExpiryDate = null;
                 }
               } else {
-                // Fallback to old companies table
-                partnershipStatus = company.partnership_status || 'pending';
-                coordinatorApproved = company.coordinator_approved || false;
-                companyApproved = company.company_approved || false;
-                moaStatus = company.moa_status || 'pending';
-                moaExpiryDate = company.moa_expiry_date;
+                // No partnerships found
+                if (includeAllCompanies) {
+                  // For coordinator dashboard, include companies without partnerships with default 'pending' status
+                  console.log(`✅ [COORDINATOR DASHBOARD] Company ${company.company_name} (ID: ${company.id}) has no partnerships, including with pending status`);
+                  partnershipStatus = 'pending';
+                  moaStatus = 'pending';
+                  coordinatorApproved = false;
+                  companyApproved = false;
+                  allPartnerships = []; // Empty array for companies without partnerships
+                } else {
+                  // For students, skip companies without partnerships
+                console.log(`⚠️ [STUDENT] Company ${company.company_name} (ID: ${company.id}) has no partnerships, skipping`);
+                companiesSkipped++;
+                continue;
+                }
               }
             } catch (error) {
-              console.log('⚠️ Error fetching partnerships from junction table, falling back to old method:', error.message);
-              // Fallback to old companies table
-              partnershipStatus = company.partnership_status || 'pending';
-              coordinatorApproved = company.coordinator_approved || false;
-              companyApproved = company.company_approved || false;
-              moaStatus = company.moa_status || 'pending';
-              moaExpiryDate = company.moa_expiry_date;
+              console.log('⚠️ [STUDENT] Error fetching partnerships from junction table:', error.message);
+              console.log('⚠️ [STUDENT] Error stack:', error.stack);
+              companiesSkipped++;
+              continue; // Skip this company on error
             }
+            
+            console.log(`✅ [STUDENT] Adding company to response: ${company.company_name}`, {
+              id: company.id,
+              partnershipStatus,
+              moaStatus: `'${moaStatus}' (mapped from partnership_status: '${partnershipStatus}')`,
+              coordinatorApproved,
+              companyApproved
+            });
             
             companies.push({
                 id: company.id.toString(),
@@ -315,10 +462,25 @@ class CompanyController {
                 skillsRequired: company.skills_required
               });
           } else {
-            console.log(`Skipping company ${company.company_name} - Not a Company user type`);
+            console.log(`⚠️ [STUDENT] Skipping company ${company.company_name} - Not a Company user type`);
+            companiesSkipped++;
           }
         }
       }
+
+      console.log('\n📊 [STUDENT] ===== FINAL SUMMARY =====');
+      console.log('📊 [STUDENT] Total companies processed:', companiesProcessed);
+      console.log('📊 [STUDENT] Total companies skipped:', companiesSkipped);
+      console.log('📊 [STUDENT] Total companies in response:', companies.length);
+      console.log('📊 [STUDENT] Company names in final response:', companies.map(c => c.name));
+      console.log('📊 [STUDENT] Company details:', companies.map(c => ({
+        id: c.id,
+        name: c.name,
+        partnershipStatus: c.partnershipStatus,
+        moaStatus: c.moaStatus,
+        hasPartnerships: c.partnerships ? c.partnerships.length : 0
+      })));
+      console.log('📊 [STUDENT] ===== END SUMMARY =====\n');
 
       res.json({
         success: true,
@@ -720,8 +882,9 @@ class CompanyController {
   static async removePartnership(req, res) {
     try {
       const { id } = req.params;
+      const { coordinatorUserId } = req.body; // Get coordinator user ID from request body
 
-      console.log('🗑️ removePartnership called for company:', id);
+      console.log('🗑️ removePartnership called for company:', id, 'coordinatorUserId:', coordinatorUserId);
 
       const companyResult = await query('companies', 'select', null, { id: parseInt(id) });
       
@@ -734,70 +897,65 @@ class CompanyController {
 
       const company = companyResult.data[0];
       const companyId = parseInt(id);
-      const coordinatorUserId = company.moa_uploaded_by;
-      console.log('🗑️ Found company:', { companyId: company.id, moa_uploaded_by: coordinatorUserId });
 
-      // PHASE 1: Update the company table (OLD WAY - for backward compatibility)
-      const updateData = {
-        moa_uploaded_by: null,
-        moa_uploaded_at: null,
-        partnership_status: 'pending',
-        moa_status: 'pending',
-        updated_at: new Date().toISOString()
-      };
+      // If coordinatorUserId is provided, only remove that specific coordinator's partnership
+      if (coordinatorUserId) {
+        try {
+          // Get coordinator ID from user ID
+          const coordinatorResult = await query('coordinators', 'select', ['id'], { user_id: parseInt(coordinatorUserId) });
 
-      // Reset approval flags if they exist
-      try {
-        updateData.coordinator_approved = false;
-        updateData.company_approved = false;
-      } catch (error) {
-        console.log('⚠️ Approval columns may not exist yet');
-      }
-
-      const result = await query('companies', 'update', updateData, { id: companyId });
-
-      if (!result.data) {
+          if (!coordinatorResult.data || coordinatorResult.data.length === 0) {
         return res.status(404).json({
           success: false,
-          message: 'Company not found'
+              message: 'Coordinator not found'
         });
       }
 
-      // PHASE 1: Remove partnership from junction table (NEW WAY)
-      // If we have coordinator info, remove that specific partnership
-      // Otherwise, remove all partnerships for this company
-      if (coordinatorUserId) {
-        try {
-          const coordinatorResult = await query('coordinators', 'select', ['id'], { user_id: coordinatorUserId });
-          if (coordinatorResult.data && coordinatorResult.data.length > 0) {
             const coordinatorId = coordinatorResult.data[0].id;
-            // Delete the specific partnership
-            await query('company_coordinator_partnerships', 'delete', null, { 
+          console.log('🗑️ Removing partnership for coordinator:', coordinatorId, 'company:', companyId);
+
+          // Delete only the specific partnership for this coordinator
+          const deleteResult = await query('company_coordinator_partnerships', 'delete', null, { 
               company_id: companyId, 
               coordinator_id: coordinatorId 
             });
-            console.log('✅ Removed partnership from junction table');
-          }
-        } catch (error) {
-          console.error('⚠️ Error removing partnership from junction table (migration may not be run yet):', error.message);
-        }
-      } else {
-        // Remove all partnerships for this company
-        try {
-          await query('company_coordinator_partnerships', 'delete', null, { company_id: companyId });
-          console.log('✅ Removed all partnerships from junction table');
-        } catch (error) {
-          console.error('⚠️ Error removing partnerships from junction table (migration may not be run yet):', error.message);
-        }
-      }
 
-      console.log('✅ Partnership/MOA removed successfully');
+          console.log('✅ Removed partnership from junction table for coordinator:', coordinatorId);
+
+          // Check if this coordinator was the one who uploaded the MOA
+          // If so, update the company table to clear MOA-related fields
+          if (company.moa_uploaded_by && parseInt(company.moa_uploaded_by) === parseInt(coordinatorUserId)) {
+            const updateData = {
+              moa_uploaded_by: null,
+              moa_uploaded_at: null,
+              updated_at: new Date().toISOString()
+            };
+
+            // Only update company table if this coordinator uploaded the MOA
+            await query('companies', 'update', updateData, { id: companyId });
+            console.log('✅ Cleared MOA fields in company table');
+          }
 
       res.json({
         success: true,
-        message: 'Partnership and MOA removed successfully. The company remains in the system.',
-        company: result.data
-      });
+            message: 'Partnership removed successfully. The company remains in the system.',
+            company: companyResult.data
+          });
+        } catch (error) {
+          console.error('❌ Error removing partnership from junction table:', error);
+          res.status(500).json({
+            success: false,
+            message: 'Failed to remove partnership',
+            error: error.message
+          });
+        }
+      } else {
+        // If no coordinatorUserId provided, return error (we need to know which coordinator to remove)
+        return res.status(400).json({
+          success: false,
+          message: 'Coordinator user ID is required to remove partnership'
+        });
+      }
     } catch (error) {
       console.error('❌ Error removing partnership:', error);
       res.status(500).json({

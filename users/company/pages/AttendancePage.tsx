@@ -698,10 +698,99 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
     }
   };
 
+  // Validate working hours before saving
+  const validateWorkingHours = (): { isValid: boolean; errorMessage?: string } => {
+    const { startTime, startPeriod, endTime, endPeriod, breakStart, breakStartPeriod, breakEnd, breakEndPeriod } = workingHours;
+    
+    // 1. Time format validation (HH:MM)
+    const timeFormatRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeFormatRegex.test(startTime) || !timeFormatRegex.test(endTime) || 
+        !timeFormatRegex.test(breakStart) || !timeFormatRegex.test(breakEnd)) {
+      return { isValid: false, errorMessage: 'Please enter times in HH:MM format (e.g., 07:00, 11:30)' };
+    }
+
+    // 2. Parse times to minutes for comparison
+    const startMinutes = convertTo24Hour(startTime, startPeriod);
+    const endMinutes = convertTo24Hour(endTime, endPeriod);
+    const breakStartMinutes = convertTo24Hour(breakStart, breakStartPeriod);
+    const breakEndMinutes = convertTo24Hour(breakEnd, breakEndPeriod);
+
+    // 3. Check if end time is after start time (handle midnight crossover)
+    let totalWorkingMinutes = endMinutes - startMinutes;
+    if (totalWorkingMinutes < 0) {
+      // If negative, it means it spans midnight (e.g., 7 PM to 7 AM next day)
+      totalWorkingMinutes += 24 * 60; // Add 24 hours
+    }
+    
+    // 4. Validate minimum working hours (at least 1 hour)
+    if (totalWorkingMinutes < 60) {
+      return { isValid: false, errorMessage: 'Working hours must be at least 1 hour long' };
+    }
+
+    // 5. Validate maximum working hours (no more than 16 hours)
+    if (totalWorkingMinutes > 16 * 60) {
+      return { isValid: false, errorMessage: 'Working hours cannot exceed 16 hours per day' };
+    }
+
+    // 6. Validate break time is within working hours
+    // Check if break start is after work start
+    let breakStartRelative = breakStartMinutes - startMinutes;
+    if (breakStartRelative < 0) {
+      breakStartRelative += 24 * 60; // Handle midnight crossover
+    }
+    
+    // Check if break end is before work end
+    let breakEndRelative = breakEndMinutes - startMinutes;
+    if (breakEndRelative < 0) {
+      breakEndRelative += 24 * 60; // Handle midnight crossover
+    }
+    
+    if (breakStartRelative < 0 || breakStartRelative > totalWorkingMinutes) {
+      return { isValid: false, errorMessage: 'Lunch break start time must be within working hours' };
+    }
+    
+    if (breakEndRelative < 0 || breakEndRelative > totalWorkingMinutes) {
+      return { isValid: false, errorMessage: 'Lunch break end time must be within working hours' };
+    }
+
+    // 7. Validate break start is before break end
+    let breakDuration = breakEndMinutes - breakStartMinutes;
+    if (breakDuration < 0) {
+      breakDuration += 24 * 60; // Handle midnight crossover
+    }
+    
+    if (breakDuration <= 0) {
+      return { isValid: false, errorMessage: 'Lunch break end time must be after break start time' };
+    }
+
+    // 8. Validate minimum break duration (at least 30 minutes)
+    if (breakDuration < 30) {
+      return { isValid: false, errorMessage: 'Lunch break must be at least 30 minutes long' };
+    }
+    
+    // 9. Validate break doesn't overlap with start/end times
+    if (breakStartRelative === 0) {
+      return { isValid: false, errorMessage: 'Lunch break cannot start at the same time as work start' };
+    }
+    
+    if (breakEndRelative >= totalWorkingMinutes) {
+      return { isValid: false, errorMessage: 'Lunch break cannot end at or after work end time' };
+    }
+
+    return { isValid: true };
+  };
+
   // Save working hours to backend
   const saveWorkingHours = async () => {
     if (!companyId) {
       Alert.alert('Error', 'Company information not loaded. Please try again.');
+      return;
+    }
+    
+    // Validate working hours before saving
+    const validation = validateWorkingHours();
+    if (!validation.isValid) {
+      Alert.alert('Invalid Working Hours', validation.errorMessage || 'Please check your working hours settings.');
       return;
     }
     
@@ -3734,16 +3823,6 @@ export default function AttendancePage({ currentUser }: AttendancePageProps) {
                 </View>
               </View>
               
-              <View style={styles.currentStatus}>
-                <Text style={styles.statusLabel}>Current Status:</Text>
-                <Text style={[
-                  styles.workingTimeStatusText,
-                  { color: isWithinWorkingHours() ? '#34a853' : '#ea4335' }
-                ]}>
-                  {isWithinWorkingHours() ? 'Within Working Hours' : 'Outside Working Hours'}
-                </Text>
-              </View>
-              
               <View style={styles.workingTimeActions}>
                 <TouchableOpacity
                   style={styles.cancelButton}
@@ -4806,21 +4885,6 @@ const styles = StyleSheet.create({
   },
   periodButtonTextActive: {
     color: '#fff',
-  },
-  currentStatus: {
-    backgroundColor: '#f8f9fa',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 24,
-  },
-  statusLabel: {
-    fontSize: 14,
-    color: '#6c757d',
-    marginBottom: 4,
-  },
-  workingTimeStatusText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   workingTimeActions: {
     flexDirection: 'row',

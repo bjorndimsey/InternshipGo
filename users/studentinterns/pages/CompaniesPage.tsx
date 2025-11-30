@@ -225,6 +225,8 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [showMissingInfoSelectionModal, setShowMissingInfoSelectionModal] = useState(false);
+  const [showProgramRestrictionModal, setShowProgramRestrictionModal] = useState(false);
+  const [currentStudentProgram, setCurrentStudentProgram] = useState<string>('');
   const [isStartingInternship, setIsStartingInternship] = useState<string | null>(null);
   const [showStartInternshipModal, setShowStartInternshipModal] = useState(false);
   const [companyToStart, setCompanyToStart] = useState<Company | null>(null);
@@ -1937,18 +1939,27 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
     try {
       setIsDownloadingJournal(true);
 
+      const profile = await ensureStudentProfile();
+
+      if (!profile) {
+        Alert.alert('Error', studentProfileError || 'Unable to load your profile details.');
+        return;
+      }
+
+      // Check if student program is BSIT
+      const studentProgram = profile.program?.toUpperCase().trim();
+      if (studentProgram !== 'BSIT') {
+        setCurrentStudentProgram(profile.program || 'Not specified');
+        setShowProgramRestrictionModal(true);
+        setIsDownloadingJournal(false);
+        return;
+      }
+
       const companiesForJournal =
         companies.length > 0 ? companies : await fetchCompanies();
 
       if (!companiesForJournal.length) {
         Alert.alert('Info', 'No approved companies available for generating the OJT Journal.');
-        return;
-      }
-
-      const profile = await ensureStudentProfile();
-
-      if (!profile) {
-        Alert.alert('Error', studentProfileError || 'Unable to load your profile details.');
         return;
       }
 
@@ -3882,6 +3893,36 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
         </View>
       </Modal>
 
+      {/* Program Restriction Modal */}
+      <Modal
+        visible={showProgramRestrictionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowProgramRestrictionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.programRestrictionModalContent}>
+            <View style={styles.programRestrictionHeader}>
+              <MaterialIcons name="info" size={32} color="#F56E0F" />
+              <Text style={styles.programRestrictionTitle}>OJT Journal Unavailable</Text>
+            </View>
+            <View style={styles.programRestrictionInfoContainer}>
+              <Text style={styles.programRestrictionLabel}>Current Program:</Text>
+              <Text style={styles.programRestrictionProgram}>{currentStudentProgram || 'Not specified'}</Text>
+            </View>
+            <Text style={styles.programRestrictionText}>
+              Please wait for more updates and contact your coordinator for assistance.
+            </Text>
+            <TouchableOpacity
+              style={styles.programRestrictionButton}
+              onPress={() => setShowProgramRestrictionModal(false)}
+            >
+              <Text style={styles.programRestrictionButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Missing Info Modal */}
       <Modal
         visible={showMissingInfoModal}
@@ -5294,7 +5335,7 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
                     borderColor: '#4CAF50',
                   }}>
                     <Text style={{ fontSize: 14, fontWeight: '600', color: '#2D5A3D', textAlign: 'center', marginBottom: 8 }}>
-                      Section B (Training Schedule) Total: {trainingSchedules.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)} hours
+                     (Training Schedule) Total: {trainingSchedules.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)} hours
                     </Text>
                     <View style={{
                       marginTop: 8,
@@ -5303,7 +5344,7 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
                       borderTopColor: '#4CAF50',
                     }}>
                       <Text style={{ fontSize: 14, fontWeight: '600', color: '#2D5A3D', textAlign: 'center', marginBottom: 4 }}>
-                        Section A (Total Internship Hours Summary): {sectionATotalHours.toFixed(2)} hours
+                         (Total Internship Hours Summary): {sectionATotalHours.toFixed(2)} hours
                       </Text>
                       {Math.abs(trainingSchedules.reduce((sum, s) => sum + s.totalHours, 0) - sectionATotalHours) < 0.01 ? (
                         <Text style={{ fontSize: 12, color: '#4CAF50', textAlign: 'center', marginTop: 4, fontWeight: '600' }}>
@@ -7138,6 +7179,71 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     fontWeight: '500',
+  },
+  programRestrictionModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 20,
+    maxWidth: 400,
+    width: '90%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  programRestrictionHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  programRestrictionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  programRestrictionInfoContainer: {
+    width: '100%',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  programRestrictionLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  programRestrictionProgram: {
+    fontSize: 18,
+    color: '#1a1a2e',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  programRestrictionText: {
+    fontSize: 14,
+    color: '#4a4a4a',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  programRestrictionButton: {
+    backgroundColor: '#F56E0F',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    minWidth: 120,
+  },
+  programRestrictionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   hteInfoModalContent: {
     backgroundColor: '#fff',

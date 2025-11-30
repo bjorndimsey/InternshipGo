@@ -41,6 +41,7 @@ interface Student {
   last_name: string;
   email: string;
   phone_number?: string;
+  program?: string;
   major?: string;
   year?: string;
   university?: string;
@@ -56,10 +57,12 @@ export default function InternsManagement() {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [programFilter, setProgramFilter] = useState<string>('');
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showProgramFilterModal, setShowProgramFilterModal] = useState(false);
   const [warningModalData, setWarningModalData] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [successModalData, setSuccessModalData] = useState<{ title: string; message: string } | null>(null);
   const [dimensions, setDimensions] = useState({ width, height: Dimensions.get('window').height });
@@ -78,7 +81,7 @@ export default function InternsManagement() {
 
   useEffect(() => {
     filterStudents();
-  }, [searchQuery, students]);
+  }, [searchQuery, programFilter, students]);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -104,6 +107,7 @@ export default function InternsManagement() {
           last_name: student.last_name || '',
           email: student.email || '',
           phone_number: student.phone_number || '',
+          program: student.program || '',
           major: student.major || '',
           year: student.year || '',
           university: student.university || '',
@@ -142,8 +146,25 @@ export default function InternsManagement() {
       });
     }
 
+    if (programFilter) {
+      filtered = filtered.filter(student => 
+        student.program?.toLowerCase() === programFilter.toLowerCase()
+      );
+    }
+
     setFilteredStudents(filtered);
   };
+
+  const getUniquePrograms = () => {
+    const programs = students
+      .map(s => s.program)
+      .filter((p): p is string => !!p && p.trim() !== '')
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .sort();
+    return programs;
+  };
+
+  const availablePrograms = ['BSIT', 'BITM', 'BSMATH', 'BSCE', 'BSMRS'];
 
   const handleViewStudent = (student: Student) => {
     setSelectedStudent(student);
@@ -451,6 +472,9 @@ export default function InternsManagement() {
           <View style={[styles.tableHeaderCell, styles.tableCellId]}>
             <Text style={styles.tableHeaderText}>ID Number</Text>
           </View>
+          <View style={[styles.tableHeaderCell, styles.tableCellProgram]}>
+            <Text style={styles.tableHeaderText}>Program</Text>
+          </View>
           <View style={[styles.tableHeaderCell, styles.tableCellYear]}>
             <Text style={styles.tableHeaderText}>Year</Text>
           </View>
@@ -492,6 +516,9 @@ export default function InternsManagement() {
             </View>
             <View style={[styles.tableCell, styles.tableCellId]}>
               <Text style={styles.tableCellText}>{student.id_number || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, styles.tableCellProgram]}>
+              <Text style={styles.tableCellText} numberOfLines={1}>{student.program || 'N/A'}</Text>
             </View>
             <View style={[styles.tableCell, styles.tableCellYear]}>
               <Text style={styles.tableCellText}>{student.year || 'N/A'}</Text>
@@ -588,6 +615,26 @@ export default function InternsManagement() {
             placeholderTextColor="#999"
           />
         </View>
+        <View style={styles.filterContainer}>
+          <MaterialIcons name="filter-list" size={20} color="#666" style={styles.filterIcon} />
+          <TouchableOpacity
+            style={styles.filterDropdown}
+            onPress={() => setShowProgramFilterModal(true)}
+          >
+            <Text style={styles.filterText}>
+              {programFilter ? `Program: ${programFilter}` : 'All Programs'}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#666" />
+          </TouchableOpacity>
+          {programFilter !== '' && (
+            <TouchableOpacity
+              style={styles.clearFilterButton}
+              onPress={() => setProgramFilter('')}
+            >
+              <MaterialIcons name="close" size={18} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Students Table */}
@@ -609,7 +656,7 @@ export default function InternsManagement() {
             showsVerticalScrollIndicator={false}
             horizontal={dimensions.width < 768}
             showsHorizontalScrollIndicator={dimensions.width < 768}
-            contentContainerStyle={dimensions.width < 768 ? { minWidth: 1000 } : undefined}
+            contentContainerStyle={dimensions.width < 768 ? { minWidth: 1150 } : undefined}
           >
             {renderStudentTable()}
           </ScrollView>
@@ -667,6 +714,11 @@ export default function InternsManagement() {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>University:</Text>
                     <Text style={styles.detailValue}>{selectedStudent.university || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Program:</Text>
+                    <Text style={styles.detailValue}>{selectedStudent.program || 'N/A'}</Text>
                   </View>
                   
                   <View style={styles.detailRow}>
@@ -796,6 +848,73 @@ export default function InternsManagement() {
         </View>
       </Modal>
 
+      {/* Program Filter Modal */}
+      <Modal
+        visible={showProgramFilterModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowProgramFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.programFilterModalContent}>
+            <View style={styles.programFilterModalHeader}>
+              <Text style={styles.programFilterModalTitle}>Select Program</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowProgramFilterModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.programFilterModalBody}>
+              <TouchableOpacity
+                style={[
+                  styles.programFilterOption,
+                  programFilter === '' && styles.programFilterOptionSelected
+                ]}
+                onPress={() => {
+                  setProgramFilter('');
+                  setShowProgramFilterModal(false);
+                }}
+              >
+                <Text style={[
+                  styles.programFilterOptionText,
+                  programFilter === '' && styles.programFilterOptionTextSelected
+                ]}>
+                  All Programs
+                </Text>
+                {programFilter === '' && (
+                  <MaterialIcons name="check" size={20} color="#f59e0b" />
+                )}
+              </TouchableOpacity>
+              {availablePrograms.map((program) => (
+                <TouchableOpacity
+                  key={program}
+                  style={[
+                    styles.programFilterOption,
+                    programFilter === program && styles.programFilterOptionSelected
+                  ]}
+                  onPress={() => {
+                    setProgramFilter(program);
+                    setShowProgramFilterModal(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.programFilterOptionText,
+                    programFilter === program && styles.programFilterOptionTextSelected
+                  ]}>
+                    {program}
+                  </Text>
+                  {programFilter === program && (
+                    <MaterialIcons name="check" size={20} color="#f59e0b" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Tooltip */}
       {tooltip.visible && (
         <View 
@@ -872,6 +991,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1e293b',
     fontWeight: '500',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+  filterIcon: {
+    marginRight: 4,
+  },
+  filterDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    flex: 1,
+    minHeight: 44,
+  },
+  filterText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  clearFilterButton: {
+    padding: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   tableWrapper: {
     flex: 1,
@@ -950,6 +1103,11 @@ const styles = StyleSheet.create({
     flex: isSmallScreen ? 0 : 1.5,
     width: isSmallScreen ? 120 : undefined,
     minWidth: 120,
+  },
+  tableCellProgram: {
+    flex: isSmallScreen ? 0 : 1.5,
+    width: isSmallScreen ? 150 : undefined,
+    minWidth: 150,
   },
   tableCellYear: {
     flex: isSmallScreen ? 0 : 1,
@@ -1289,5 +1447,60 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  // Program Filter Modal Styles
+  programFilterModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  programFilterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  programFilterModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  programFilterModalBody: {
+    padding: 8,
+    maxHeight: 400,
+  },
+  programFilterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginVertical: 4,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  programFilterOptionSelected: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: '#f59e0b',
+  },
+  programFilterOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  programFilterOptionTextSelected: {
+    color: '#1e293b',
+    fontWeight: '600',
   },
 });

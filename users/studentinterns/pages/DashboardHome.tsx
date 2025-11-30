@@ -236,35 +236,105 @@ const toRadians = (degrees: number): number => {
   return degrees * (Math.PI / 180);
 };
 
-const rankCompaniesByRelevance = (companies: any[], student: any, currentUserLocation: any): any[] => {
-  if (!student) return companies;
-  
-  return companies
-    .map(company => {
-      const matching = calculateMatchingScore(student, company);
-      const distanceResult = calculateDistance(company, currentUserLocation);
-      console.log(`🎯 Company ${company.name} matching score:`, matching.score, 'reasons:', matching.reasons);
-      return {
-        ...company,
-        matchingScore: matching.score,
-        matchingReasons: matching.reasons,
-        distance: distanceResult.distance,
-        distanceText: distanceResult.distanceText
-      };
-    })
-    .sort((a, b) => {
-      const scoreDiff = b.matchingScore - a.matchingScore;
-      if (Math.abs(scoreDiff) < 0.1) { // If scores are very close, sort by distance
-        return (a.distance || Infinity) - (b.distance || Infinity);
-      }
-      return scoreDiff;
-    }); // Sort by relevance score first, then by distance
+/**
+ * KNN (K-Nearest Neighbors) Configuration
+ * 
+ * Hybrid Approach Implementation:
+ * 1. Filter companies by relevance score threshold
+ * 2. Calculate combined score (relevance + normalized distance)
+ * 3. Select K nearest neighbors based on combined score
+ * 
+ * This combines content-based filtering (relevance) with collaborative filtering (distance-based)
+ */
+const KNN_CONFIG = {
+  K: 10, // Number of nearest neighbors to select
+  RELEVANCE_THRESHOLD: 0, // Minimum relevance score to consider (0 = show all companies with partnerships)
+  DISTANCE_WEIGHT: 0.3, // Weight for distance in combined score (0-1) - 30% weight
+  RELEVANCE_WEIGHT: 0.7, // Weight for relevance in combined score (0-1) - 70% weight
+  MAX_DISTANCE_KM: 100, // Maximum distance to consider (in kilometers)
 };
 
-const filterRelevantCompanies = (companies: any[], student: any, currentUserLocation: any): any[] => {
+// Normalize distance to 0-1 scale (inverse: closer = higher score)
+const normalizeDistance = (distance: number, maxDistance: number = KNN_CONFIG.MAX_DISTANCE_KM): number => {
+  if (distance === Infinity || distance === undefined || distance === null) return 0;
+  if (distance > maxDistance) return 0;
+  // Inverse normalization: closer distance = higher score
+  return 1 - (distance / maxDistance);
+};
+
+// Calculate combined score (relevance + distance)
+const calculateCombinedScore = (
+  relevanceScore: number,
+  distance: number,
+  relevanceWeight: number = KNN_CONFIG.RELEVANCE_WEIGHT,
+  distanceWeight: number = KNN_CONFIG.DISTANCE_WEIGHT
+): number => {
+  const normalizedDistance = normalizeDistance(distance);
+  const combinedScore = (relevanceScore * relevanceWeight) + (normalizedDistance * distanceWeight);
+  return Math.min(Math.max(combinedScore, 0), 1); // Clamp between 0 and 1
+};
+
+/**
+ * KNN Algorithm: Select K nearest neighbors based on combined score
+ * 
+ * Steps:
+ * 1. Filter by relevance threshold (content-based filtering)
+ * 2. Calculate combined scores (relevance + distance)
+ * 3. Sort by combined score (descending)
+ * 4. Select top K companies (K nearest neighbors)
+ * 
+ * @param companies - Array of companies with matchingScore and distance
+ * @param K - Number of nearest neighbors to select
+ * @param relevanceThreshold - Minimum relevance score to consider
+ * @returns Top K companies sorted by combined score
+ */
+const applyKNN = (
+  companies: any[],
+  K: number = KNN_CONFIG.K,
+  relevanceThreshold: number = KNN_CONFIG.RELEVANCE_THRESHOLD
+): any[] => {
+  if (companies.length === 0) return companies;
+  
+  // Step 1: Filter by relevance threshold (if threshold > 0, otherwise include all)
+  // For student dashboard, we want to show all companies with partnerships, ranked by score
+  const filteredCompanies = relevanceThreshold > 0 
+    ? companies.filter(company => company.matchingScore >= relevanceThreshold)
+    : companies; // Include all companies if threshold is 0
+  
+  console.log(`🔍 KNN: Filtered ${companies.length} → ${filteredCompanies.length} companies (threshold: ${relevanceThreshold === 0 ? 'none (showing all)' : relevanceThreshold})`);
+  
+  // Step 2: Calculate combined scores for all filtered companies
+  const companiesWithScores = filteredCompanies.map(company => {
+    const combinedScore = calculateCombinedScore(
+      company.matchingScore || 0,
+      company.distance || Infinity
+    );
+    return {
+      ...company,
+      combinedScore,
+      knnScore: combinedScore // Store for reference
+    };
+  });
+  
+  // Step 3: Sort by combined score (descending)
+  companiesWithScores.sort((a, b) => b.combinedScore - a.combinedScore);
+  
+  // Step 4: Select K nearest neighbors
+  const kNearest = companiesWithScores.slice(0, Math.min(K, companiesWithScores.length));
+  
+  console.log(`🎯 KNN: Selected ${kNearest.length} nearest neighbors (K=${K})`);
+  kNearest.forEach((company, index) => {
+    console.log(`  ${index + 1}. ${company.name} - Combined Score: ${(company.combinedScore * 100).toFixed(2)}% (Relevance: ${(company.matchingScore * 100).toFixed(2)}%, Distance: ${company.distanceText})`);
+  });
+  
+  return kNearest;
+};
+
+const rankCompaniesByRelevance = (companies: any[], student: any, currentUserLocation: any, useKNN: boolean = true): any[] => {
   if (!student) return companies;
   
-  return companies
+  // Step 1: Calculate matching scores and distances for all companies
+  const companiesWithScores = companies
     .map(company => {
       const matching = calculateMatchingScore(student, company);
       const distanceResult = calculateDistance(company, currentUserLocation);
@@ -276,22 +346,66 @@ const filterRelevantCompanies = (companies: any[], student: any, currentUserLoca
         distance: distanceResult.distance,
         distanceText: distanceResult.distanceText
       };
-    })
-    .filter(company => {
-      const willShow = company.matchingScore > 0.01;
-      console.log(`🔍 Company ${company.name} - matching score: ${company.matchingScore}, will show: ${willShow}`);
-      if (!willShow) {
-        console.log(`❌ Filtering out ${company.name} due to low matching score: ${company.matchingScore}`);
-      }
-      return willShow; // Only show companies with at least 1% relevance (temporarily lowered for debugging)
-    })
-    .sort((a, b) => {
+    });
+  
+  // Step 2: Apply KNN if enabled, otherwise use traditional ranking
+  if (useKNN) {
+    return applyKNN(companiesWithScores, KNN_CONFIG.K, KNN_CONFIG.RELEVANCE_THRESHOLD);
+  } else {
+    // Traditional approach: sort by relevance, then distance
+    return companiesWithScores.sort((a, b) => {
       const scoreDiff = b.matchingScore - a.matchingScore;
       if (Math.abs(scoreDiff) < 0.1) { // If scores are very close, sort by distance
         return (a.distance || Infinity) - (b.distance || Infinity);
       }
       return scoreDiff;
-    }); // Sort by relevance score first, then by distance
+    });
+  }
+};
+
+const filterRelevantCompanies = (companies: any[], student: any, currentUserLocation: any, useKNN: boolean = true): any[] => {
+  if (!student) return companies;
+  
+  // Step 1: Calculate matching scores and distances
+  const companiesWithScores = companies
+    .map(company => {
+      const matching = calculateMatchingScore(student, company);
+      const distanceResult = calculateDistance(company, currentUserLocation);
+      console.log(`🎯 Company ${company.name} matching score:`, matching.score, 'reasons:', matching.reasons);
+      return {
+        ...company,
+        matchingScore: matching.score,
+        matchingReasons: matching.reasons,
+        distance: distanceResult.distance,
+        distanceText: distanceResult.distanceText
+      };
+    });
+  
+  // Step 2: Apply KNN if enabled
+  if (useKNN) {
+    return applyKNN(companiesWithScores, KNN_CONFIG.K, KNN_CONFIG.RELEVANCE_THRESHOLD);
+  } else {
+    // Traditional filtering: filter by threshold, then sort
+    // If threshold is 0, show all companies (for student dashboard - show all companies with partnerships)
+    return companiesWithScores
+      .filter(company => {
+        const willShow = KNN_CONFIG.RELEVANCE_THRESHOLD === 0 
+          ? true 
+          : company.matchingScore >= KNN_CONFIG.RELEVANCE_THRESHOLD;
+        console.log(`🔍 Company ${company.name} - matching score: ${company.matchingScore}, will show: ${willShow} (threshold: ${KNN_CONFIG.RELEVANCE_THRESHOLD})`);
+        if (!willShow) {
+          console.log(`❌ Filtering out ${company.name} due to low matching score: ${company.matchingScore}`);
+        }
+        return willShow;
+      })
+      .sort((a, b) => {
+        const scoreDiff = b.matchingScore - a.matchingScore;
+        if (Math.abs(scoreDiff) < 0.1) {
+          return (a.distance || Infinity) - (b.distance || Infinity);
+        }
+        return scoreDiff;
+      });
+  }
 };
 
 interface Company {
@@ -354,6 +468,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [useKNN, setUseKNN] = useState(true); // Toggle for KNN vs traditional ranking
   
   // Animation values for stats
   const [animatedStats, setAnimatedStats] = useState({
@@ -504,13 +619,36 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       setLoading(true);
       setShowSkeleton(true);
       
+      console.log('🚀 [STUDENT DASHBOARD] Starting fetchCompanies...');
+      console.log('🚀 [STUDENT DASHBOARD] Current user:', currentUser?.id);
+      
       const response = await apiService.getAllCompanies();
       
+      console.log('📡 [STUDENT DASHBOARD] API Response:', {
+        success: response.success,
+        message: response.message,
+        companiesCount: response.companies ? response.companies.length : 0,
+        hasCompanies: !!response.companies,
+        companies: response.companies ? response.companies.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          partnershipStatus: c.partnershipStatus,
+          moaStatus: c.moaStatus
+        })) : null
+      });
+      
       if (response.success && response.companies) {
-        // Filter companies to only show those with approved partnership status
-        let companies = response.companies.filter((company: any) => company.partnershipStatus === 'approved');
-        console.log('📊 Companies received from API:', response.companies.length);
-        console.log('📊 Companies with approved partnership:', companies.length);
+        // Backend now only returns companies with partnerships from company_coordinator_partnerships
+        let companies = response.companies;
+        console.log('📊 [STUDENT DASHBOARD] Companies received from API:', companies.length);
+        console.log('📊 [STUDENT DASHBOARD] Company details:', companies.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          partnershipStatus: c.partnershipStatus,
+          moaStatus: c.moaStatus,
+          availableSlots: c.availableSlots,
+          totalSlots: c.totalSlots
+        })));
         console.log('📊 Company details with slots:', companies.map((c: any) => ({
           name: c.name,
           partnershipStatus: c.partnershipStatus,
@@ -526,7 +664,8 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
         if (currentUser) {
           // Use currentUser.id directly as applications table uses user_id as student_id
           const userId = currentUser.id;
-          console.log('🔍 Filtering out companies with approved applications for user:', userId);
+          console.log('🔍 [STUDENT DASHBOARD] Filtering out companies with approved applications for user:', userId);
+          console.log('🔍 [STUDENT DASHBOARD] Companies before filtering:', companies.length);
             
           try {
             // Get all student applications (API expects user_id)
@@ -567,24 +706,28 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
                 return !hasApprovedApplication;
               });
               
-              console.log(`📊 Companies filtered: ${originalCount} → ${companies.length} (removed ${originalCount - companies.length})`);
-              console.log('🏢 Remaining companies after filtering:', companies.map((c: any) => ({ id: c.id, name: c.name })));
+              console.log(`📊 [STUDENT DASHBOARD] Companies filtered: ${originalCount} → ${companies.length} (removed ${originalCount - companies.length})`);
+              console.log('🏢 [STUDENT DASHBOARD] Remaining companies after filtering:', companies.map((c: any) => ({ id: c.id, name: c.name })));
             } else {
-                console.log('ℹ️ No approved applications found, showing all companies');
+                console.log('ℹ️ [STUDENT DASHBOARD] No approved applications found, showing all companies');
               }
             } else {
-              console.log('ℹ️ No applications found or API error, showing all companies');
+              console.log('ℹ️ [STUDENT DASHBOARD] No applications found or API error, showing all companies');
             }
           } catch (error) {
-            console.error('❌ Error fetching student applications:', error);
+            console.error('❌ [STUDENT DASHBOARD] Error fetching student applications:', error);
             // Continue with all companies if there's an error
           }
         }
         
+        console.log('📊 [STUDENT DASHBOARD] Companies after application filtering:', companies.length);
+        
         // Apply skill-based matching if student profile is available (for ranking, not filtering)
         let relevantCompanies = companies;
+        console.log('📊 [STUDENT DASHBOARD] Companies before ranking:', companies.length);
+        
         if (studentProfile) {
-          console.log('👤 Student profile for matching:', {
+          console.log('👤 [STUDENT DASHBOARD] Student profile for matching:', {
             program: studentProfile.program,
             skills: studentProfile.skills,
             work_experience: studentProfile.work_experience,
@@ -592,10 +735,15 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
             gpa: studentProfile.gpa,
             achievements: studentProfile.achievements
           });
-          relevantCompanies = rankCompaniesByRelevance(companies, studentProfile, currentUserLocation);
-          console.log('🎯 Companies after skill and location ranking:', relevantCompanies.length);
-          console.log('📍 Current user location for matching:', currentUserLocation);
+          relevantCompanies = rankCompaniesByRelevance(companies, studentProfile, currentUserLocation, useKNN);
+          console.log('🎯 [STUDENT DASHBOARD] Companies after skill and location ranking:', relevantCompanies.length);
+          console.log('📍 [STUDENT DASHBOARD] Current user location for matching:', currentUserLocation);
+          console.log(`🤖 [STUDENT DASHBOARD] KNN ${useKNN ? 'enabled' : 'disabled'} - K=${KNN_CONFIG.K}, Relevance Weight=${KNN_CONFIG.RELEVANCE_WEIGHT}, Distance Weight=${KNN_CONFIG.DISTANCE_WEIGHT}`);
+        } else {
+          console.log('⚠️ [STUDENT DASHBOARD] No student profile available, skipping ranking');
         }
+        
+        console.log('📊 [STUDENT DASHBOARD] Relevant companies count:', relevantCompanies.length);
         
         // Load favorite status for each company
         if (currentUser) {
@@ -618,17 +766,33 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
               }
             })
           );
+          console.log('✅ [STUDENT DASHBOARD] Setting companies state with favorites:', companiesWithFavorites.length);
+          console.log('📊 [STUDENT DASHBOARD] Final companies:', companiesWithFavorites.map((c: any) => ({ id: c.id, name: c.name })));
           setCompanies(companiesWithFavorites);
         } else {
-          setCompanies(relevantCompanies.map((company: any) => ({ ...company, isFavorite: false })));
+          console.log('⚠️ [STUDENT DASHBOARD] No current user, setting companies without favorites');
+          const companiesWithoutFavorites = relevantCompanies.map((company: any) => ({ ...company, isFavorite: false }));
+          console.log('✅ [STUDENT DASHBOARD] Setting companies state:', companiesWithoutFavorites.length);
+          setCompanies(companiesWithoutFavorites);
         }
       } else {
+        console.error('❌ [STUDENT DASHBOARD] API call failed or no companies returned:', {
+          success: response.success,
+          message: response.message,
+          companies: response.companies,
+          responseKeys: Object.keys(response)
+        });
         setCompanies([]);
       }
     } catch (error) {
-      console.error('Error fetching companies:', error);
+      console.error('❌ [STUDENT DASHBOARD] Error fetching companies:', error);
+      console.error('❌ [STUDENT DASHBOARD] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       setCompanies([]);
     } finally {
+      console.log('🏁 [STUDENT DASHBOARD] fetchCompanies completed');
       setLoading(false);
       // Hide skeleton after a short delay to show the animation
       setTimeout(() => {

@@ -57,4 +57,17 @@ router.put('/:id/campus-assignment', CoordinatorController.updateCampusAssignmen
 // DELETE /api/coordinators/:id/campus-assignment - Remove coordinator campus assignment
 router.delete('/:id/campus-assignment', CoordinatorController.removeCampusAssignment);
 
+// Company Assignment routes
+// GET /api/coordinators/:coordinatorId/available-companies - Get companies available for assignment
+router.get('/:coordinatorId/available-companies', CoordinatorController.getAvailableCompaniesForAssignment);
+
+// POST /api/coordinators/:id/assign-company - Assign coordinator to company
+router.post('/:id/assign-company', CoordinatorController.assignCoordinatorToCompany);
+
+// GET /api/coordinators/:id/assigned-companies - Get assigned companies for a coordinator
+router.get('/:id/assigned-companies', CoordinatorController.getCoordinatorAssignedCompanies);
+
+// DELETE /api/coordinators/:id/unassign-company - Unassign coordinator from company
+router.delete('/:id/unassign-company', CoordinatorController.unassignCoordinatorFromCompany);
+
 module.exports = router;

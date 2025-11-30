@@ -59,6 +59,7 @@ interface Coordinator {
   address: string;
   status: 'active' | 'inactive';
   assignedInterns: number;
+  assignedCompanies?: number;
   joinDate: string;
   isAdminCoordinator: boolean;
   adminId?: string;
@@ -77,7 +78,17 @@ interface Coordinator {
   assignedAt?: string;
 }
 
-export default function CoordinatorsPage() {
+interface UserInfo {
+  id: string;
+  email: string;
+  user_type: string;
+}
+
+interface CoordinatorsPageProps {
+  currentUser?: UserInfo | null;
+}
+
+export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps = {}) {
   const [coordinators, setCoordinators] = useState<Coordinator[]>([]);
   const [filteredCoordinators, setFilteredCoordinators] = useState<Coordinator[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +103,14 @@ export default function CoordinatorsPage() {
   const [assignedStudents, setAssignedStudents] = useState<any[]>([]);
   const [testMessage, setTestMessage] = useState('');
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showAssignedCompaniesModal, setShowAssignedCompaniesModal] = useState(false);
+  const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
+  const [assignedCompanies, setAssignedCompanies] = useState<any[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [showUnassignModal, setShowUnassignModal] = useState(false);
+  const [companyToUnassign, setCompanyToUnassign] = useState<any | null>(null);
+  const [unassigning, setUnassigning] = useState(false);
   const [tooltip, setTooltip] = useState<{ visible: boolean; text: string; x: number; y: number; buttonWidth?: number }>({
     visible: false,
     text: '',
@@ -126,9 +145,21 @@ export default function CoordinatorsPage() {
       console.log('🚀 Frontend: API response:', response);
       
       if (response.success && response.coordinators) {
-        // Map API response to component interface
-        const mappedCoordinators: Coordinator[] = response.coordinators.map((coordinator: ApiCoordinator) => {
+        // Map API response to component interface and fetch assigned companies count
+        const mappedCoordinatorsPromises = response.coordinators.map(async (coordinator: ApiCoordinator) => {
           console.log('🚀 Frontend: Mapping coordinator:', coordinator.firstName, 'Campus Assignment:', coordinator.campusAssignment);
+          
+          // Get assigned companies count
+          let assignedCompaniesCount = 0;
+          try {
+            const companiesResponse = await apiService.getCoordinatorAssignedCompanies(coordinator.id);
+            if (companiesResponse.success && companiesResponse.companies) {
+              assignedCompaniesCount = companiesResponse.companies.length;
+            }
+          } catch (error) {
+            console.error('Error fetching assigned companies count:', error);
+          }
+          
           return {
             id: coordinator.id,
             userId: coordinator.userId,
@@ -141,6 +172,7 @@ export default function CoordinatorsPage() {
             address: coordinator.address,
             status: coordinator.status,
             assignedInterns: coordinator.assignedInterns || 0,
+            assignedCompanies: assignedCompaniesCount,
             joinDate: coordinator.joinDate,
             isAdminCoordinator: coordinator.isAdminCoordinator,
             adminId: coordinator.adminId,
@@ -153,6 +185,7 @@ export default function CoordinatorsPage() {
           };
         });
         
+        const mappedCoordinators = await Promise.all(mappedCoordinatorsPromises);
         console.log('🚀 Frontend: Mapped coordinators:', mappedCoordinators);
         setCoordinators(mappedCoordinators);
       } else {
@@ -285,7 +318,8 @@ export default function CoordinatorsPage() {
     try {
       console.log('🚀 Frontend: Starting off-campus assignment for:', coordinator.id);
       console.log('🚀 Frontend: Calling API service...');
-      const response = await apiService.assignCoordinatorCampus(coordinator.id, 'off-campus', '1'); // TODO: Get actual admin user ID
+      const adminUserId = currentUser?.id || '1'; // Get actual admin user ID
+      const response = await apiService.assignCoordinatorCampus(coordinator.id, 'off-campus', adminUserId);
       console.log('🚀 Frontend: API response:', response);
       if (response.success) {
         console.log('🚀 Frontend: Assignment successful, showing success modal');
@@ -317,7 +351,8 @@ export default function CoordinatorsPage() {
     try {
       console.log('🚀 Frontend: Starting in-campus assignment for:', coordinator.id);
       console.log('🚀 Frontend: Calling API service...');
-      const response = await apiService.assignCoordinatorCampus(coordinator.id, 'in-campus', '1'); // TODO: Get actual admin user ID
+      const adminUserId = currentUser?.id || '1'; // Get actual admin user ID
+      const response = await apiService.assignCoordinatorCampus(coordinator.id, 'in-campus', adminUserId);
       console.log('🚀 Frontend: API response:', response);
       if (response.success) {
         console.log('🚀 Frontend: Assignment successful, showing success modal');
@@ -340,6 +375,184 @@ export default function CoordinatorsPage() {
       setIsSuccess(false);
       setShowSuccessModal(true);
     }
+  };
+
+  const handleAssignCompany = async (coordinator: Coordinator) => {
+    setSelectedCoordinator(coordinator);
+    setLoadingCompanies(true);
+    try {
+      // Fetch all companies and assigned companies in parallel
+      const [allCompaniesResponse, assignedCompaniesResponse] = await Promise.all([
+        apiService.getAllCompanies(true), // Fetch ALL companies
+        apiService.getCoordinatorAssignedCompanies(coordinator.id) // Get already assigned companies
+      ]);
+
+      if (allCompaniesResponse.success && allCompaniesResponse.companies) {
+        // Get list of company IDs already assigned to this coordinator
+        const assignedCompanyIds = new Set<string>();
+        const assignedCompaniesMap = new Map<string, any>();
+        if (assignedCompaniesResponse.success && assignedCompaniesResponse.companies) {
+          assignedCompaniesResponse.companies.forEach((company: any) => {
+            if (company.id) {
+              assignedCompanyIds.add(String(company.id));
+              assignedCompaniesMap.set(String(company.id), {
+                assignedAt: company.assignedAt,
+                partnershipStatus: company.partnershipStatus,
+                isAlreadyAssigned: true
+              });
+            }
+          });
+        }
+
+        // Filter companies: Show only companies that are partnered with OTHER coordinators
+        // (NOT partnered with current coordinator, but partnered with other coordinators)
+        const filteredCompanies = allCompaniesResponse.companies.filter((company: any) => {
+          const companyId = String(company.id);
+          const isAssignedToCurrentCoordinator = assignedCompanyIds.has(companyId);
+          
+          // Exclude if already assigned to current coordinator
+          if (isAssignedToCurrentCoordinator) {
+            return false;
+          }
+          
+          // Check if company has partnerships with OTHER coordinators
+          let hasPartnershipWithOtherCoordinator = false;
+          if (company.partnerships && Array.isArray(company.partnerships) && company.partnerships.length > 0) {
+            hasPartnershipWithOtherCoordinator = company.partnerships.some((p: any) => 
+              p.coordinator_user_id && parseInt(p.coordinator_user_id) !== parseInt(coordinator.userId)
+            );
+          }
+          
+          // Include only if partnered with OTHER coordinators (not current, but has other partnerships)
+          return hasPartnershipWithOtherCoordinator;
+        });
+
+        // Mark which companies are already assigned and include their assignment details
+        const companiesWithAssignmentStatus = filteredCompanies.map((company: any) => {
+          const assignedInfo = assignedCompaniesMap.get(String(company.id));
+          return {
+            ...company,
+            isAlreadyAssigned: !!assignedInfo,
+            assignedAt: assignedInfo?.assignedAt || company.assignedAt,
+            partnershipStatus: assignedInfo?.partnershipStatus || company.partnershipStatus || 'pending'
+          };
+        });
+
+        setAvailableCompanies(companiesWithAssignmentStatus);
+        setShowAssignModal(true);
+      } else {
+        Alert.alert('Error', typeof allCompaniesResponse.message === 'string' ? allCompaniesResponse.message : 'Failed to fetch companies');
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+      Alert.alert('Error', 'Failed to fetch companies. Please try again.');
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  const handleConfirmAssignCompany = async (companyId: string) => {
+    if (!selectedCoordinator || !currentUser?.id) {
+      Alert.alert('Error', 'Missing coordinator or user information');
+      return;
+    }
+
+    try {
+      setLoadingCompanies(true);
+      const response = await apiService.assignCoordinatorToCompany(
+        selectedCoordinator.id,
+        companyId,
+        currentUser.id
+      );
+
+      if (response.success) {
+        setSuccessMessage('Coordinator assigned to company successfully!');
+        setIsSuccess(true);
+        setShowSuccessModal(true);
+        setShowAssignModal(false);
+        await fetchCoordinators();
+      } else {
+        setSuccessMessage(response.message || 'Failed to assign coordinator to company');
+        setIsSuccess(false);
+        setShowSuccessModal(true);
+      }
+    } catch (error) {
+      console.error('Error assigning coordinator to company:', error);
+      setSuccessMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsSuccess(false);
+      setShowSuccessModal(true);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  const handleViewAssignedCompanies = async (coordinator: Coordinator) => {
+    setSelectedCoordinator(coordinator);
+    setLoadingCompanies(true);
+    try {
+      const response = await apiService.getCoordinatorAssignedCompanies(coordinator.id);
+      if (response.success && response.companies) {
+        setAssignedCompanies(response.companies);
+        setShowAssignedCompaniesModal(true);
+      } else {
+        setAssignedCompanies([]);
+        setShowAssignedCompaniesModal(true);
+      }
+    } catch (error) {
+      console.error('Error fetching assigned companies:', error);
+      setAssignedCompanies([]);
+      setShowAssignedCompaniesModal(true);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  const handleUnassignCompany = (company: any) => {
+    setCompanyToUnassign(company);
+    setShowUnassignModal(true);
+  };
+
+  const confirmUnassignCompany = async () => {
+    if (!selectedCoordinator || !companyToUnassign) {
+      Alert.alert('Error', 'Missing coordinator or company information');
+      return;
+    }
+
+    try {
+      setUnassigning(true);
+      const response = await apiService.unassignCoordinatorFromCompany(
+        selectedCoordinator.id,
+        companyToUnassign.id
+      );
+
+      if (response.success) {
+        setSuccessMessage(`Coordinator unassigned from ${companyToUnassign.name} successfully!`);
+        setIsSuccess(true);
+        setShowSuccessModal(true);
+        setShowUnassignModal(false);
+        setCompanyToUnassign(null);
+        // Refresh assigned companies list
+        await handleViewAssignedCompanies(selectedCoordinator);
+        // Refresh coordinators list to update count
+        await fetchCoordinators();
+      } else {
+        setSuccessMessage(response.message || 'Failed to unassign coordinator from company');
+        setIsSuccess(false);
+        setShowSuccessModal(true);
+      }
+    } catch (error) {
+      console.error('Error unassigning coordinator from company:', error);
+      setSuccessMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsSuccess(false);
+      setShowSuccessModal(true);
+    } finally {
+      setUnassigning(false);
+    }
+  };
+
+  const cancelUnassignCompany = () => {
+    setShowUnassignModal(false);
+    setCompanyToUnassign(null);
   };
 
   const getStatusColor = (status: string) => {
@@ -504,6 +717,12 @@ export default function CoordinatorsPage() {
                   <Text style={styles.mobileDetailLabel}>Assigned Interns:</Text>
                   <Text style={styles.mobileDetailValue}>{coordinator.assignedInterns}</Text>
                 </View>
+                <View style={styles.mobileDetailRow}>
+                  <Text style={styles.mobileDetailLabel}>Assigned Companies:</Text>
+                  <TouchableOpacity onPress={() => handleViewAssignedCompanies(coordinator)}>
+                    <Text style={[styles.mobileDetailValue, { color: '#8b5cf6' }]}>{coordinator.assignedCompanies || 0}</Text>
+                  </TouchableOpacity>
+                </View>
                 {coordinator.campusAssignment && (
                   <View style={styles.mobileDetailRow}>
                     <Text style={styles.mobileDetailLabel}>Campus:</Text>
@@ -565,6 +784,18 @@ export default function CoordinatorsPage() {
                   <MaterialIcons name="location-on" size={18} color="#fff" />
                 </TouchableOpacity>
                 <TouchableOpacity 
+                  style={[styles.mobileActionButton, styles.mobileAssignButton]} 
+                  onPress={() => handleButtonPress(() => handleAssignCompany(coordinator), 'Assign Company')}
+                  onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Assign Company', e)}
+                  onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                  {...(Platform.OS === 'web' ? {
+                    onMouseEnter: (e: any) => showTooltip('Assign Company', e),
+                    onMouseLeave: hideTooltip,
+                  } : {})}
+                >
+                  <MaterialIcons name="add-business" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
                   style={[styles.mobileActionButton, styles.mobileDeleteButton]} 
                   onPress={() => handleButtonPress(() => handleDeleteCoordinator(coordinator), 'Delete Coordinator')}
                   onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Delete Coordinator', e)}
@@ -608,6 +839,9 @@ export default function CoordinatorsPage() {
             </View>
             <View style={[styles.tableHeaderCell, styles.tableCellInterns]}>
               <Text style={styles.tableHeaderText}>Interns</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, styles.tableCellCompanies]}>
+              <Text style={styles.tableHeaderText}>Companies</Text>
             </View>
             <View style={[styles.tableHeaderCell, styles.tableCellAdmin]}>
               <Text style={styles.tableHeaderText}>Admin</Text>
@@ -668,6 +902,15 @@ export default function CoordinatorsPage() {
                   <MaterialIcons name="people" size={16} color="#3b82f6" />
                   <Text style={styles.tableInternsText}>{coordinator.assignedInterns}</Text>
                 </View>
+              </View>
+              <View style={[styles.tableCell, styles.tableCellCompanies]}>
+                <TouchableOpacity 
+                  style={styles.tableCompaniesContainer}
+                  onPress={() => handleViewAssignedCompanies(coordinator)}
+                >
+                  <MaterialIcons name="business" size={16} color="#8b5cf6" />
+                  <Text style={styles.tableCompaniesText}>{coordinator.assignedCompanies || 0}</Text>
+                </TouchableOpacity>
               </View>
               <View style={[styles.tableCell, styles.tableCellAdmin]}>
                 {coordinator.isAdminCoordinator ? (
@@ -736,6 +979,20 @@ export default function CoordinatorsPage() {
                     } : {})}
                   >
                     <MaterialIcons name="location-on" size={16} color="#8b5cf6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    ref={(ref) => { buttonRefs.current[`assign-${coordinator.id}`] = ref; }}
+                    style={[styles.tableActionButton, styles.tableActionAssign]} 
+                    onPress={() => handleButtonPress(() => handleAssignCompany(coordinator), 'Assign Company')}
+                    onPressIn={(e) => Platform.OS === 'web' ? null : showTooltip('Assign Company', e, `assign-${coordinator.id}`)}
+                    onPressOut={Platform.OS === 'web' ? undefined : hideTooltip}
+                    onLongPress={(e) => Platform.OS === 'web' ? null : showTooltip('Assign Company', e, `assign-${coordinator.id}`)}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseEnter: (e: any) => showTooltip('Assign Company', e, `assign-${coordinator.id}`),
+                      onMouseLeave: hideTooltip,
+                    } : {})}
+                  >
+                    <MaterialIcons name="add-business" size={16} color="#10b981" />
                   </TouchableOpacity>
                   <TouchableOpacity 
                     ref={(ref) => { buttonRefs.current[`delete-${coordinator.id}`] = ref; }}
@@ -1127,6 +1384,225 @@ export default function CoordinatorsPage() {
         </View>
       </Modal>
 
+      {/* Assign Company Modal */}
+      <Modal
+        visible={showAssignModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAssignModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Assign Company - {selectedCoordinator?.firstName} {selectedCoordinator?.lastName}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAssignModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {loadingCompanies ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4285f4" />
+                  <Text style={styles.loadingText}>Loading companies...</Text>
+                </View>
+              ) : availableCompanies.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <MaterialIcons name="business" size={64} color="#ccc" />
+                  <Text style={styles.emptyStateTitle}>No companies available</Text>
+                  <Text style={styles.emptyStateText}>
+                    No companies found in the system.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.companiesList}>
+                  {availableCompanies.map((company, index) => (
+                    <TouchableOpacity
+                      key={company.id || index}
+                      style={[
+                        styles.companyCard,
+                        company.isAlreadyAssigned && styles.companyCardDisabled
+                      ]}
+                      onPress={() => !company.isAlreadyAssigned && handleConfirmAssignCompany(company.id)}
+                      disabled={company.isAlreadyAssigned}
+                    >
+                      <View style={styles.companyCardContent}>
+                        <View style={styles.companyCardHeader}>
+                          <Text style={styles.companyCardName}>{company.name}</Text>
+                          {company.isAlreadyAssigned && (
+                            <View style={styles.alreadyAssignedBadge}>
+                              <MaterialIcons name="check-circle" size={14} color="#10b981" />
+                              <Text style={styles.alreadyAssignedText}>Assigned</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.companyCardIndustry}>Industry: {company.industry}</Text>
+                        <Text style={styles.companyCardAddress}>{company.address}</Text>
+                        {company.email && (
+                          <Text style={styles.companyCardEmail}>{company.email}</Text>
+                        )}
+                        {company.isAlreadyAssigned && company.assignedAt && (
+                          <View style={styles.companyCardFooter}>
+                            <View style={styles.companyCardFooterLeft}>
+                              <View style={[styles.statusBadge, { backgroundColor: company.partnershipStatus === 'approved' ? '#10b981' : '#f59e0b' }]}>
+                                <Text style={styles.statusText}>
+                                  {company.partnershipStatus === 'approved' ? 'Approved' : company.partnershipStatus || 'Pending'}
+                                </Text>
+                              </View>
+                              <Text style={styles.companyCardDate}>
+                                Assigned: {new Date(company.assignedAt).toLocaleDateString()}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowAssignModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Assigned Companies Modal */}
+      <Modal
+        visible={showAssignedCompaniesModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAssignedCompaniesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Assigned Companies - {selectedCoordinator?.firstName} {selectedCoordinator?.lastName}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowAssignedCompaniesModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {loadingCompanies ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4285f4" />
+                  <Text style={styles.loadingText}>Loading companies...</Text>
+                </View>
+              ) : assignedCompanies.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <MaterialIcons name="business" size={64} color="#ccc" />
+                  <Text style={styles.emptyStateTitle}>No companies assigned</Text>
+                  <Text style={styles.emptyStateText}>
+                    This coordinator doesn't have any assigned companies yet.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.companiesList}>
+                  {assignedCompanies.map((company, index) => (
+                    <View key={company.id || index} style={styles.companyCard}>
+                      <View style={styles.companyCardContent}>
+                        <Text style={styles.companyCardName}>{company.name}</Text>
+                        <Text style={styles.companyCardIndustry}>Industry: {company.industry}</Text>
+                        <Text style={styles.companyCardAddress}>{company.address}</Text>
+                        {company.email && (
+                          <Text style={styles.companyCardEmail}>{company.email}</Text>
+                        )}
+                        <View style={styles.companyCardFooter}>
+                          <View style={styles.companyCardFooterLeft}>
+                            <View style={[styles.statusBadge, { backgroundColor: company.partnershipStatus === 'approved' ? '#10b981' : '#f59e0b' }]}>
+                              <Text style={styles.statusText}>
+                                {company.partnershipStatus === 'approved' ? 'Approved' : company.partnershipStatus}
+                              </Text>
+                            </View>
+                            {company.assignedAt && (
+                              <Text style={styles.companyCardDate}>
+                                Assigned: {new Date(company.assignedAt).toLocaleDateString()}
+                              </Text>
+                            )}
+                          </View>
+                          <TouchableOpacity
+                            style={styles.unassignButton}
+                            onPress={() => handleUnassignCompany(company)}
+                          >
+                            <MaterialIcons name="remove-circle" size={16} color="#ef4444" />
+                            <Text style={styles.unassignButtonText}>Unassign</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowAssignedCompaniesModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Unassign Company Confirmation Modal */}
+      <Modal
+        visible={showUnassignModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={cancelUnassignCompany}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <MaterialIcons name="warning" size={48} color="#ef4444" style={styles.modalWarningIcon} />
+            <Text style={styles.modalTitle}>Unassign Company</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to unassign {companyToUnassign?.name} from {selectedCoordinator?.firstName} {selectedCoordinator?.lastName}? This will remove the partnership between them.
+            </Text>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.cancelButton, { flex: 1 }]}
+                onPress={cancelUnassignCompany}
+                disabled={unassigning}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveButton, { flex: 1, backgroundColor: '#ef4444' }]}
+                onPress={confirmUnassignCompany}
+                disabled={unassigning}
+              >
+                {unassigning ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Unassign</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Tooltip */}
       {tooltip.visible && (
         <View 
@@ -1397,13 +1873,17 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 90,
   },
+  tableCellCompanies: {
+    flex: 1,
+    minWidth: 100,
+  },
   tableCellAdmin: {
     flex: 1,
     minWidth: 90,
   },
   tableCellActions: {
-    flex: 1.8,
-    minWidth: 180,
+    flex: 2,
+    minWidth: 200,
   },
   // Table Cell Content
   tableCellNameContent: {
@@ -1485,6 +1965,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#3b82f6',
   },
+  tableCompaniesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tableCompaniesText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8b5cf6',
+  },
   tableAdminBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1530,6 +2020,10 @@ const styles = StyleSheet.create({
   tableActionInCampus: {
     backgroundColor: '#f5f3ff',
     borderColor: '#8b5cf6',
+  },
+  tableActionAssign: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
   },
   tableActionDelete: {
     backgroundColor: '#fef2f2',
@@ -1663,6 +2157,9 @@ const styles = StyleSheet.create({
   mobileInCampusButton: {
     backgroundColor: '#8b5cf6',
   },
+  mobileAssignButton: {
+    backgroundColor: '#10b981',
+  },
   mobileDeleteButton: {
     backgroundColor: '#ef4444',
   },
@@ -1766,6 +2263,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
     letterSpacing: -0.3,
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: '#64748b',
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: 'center',
   },
   closeModalButton: {
     padding: 8,
@@ -2058,5 +2562,101 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
     borderBottomColor: '#1e293b',
+  },
+  // Company Assignment Modal Styles
+  companiesList: {
+    gap: 12,
+  },
+  companyCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  companyCardDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#f1f5f9',
+  },
+  companyCardContent: {
+    gap: 8,
+  },
+  companyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  companyCardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    flex: 1,
+  },
+  alreadyAssignedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+  },
+  alreadyAssignedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  companyCardIndustry: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  companyCardAddress: {
+    fontSize: 13,
+    color: '#94a3b8',
+  },
+  companyCardEmail: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  companyCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  companyCardFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  companyCardDate: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  unassignButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  unassignButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
+  modalWarningIcon: {
+    alignSelf: 'center',
+    marginBottom: 12,
   },
 });

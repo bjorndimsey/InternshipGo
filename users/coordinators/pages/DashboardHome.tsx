@@ -222,8 +222,42 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   };
 
   useEffect(() => {
+    console.log('🔄 filterCompanies useEffect triggered:', {
+      companiesCount: companies.length,
+      searchQuery,
+      selectedSchoolYear,
+      companies: companies.map(c => ({ name: c.name, id: c.id, schoolYear: c.schoolYear }))
+    });
     filterCompanies();
   }, [searchQuery, selectedSchoolYear, companies]);
+
+  // Log companies state changes
+  useEffect(() => {
+    console.log('📊 Companies state updated:', {
+      count: companies.length,
+      companies: companies.map(c => ({
+        name: c.name,
+        id: c.id,
+        schoolYear: c.schoolYear,
+        partnershipStatus: c.partnershipStatus,
+        moaStatus: c.moaStatus
+      }))
+    });
+  }, [companies]);
+
+  // Log filtered companies state changes
+  useEffect(() => {
+    console.log('📊 Filtered companies state updated:', {
+      count: filteredCompanies.length,
+      companies: filteredCompanies.map(c => ({
+        name: c.name,
+        id: c.id,
+        schoolYear: c.schoolYear,
+        partnershipStatus: c.partnershipStatus,
+        moaStatus: c.moaStatus
+      }))
+    });
+  }, [filteredCompanies]);
 
   const fetchData = async () => {
     try {
@@ -241,7 +275,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       
       // Fetch data in parallel: companies, interns, and partner companies
       const [companiesResponse, internsResponse, partnerCompaniesResponse] = await Promise.all([
-        apiService.getAllCompanies(),
+        apiService.getAllCompanies(true), // Include ALL companies (not just those with partnerships) for filtering
         apiService.getCoordinatorInterns(currentUser.id),
         apiService.getCompanies(currentUser.id) // Get companies where current coordinator uploaded MOA
       ]);
@@ -249,24 +283,133 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       // Process companies for display
       if (companiesResponse.success && companiesResponse.companies && Array.isArray(companiesResponse.companies)) {
         console.log('✅ Companies fetched successfully:', companiesResponse.companies.length);
+        console.log('📊 Raw API Response - First company sample:', companiesResponse.companies[0] ? {
+          id: companiesResponse.companies[0].id,
+          name: companiesResponse.companies[0].name,
+          partnership_status: companiesResponse.companies[0].partnership_status,
+          partnershipStatus: companiesResponse.companies[0].partnershipStatus,
+          moa_status: companiesResponse.companies[0].moa_status,
+          moaStatus: companiesResponse.companies[0].moaStatus,
+          partnerships: companiesResponse.companies[0].partnerships
+        } : 'No companies');
         
-        // Filter to show companies where current coordinator hasn't uploaded MOA yet
-        const companiesWithoutMOA = companiesResponse.companies.filter(company => {
-          const moaUploadedBy = company.moa_uploaded_by || company.moaUploadedBy;
-          const currentUserIdNum = parseInt(currentUser.id);
+        // Get list of company IDs that are already assigned to current coordinator
+        const assignedCompanyIds = new Set<string>();
+        if (partnerCompaniesResponse.success && partnerCompaniesResponse.companies && Array.isArray(partnerCompaniesResponse.companies)) {
+          partnerCompaniesResponse.companies.forEach((company: any) => {
+            assignedCompanyIds.add(company.id.toString());
+          });
+          console.log('📋 Companies already assigned to current coordinator:', assignedCompanyIds.size, Array.from(assignedCompanyIds));
+        } else {
+          console.log('📋 No partner companies response or empty array');
+        }
+        
+        // Normalize company fields first to ensure consistent field names
+        console.log('🔄 Normalizing company fields...');
+        const normalizedCompanies = companiesResponse.companies.map((company, index) => {
+          const normalized = {
+            ...company,
+            partnershipStatus: company.partnership_status || company.partnershipStatus || 'pending',
+            moaStatus: company.moa_status || company.moaStatus || 'pending',
+          };
           
-          const hasNoMOA = !moaUploadedBy;
-          const moaUploadedByOther = moaUploadedBy && moaUploadedBy !== currentUserIdNum;
+          // Log first few companies for debugging
+          if (index < 3) {
+            console.log(`📝 Company ${index + 1} normalization:`, {
+              name: company.name,
+              id: company.id,
+              raw_partnership_status: company.partnership_status,
+              raw_partnershipStatus: company.partnershipStatus,
+              normalized_partnershipStatus: normalized.partnershipStatus,
+              raw_moa_status: company.moa_status,
+              raw_moaStatus: company.moaStatus,
+              normalized_moaStatus: normalized.moaStatus
+            });
+          }
           
-          return hasNoMOA || moaUploadedByOther;
+          return normalized;
         });
         
-        console.log('📋 Companies without MOA from current coordinator:', companiesWithoutMOA.length);
+        console.log('✅ Normalized companies count:', normalizedCompanies.length);
+        
+        // Filter to show companies that are NOT already assigned to current coordinator
+        // AND have partnership_status === 'pending' AND moa_status === 'pending'
+        // This includes:
+        // 1. Companies with partnerships with OTHER coordinators
+        // 2. Companies with no partnership with current coordinator
+        console.log('🔍 Starting filter process...');
+        console.log('👤 Current User ID:', currentUser.id);
+        
+        const companiesWithoutMOA = normalizedCompanies.filter((company, index) => {
+          const companyId = company.id.toString();
+          const isAssignedToCurrentCoordinator = assignedCompanyIds.has(companyId);
+          
+          // Check if company has partnership with current coordinator
+          // This checks the partnerships array from the API response
+          let hasPartnershipWithCurrentCoordinator = false;
+          if (company.partnerships && Array.isArray(company.partnerships)) {
+            hasPartnershipWithCurrentCoordinator = company.partnerships.some((p: any) => 
+              p.coordinator_user_id && parseInt(p.coordinator_user_id) === parseInt(currentUser.id)
+            );
+          }
+          
+          // NEW LOGIC: 
+          // - Exclude if already assigned to current coordinator
+          // - Exclude if has ANY partnership with current coordinator (regardless of status)
+          // - Include if NOT partnered with current coordinator (even if partnered with others)
+          const shouldExclude = isAssignedToCurrentCoordinator || hasPartnershipWithCurrentCoordinator;
+          
+          // Log detailed info for first few companies
+          if (index < 5) {
+            console.log(`🔍 Filtering company ${index + 1}:`, {
+              name: company.name,
+              id: companyId,
+              isAssignedToCurrentCoordinator,
+              hasPartnershipWithCurrentCoordinator,
+              partnershipStatus: company.partnershipStatus,
+              moaStatus: company.moaStatus,
+              shouldExclude,
+              willInclude: !shouldExclude,
+              partnerships: company.partnerships
+            });
+          }
+          
+          if (shouldExclude) {
+            if (isAssignedToCurrentCoordinator) {
+            console.log(`❌ Excluding company ${company.name} (ID: ${companyId}) - already assigned to current coordinator`);
+            } else if (hasPartnershipWithCurrentCoordinator) {
+              console.log(`❌ Excluding company ${company.name} (ID: ${companyId}) - already has partnership with current coordinator`);
+            }
+          } else {
+            console.log(`✅ Including company ${company.name} (ID: ${companyId}) - not partnered with current coordinator`);
+          }
+          
+          return !shouldExclude;
+        });
+        
+        console.log('📋 ===== FILTER RESULTS =====');
+        console.log('📋 Total companies from API:', companiesResponse.companies.length);
+        console.log('📋 Normalized companies:', normalizedCompanies.length);
+        console.log('📋 Companies NOT partnered with current coordinator (available for assignment):', companiesWithoutMOA.length);
+        console.log('📋 Filtered company names:', companiesWithoutMOA.map(c => ({ 
+          name: c.name, 
+          id: c.id, 
+          partnershipStatus: c.partnershipStatus, 
+          moaStatus: c.moaStatus,
+          hasPartnerships: c.partnerships ? c.partnerships.length : 0
+        })));
+        console.log('📋 ===== END FILTER RESULTS =====');
         
         // Process companies with matching algorithm
+        console.log('🎯 Processing companies with matching algorithm...');
+        console.log('🎯 Input companies count:', companiesWithoutMOA.length);
         const processedCompanies = await processCompaniesWithMatching(companiesWithoutMOA);
+        console.log('✅ Processed companies count:', processedCompanies.length);
+        console.log('✅ Processed company names:', processedCompanies.map(c => ({ name: c.name, id: c.id, partnershipStatus: c.partnershipStatus, moaStatus: c.moaStatus })));
         
+        console.log('💾 Setting companies state...');
         setCompanies(processedCompanies);
+        console.log('✅ Companies state set with', processedCompanies.length, 'companies');
         
         // Get number of interns
         let numberOfInterns = 0;
@@ -688,16 +831,30 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   };
 
   const filterCompanies = () => {
+    console.log('🔍 ===== FILTER COMPANIES CALLED =====');
+    console.log('🔍 Input companies count:', companies.length);
+    console.log('🔍 Selected school year:', selectedSchoolYear);
+    console.log('🔍 Search query:', searchQuery);
+    
     let filtered = companies;
 
     // Companies are already filtered to pending in fetchData, so no need to filter again
     // Just apply search and school year filters
 
     // Filter by school year
-    filtered = filtered.filter(company => company.schoolYear === selectedSchoolYear);
+    const beforeSchoolYearFilter = filtered.length;
+    filtered = filtered.filter(company => {
+      const matches = company.schoolYear === selectedSchoolYear;
+      if (!matches && filtered.length < 5) {
+        console.log(`❌ Company ${company.name} excluded - schoolYear: ${company.schoolYear}, selected: ${selectedSchoolYear}`);
+      }
+      return matches;
+    });
+    console.log(`📅 After school year filter (${selectedSchoolYear}): ${beforeSchoolYearFilter} -> ${filtered.length}`);
 
     // Filter by search query - now includes more fields from the migration
     if (searchQuery) {
+      const beforeSearchFilter = filtered.length;
       filtered = filtered.filter(company =>
         company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         company.industry.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -708,7 +865,12 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
         (company.companyDescription && company.companyDescription.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (company.contactPerson && company.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()))
       );
+      console.log(`🔎 After search filter ("${searchQuery}"): ${beforeSearchFilter} -> ${filtered.length}`);
     }
+
+    console.log('✅ Final filtered companies count:', filtered.length);
+    console.log('✅ Final filtered company names:', filtered.map(c => ({ name: c.name, schoolYear: c.schoolYear, partnershipStatus: c.partnershipStatus, moaStatus: c.moaStatus })));
+    console.log('🔍 ===== END FILTER COMPANIES =====');
 
     setFilteredCompanies(filtered);
   };
@@ -879,6 +1041,24 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
     }
   };
 
+  const getPartnershipStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return '#fbbc04';
+      case 'approved': return '#34a853';
+      case 'rejected': return '#ea4335';
+      default: return '#666';
+    }
+  };
+
+  const getPartnershipStatusText = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return 'Pending';
+      case 'approved': return 'Approved';
+      case 'rejected': return 'Rejected';
+      default: return 'Unknown';
+    }
+  };
+
   const CompanyCard = ({ company }: { company: Company }) => {
     const isExpanded = expandedCards.has(company.id);
     
@@ -959,6 +1139,14 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
               {company.moaExpiryDate && (
                 <Text style={styles.moaDate}>Expires: {company.moaExpiryDate}</Text>
               )}
+            </View>
+
+            <View style={styles.partnershipContainer}>
+              <Text style={styles.partnershipText}>
+                Partnership Status: <Text style={[styles.partnershipValue, { color: getPartnershipStatusColor(company.partnershipStatus) }]}>
+                  {getPartnershipStatusText(company.partnershipStatus)}
+                </Text>
+              </Text>
             </View>
 
             {company.schoolYear && (
@@ -1292,6 +1480,15 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
                           <Text style={styles.modalInfoLabel}>MOA Status</Text>
                           <Text style={[styles.modalInfoValue, { color: selectedCompany.moaStatus === 'active' ? '#34a853' : selectedCompany.moaStatus === 'pending' ? '#fbbc04' : '#ea4335' }]}>
                             {selectedCompany.moaStatus.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.modalInfoRow}>
+                        <MaterialIcons name="pending-actions" size={20} color={getPartnershipStatusColor(selectedCompany.partnershipStatus)} />
+                        <View style={styles.modalInfoContent}>
+                          <Text style={styles.modalInfoLabel}>Partnership Status</Text>
+                          <Text style={[styles.modalInfoValue, { color: getPartnershipStatusColor(selectedCompany.partnershipStatus) }]}>
+                            {getPartnershipStatusText(selectedCompany.partnershipStatus).toUpperCase()}
                           </Text>
                         </View>
                       </View>
@@ -1820,6 +2017,18 @@ const styles = StyleSheet.create({
     color: '#FBFBFB', // Light text
     opacity: 0.8,
     marginTop: 4,
+  },
+  partnershipContainer: {
+    marginBottom: 10,
+  },
+  partnershipText: {
+    fontSize: 15,
+    color: '#FBFBFB', // Light text
+    fontWeight: '600',
+  },
+  partnershipValue: {
+    fontSize: 15,
+    fontWeight: 'bold',
   },
   schoolYearContainer: {
     marginBottom: 10,

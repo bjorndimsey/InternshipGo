@@ -748,11 +748,18 @@ export default function CoordinatorsPage({ currentUser }: CoordinatorsPageProps)
       return;
     }
 
+    if (!coordinatorToRemove.userId) {
+      Alert.alert('Error', 'Coordinator user ID not available');
+      return;
+    }
+
     console.log('🗑️ Confirming removal of partnership/MOA for coordinator:', coordinatorToRemove.id, coordinatorToRemove.firstName, coordinatorToRemove.lastName);
+    console.log('🗑️ Coordinator user ID:', coordinatorToRemove.userId);
+    console.log('🗑️ Company ID:', companyId);
     setRemoving(true);
 
     try {
-      const response = await apiService.removePartnership(companyId);
+      const response = await apiService.removePartnership(companyId, coordinatorToRemove.userId);
       
       console.log('🗑️ Remove partnership API response:', response);
 

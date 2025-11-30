@@ -40,6 +40,8 @@ interface Company {
   coordinatorApproved?: boolean;
   companyApproved?: boolean;
   schoolYear?: string;
+  isAdminAssigned?: boolean; // New field to indicate if assigned by admin coordinator
+  moa_uploaded_by?: string | null; // To check if coordinator uploaded MOA
 }
 
 interface UserInfo {
@@ -190,6 +192,10 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
             partnershipStatus: company.partnershipStatus
           });
           
+          // Check if company was assigned by admin coordinator (has partnership but coordinator didn't upload MOA)
+          const isAdminAssigned = company.moa_uploaded_by !== currentUser.id && 
+                                  (coordinatorApproved || companyApproved || company.partnershipStatus === 'approved');
+          
           return {
             id: company.id,
             name: company.name,
@@ -210,6 +216,8 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
             coordinatorApproved,
             companyApproved,
             schoolYear: company.schoolYear || '2024-2025',
+            isAdminAssigned,
+            moa_uploaded_by: company.moa_uploaded_by,
           };
         });
         
@@ -330,15 +338,16 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   };
 
   const confirmRemoveCompany = async () => {
-    if (!companyToRemove) {
+    if (!companyToRemove || !currentUser) {
       return;
     }
 
     console.log('🗑️ Confirming removal of partnership/MOA for company:', companyToRemove.id, companyToRemove.name);
+    console.log('🗑️ Current coordinator user ID:', currentUser.id);
     setRemoving(true);
 
     try {
-      const response = await apiService.removePartnership(companyToRemove.id);
+      const response = await apiService.removePartnership(companyToRemove.id, currentUser.id);
       
       console.log('🗑️ Remove partnership API response:', response);
 

@@ -65,10 +65,12 @@ export default function CoordinatorsManagement() {
   const [filteredCoordinators, setFilteredCoordinators] = useState<CoordinatorData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [programFilter, setProgramFilter] = useState<string>('');
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCoordinator, setSelectedCoordinator] = useState<CoordinatorData | null>(null);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showProgramFilterModal, setShowProgramFilterModal] = useState(false);
   const [warningModalData, setWarningModalData] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [successModalData, setSuccessModalData] = useState<{ title: string; message: string } | null>(null);
   const [dimensions, setDimensions] = useState({ width, height: Dimensions.get('window').height });
@@ -87,7 +89,7 @@ export default function CoordinatorsManagement() {
 
   useEffect(() => {
     filterCoordinators();
-  }, [searchQuery, coordinators]);
+  }, [searchQuery, programFilter, coordinators]);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -153,8 +155,25 @@ export default function CoordinatorsManagement() {
       });
     }
 
+    if (programFilter) {
+      filtered = filtered.filter(coordinator => 
+        coordinator.program?.toLowerCase() === programFilter.toLowerCase()
+      );
+    }
+
     setFilteredCoordinators(filtered);
   };
+
+  const getUniquePrograms = () => {
+    const programs = coordinators
+      .map(c => c.program)
+      .filter((p): p is string => !!p && p.trim() !== '')
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .sort();
+    return programs;
+  };
+
+  const availablePrograms = ['BSIT', 'BITM', 'BSMATH', 'BSCE', 'BSMRS'];
 
   const handleViewCoordinator = (coordinator: CoordinatorData) => {
     setSelectedCoordinator(coordinator);
@@ -706,6 +725,26 @@ export default function CoordinatorsManagement() {
             placeholderTextColor="#9ca3af"
           />
         </View>
+        <View style={styles.filterContainer}>
+          <MaterialIcons name="filter-list" size={20} color="#9ca3af" style={styles.filterIcon} />
+          <TouchableOpacity
+            style={styles.filterDropdown}
+            onPress={() => setShowProgramFilterModal(true)}
+          >
+            <Text style={styles.filterText}>
+              {programFilter ? `Program: ${programFilter}` : 'All Programs'}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#9ca3af" />
+          </TouchableOpacity>
+          {programFilter !== '' && (
+            <TouchableOpacity
+              style={styles.clearFilterButton}
+              onPress={() => setProgramFilter('')}
+            >
+              <MaterialIcons name="close" size={18} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Coordinators Table */}
@@ -912,6 +951,73 @@ export default function CoordinatorsManagement() {
         </View>
       </Modal>
 
+      {/* Program Filter Modal */}
+      <Modal
+        visible={showProgramFilterModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowProgramFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.programFilterModalContent}>
+            <View style={styles.programFilterModalHeader}>
+              <Text style={styles.programFilterModalTitle}>Select Program</Text>
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setShowProgramFilterModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.programFilterModalBody}>
+              <TouchableOpacity
+                style={[
+                  styles.programFilterOption,
+                  programFilter === '' && styles.programFilterOptionSelected
+                ]}
+                onPress={() => {
+                  setProgramFilter('');
+                  setShowProgramFilterModal(false);
+                }}
+              >
+                <Text style={[
+                  styles.programFilterOptionText,
+                  programFilter === '' && styles.programFilterOptionTextSelected
+                ]}>
+                  All Programs
+                </Text>
+                {programFilter === '' && (
+                  <MaterialIcons name="check" size={20} color="#F56E0F" />
+                )}
+              </TouchableOpacity>
+              {availablePrograms.map((program) => (
+                <TouchableOpacity
+                  key={program}
+                  style={[
+                    styles.programFilterOption,
+                    programFilter === program && styles.programFilterOptionSelected
+                  ]}
+                  onPress={() => {
+                    setProgramFilter(program);
+                    setShowProgramFilterModal(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.programFilterOptionText,
+                    programFilter === program && styles.programFilterOptionTextSelected
+                  ]}>
+                    {program}
+                  </Text>
+                  {programFilter === program && (
+                    <MaterialIcons name="check" size={20} color="#F56E0F" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Tooltip */}
       {tooltip.visible && (
         <View 
@@ -985,6 +1091,40 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#FBFBFB',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+  filterIcon: {
+    marginRight: 4,
+  },
+  filterDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1f1f23',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
+    flex: 1,
+    minHeight: 44,
+  },
+  filterText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FBFBFB',
+    fontWeight: '500',
+  },
+  clearFilterButton: {
+    padding: 8,
+    backgroundColor: '#1f1f23',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
   },
   tableWrapper: {
     flex: 1,
@@ -1413,5 +1553,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  // Program Filter Modal Styles
+  programFilterModalContent: {
+    backgroundColor: '#2A2A2E',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
+  },
+  programFilterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3a3a3e',
+  },
+  programFilterModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FBFBFB',
+  },
+  programFilterModalBody: {
+    padding: 8,
+    maxHeight: 400,
+  },
+  programFilterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginVertical: 4,
+    backgroundColor: '#1f1f23',
+    borderWidth: 1,
+    borderColor: '#3a3a3e',
+  },
+  programFilterOptionSelected: {
+    backgroundColor: 'rgba(245, 110, 15, 0.15)',
+    borderColor: '#F56E0F',
+  },
+  programFilterOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#9ca3af',
+  },
+  programFilterOptionTextSelected: {
+    color: '#FBFBFB',
+    fontWeight: '600',
   },
 });

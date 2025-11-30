@@ -1207,6 +1207,76 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
                   </TouchableOpacity>
                 </View>
               )}
+
+              {/* Qualifications & Skills Card */}
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="school" size={24} color="#F56E0F" />
+                  </View>
+                  <Text style={styles.cardTitle}>Qualifications & Skills</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  {profile.qualifications ? (
+                    <Text style={styles.cardSubtitle} numberOfLines={3}>
+                      Qualifications: {profile.qualifications}
+                    </Text>
+                  ) : (
+                    <Text style={styles.cardSubtitle}>Qualifications: Not specified</Text>
+                  )}
+                  {profile.skillsRequired ? (
+                    <Text style={styles.cardSubtitle} numberOfLines={3}>
+                      Skills: {profile.skillsRequired}
+                    </Text>
+                  ) : (
+                    <Text style={styles.cardSubtitle}>Skills: Not specified</Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={() => handleEditSection('qualifications-skills')}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>
+                    {profile.qualifications || profile.skillsRequired ? 'Edit' : 'Add'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Work Environment & Benefits Card */}
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIcon}>
+                    <MaterialIcons name="work" size={24} color="#F56E0F" />
+                  </View>
+                  <Text style={styles.cardTitle}>Work Environment & Benefits</Text>
+                </View>
+                <View style={styles.cardContent}>
+                  {profile.workEnvironment ? (
+                    <Text style={styles.cardSubtitle} numberOfLines={3}>
+                      Environment: {profile.workEnvironment}
+                    </Text>
+                  ) : (
+                    <Text style={styles.cardSubtitle}>Environment: Not specified</Text>
+                  )}
+                  {profile.benefits ? (
+                    <Text style={styles.cardSubtitle} numberOfLines={3}>
+                      Benefits: {profile.benefits}
+                    </Text>
+                  ) : (
+                    <Text style={styles.cardSubtitle}>Benefits: Not specified</Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={styles.cardEditButton} 
+                  onPress={() => handleEditSection('work-environment')}
+                >
+                  <MaterialIcons name="add" size={16} color="#02050a" />
+                  <Text style={styles.cardEditButtonText}>
+                    {profile.workEnvironment || profile.benefits ? 'Edit' : 'Add'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Right Column */}

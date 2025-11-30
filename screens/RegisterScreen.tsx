@@ -61,6 +61,7 @@ interface FormData {
   phoneNumber: string;
   password: string;
   confirmPassword: string;
+  university: string;
 }
 
 const userTypes = ['Student', 'Coordinator', 'Company'];
@@ -84,6 +85,7 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
     phoneNumber: '',
     password: '',
     confirmPassword: '',
+    university: 'Davao Oriental State University', // Automatically set
   });
 
   const [showDropdown, setShowDropdown] = useState(false);
@@ -266,12 +268,14 @@ export default function RegisterScreen({ onNavigateToLogin, onRegisterSuccess }:
         registrationData.dateOfBirth = formData.dateOfBirth;
         registrationData.program = formData.program;
         registrationData.major = formData.major;
+        registrationData.university = formData.university; // Automatically set to "Davao Oriental State University"
       } else if (formData.userType === 'Coordinator') {
         registrationData.firstName = formData.firstName;
         registrationData.middleName = formData.middleName || 'N/A';
         registrationData.lastName = formData.lastName;
         registrationData.program = formData.program;
         registrationData.phoneNumber = formData.phoneNumber;
+        registrationData.university = formData.university; // Automatically set to "Davao Oriental State University"
       } else if (formData.userType === 'Company') {
         registrationData.companyName = formData.companyName;
         registrationData.industry = formData.industry;

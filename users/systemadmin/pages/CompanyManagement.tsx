@@ -90,7 +90,8 @@ export default function CompanyManagement() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getAllCompanies();
+      // System admin should see ALL companies, not just those with partnerships
+      const response = await apiService.getAllCompanies(true);
       
       if (response.success) {
         const responseData = response as any;
