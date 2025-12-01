@@ -1,4 +1,4 @@
-const { query } = require('../config/supabase');
+const { query, supabase } = require('../config/supabase');
 
 class EventController {
   // Get all events for a coordinator
@@ -180,34 +180,37 @@ class EventController {
       if (approvedApplications.length > 0) {
         const companyIds = approvedApplications.map(app => app.company_id);
         console.log('🏢 Companies with approved applications:', companyIds);
-        // Get company user IDs from company IDs
-        const companiesResult = await query('companies', 'select', ['user_id'], { id: companyIds });
-        console.log('🏢 Companies query result:', companiesResult);
         
-        if (companiesResult.error) {
-          console.error('❌ Error fetching company user IDs:', companiesResult.error);
-        } else {
-          const companyUserIds = companiesResult.data?.map(company => company.user_id) || [];
-          console.log('👥 Company user IDs:', companyUserIds);
+        // Get company user IDs from company IDs using .in() for array query
+        try {
+          const { data: companiesData, error: companiesError } = await supabase
+            .from('companies')
+            .select('user_id')
+            .in('id', companyIds);
+          
+          if (companiesError) {
+            console.error('❌ Error fetching company user IDs:', companiesError);
+          } else {
+            const companyUserIds = companiesData?.map(company => company.user_id).filter(id => id != null) || [];
+            console.log('👥 Company user IDs:', companyUserIds);
 
-          if (companyUserIds.length > 0) {
-            // Get events created by companies (query each company user ID separately)
-            const allCompanyEvents = [];
-            for (const companyUserId of companyUserIds) {
-              const companyEventsResult = await query('events', 'select', null, { created_by: companyUserId });
-              console.log(`📅 Company events query result for user ${companyUserId}:`, companyEventsResult);
+            if (companyUserIds.length > 0) {
+              // Get events created by companies using .in() for array query
+              const { data: allCompanyEventsData, error: companyEventsError } = await supabase
+                .from('events')
+                .select('*')
+                .in('created_by', companyUserIds);
               
-              if (companyEventsResult.error) {
-                console.error(`❌ Error fetching company events for user ${companyUserId}:`, companyEventsResult.error);
+              if (companyEventsError) {
+                console.error('❌ Error fetching company events:', companyEventsError);
               } else {
-                const events = companyEventsResult.data || [];
-                allCompanyEvents.push(...events);
-                console.log(`📅 Company events found for user ${companyUserId}:`, events.length);
+                companyEvents = allCompanyEventsData || [];
+                console.log('📅 Total company events found:', companyEvents.length);
               }
             }
-            companyEvents = allCompanyEvents;
-            console.log('📅 Total company events found:', companyEvents.length);
           }
+        } catch (error) {
+          console.error('❌ Error in company events query:', error);
         }
       } else {
         console.log('📅 No approved applications, skipping company events');

@@ -2587,13 +2587,13 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
+                    onPress: async () => {
             console.log('🗑️ User confirmed deletion, calling API...');
-            try {
-              const response = await apiService.deleteTrainingSchedule(scheduleId, currentUser.id);
+                      try {
+                        const response = await apiService.deleteTrainingSchedule(scheduleId, currentUser.id);
               console.log('📡 Delete API response:', response);
               
-              if (response.success) {
+                        if (response.success) {
                 console.log('✅ Training schedule deleted successfully');
                 Alert.alert('Success', 'Training schedule deleted successfully!');
                 // Refresh schedules
