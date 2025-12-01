@@ -97,6 +97,14 @@ export default function DashboardHome() {
   const [chartLine, setChartLine] = useState<number[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<any[]>([]);
   const [chartWidthPx, setChartWidthPx] = useState<number>(width - 40);
+  
+  // Hour tracking state
+  const [hourTrackingMonths, setHourTrackingMonths] = useState<string[]>([]);
+  const [hourTrackingBars, setHourTrackingBars] = useState<number[]>([]);
+  const [hourTrackingLine, setHourTrackingLine] = useState<number[]>([]);
+  const [hourTrackingWidthPx, setHourTrackingWidthPx] = useState<number>(width - 40);
+  const [internHoursList, setInternHoursList] = useState<Array<{ name: string; totalHours: number; requiredHours: number }>>([]);
+  const [loadingHours, setLoadingHours] = useState(false);
 
   useEffect(() => {
     fetchCompanyData();
@@ -224,6 +232,9 @@ export default function DashboardHome() {
       setChartBars(addedPerMonth);
       setChartLine(lineCounts);
 
+      // Fetch and calculate hour tracking data
+      await fetchHourTrackingData(approvedApps, companyId, effectiveUser?.id?.toString() || '');
+
       // Fetch today's attendance for present today container and stats
       const attendanceToday = await apiService.getTodayAttendance(companyId, effectiveUser?.id?.toString() || '');
       const todayData = (attendanceToday as any)?.data || (attendanceToday as any)?.applications || (attendanceToday as any)?.records || [];
@@ -260,6 +271,96 @@ export default function DashboardHome() {
       console.error('Error fetching company data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchHourTrackingData = async (approvedApps: any[], companyId: string, userId: string) => {
+    try {
+      setLoadingHours(true);
+      const currentYear = new Date().getFullYear();
+      const months: string[] = [];
+      const hoursPerMonth: number[] = [];
+      const internHoursData: Array<{ name: string; totalHours: number; requiredHours: number }> = [];
+
+      // Generate month labels
+      for (let month = 0; month < 12; month++) {
+        const d = new Date(currentYear, month, 1);
+        const label = d.toLocaleString('en-US', { month: 'short' });
+        months.push(label);
+        hoursPerMonth.push(0);
+      }
+
+      // Fetch attendance records for each approved intern
+      for (const app of approvedApps) {
+        try {
+          const internId = app.student_id || app.user_id;
+          const internName = `${app.first_name || ''} ${app.last_name || ''}`.trim() || `Intern ${internId}`;
+          // hours_of_internship is stored in the application record
+          const requiredHours = parseFloat(app.hours_of_internship || app.hoursOfInternship || '0') || 0;
+
+          // Fetch all attendance records for this intern
+          const attendanceResponse = await apiService.getAttendanceRecords(companyId, userId, {
+            internId: internId.toString(),
+          });
+
+          if (attendanceResponse.success && Array.isArray(attendanceResponse.data)) {
+            // Filter only accepted records
+            const acceptedRecords = attendanceResponse.data.filter((record: any) => 
+              record.verification_status === 'accepted'
+            );
+
+            // Calculate total hours for this intern
+            const totalHours = acceptedRecords.reduce((sum: number, record: any) => {
+              return sum + (parseFloat(record.total_hours) || 0);
+            }, 0);
+
+            // Add to intern hours list
+            internHoursData.push({
+              name: internName,
+              totalHours: Math.round(totalHours * 100) / 100, // Round to 2 decimals
+              requiredHours: requiredHours,
+            });
+
+            // Group hours by month
+            acceptedRecords.forEach((record: any) => {
+              const dateStr = record.attendance_date || record.date || record.created_at;
+              if (dateStr) {
+                const recordDate = new Date(dateStr);
+                if (recordDate.getFullYear() === currentYear) {
+                  const month = recordDate.getMonth();
+                  const hours = parseFloat(record.total_hours) || 0;
+                  hoursPerMonth[month] = (hoursPerMonth[month] || 0) + hours;
+                }
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`Error fetching hours for intern ${app.student_id}:`, error);
+        }
+      }
+
+      // Calculate cumulative hours
+      let running = 0;
+      const cumulativeHours = hoursPerMonth.map((h) => {
+        running += h;
+        return Math.round(running * 100) / 100;
+      });
+
+      setHourTrackingMonths(months);
+      setHourTrackingBars(hoursPerMonth.map(h => Math.round(h * 100) / 100));
+      setHourTrackingLine(cumulativeHours);
+      setInternHoursList(internHoursData.sort((a, b) => b.totalHours - a.totalHours));
+
+      console.log('📊 Hour Tracking Data:', {
+        months,
+        hoursPerMonth,
+        cumulativeHours,
+        internCount: internHoursData.length
+      });
+    } catch (error) {
+      console.error('Error fetching hour tracking data:', error);
+    } finally {
+      setLoadingHours(false);
     }
   };
 
@@ -496,6 +597,74 @@ export default function DashboardHome() {
               <InternsComposedChart monthlyAdded={chartBars} year={new Date().getFullYear()} />
             ) : (
               <AnimatedChart months={chartMonths} bars={chartBars} line={chartLine} widthPx={chartWidthPx} />
+            )}
+          </View>
+        </View>
+
+        {/* Hour Tracking Dashboard */}
+        <View style={styles.chartSection} onLayout={(e) => setHourTrackingWidthPx(e.nativeEvent.layout.width)}>
+          <Text style={styles.sectionTitle}>Accumulated Work Hours - {new Date().getFullYear()}</Text>
+          <View style={styles.chartCard}>
+            {loadingHours ? (
+              <View style={styles.loadingChartContainer}>
+                <ActivityIndicator size="large" color="#F56E0F" />
+                <Text style={styles.loadingChartText}>Loading hour tracking data...</Text>
+              </View>
+            ) : (
+              <>
+                {Platform.OS === 'web' ? (
+                  <InternsComposedChart monthlyAdded={hourTrackingBars} year={new Date().getFullYear()} />
+                ) : (
+                  <AnimatedChart 
+                    months={hourTrackingMonths} 
+                    bars={hourTrackingBars} 
+                    line={hourTrackingLine} 
+                    widthPx={hourTrackingWidthPx} 
+                  />
+                )}
+                
+                {/* Intern Hours Summary List */}
+                {internHoursList.length > 0 && (
+                  <View style={styles.internHoursSummary}>
+                    <Text style={styles.summaryTitle}>Intern Hours Summary</Text>
+                    <ScrollView style={styles.summaryList} nestedScrollEnabled>
+                      {internHoursList.map((intern, index) => {
+                        const progress = intern.requiredHours > 0 
+                          ? Math.min((intern.totalHours / intern.requiredHours) * 100, 100) 
+                          : 0;
+                        const isComplete = intern.requiredHours > 0 && intern.totalHours >= intern.requiredHours;
+                        
+                        return (
+                          <View key={index} style={styles.summaryItem}>
+                            <View style={styles.summaryItemHeader}>
+                              <Text style={styles.summaryItemName} numberOfLines={1}>{intern.name}</Text>
+                              <Text style={styles.summaryItemHours}>
+                                {intern.totalHours.toFixed(1)}h / {intern.requiredHours > 0 ? `${intern.requiredHours}h` : 'N/A'}
+                              </Text>
+                            </View>
+                            {intern.requiredHours > 0 && (
+                              <View style={styles.progressBarContainer}>
+                                <View style={styles.progressBarBackground}>
+                                  <Animated.View
+                                    style={[
+                                      styles.progressBarFill,
+                                      {
+                                        width: `${progress}%`,
+                                        backgroundColor: isComplete ? '#34a853' : '#F56E0F',
+                                      },
+                                    ]}
+                                  />
+                                </View>
+                                <Text style={styles.progressText}>{progress.toFixed(1)}%</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </View>
@@ -1221,5 +1390,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#F56E0F',
+  },
+  loadingChartContainer: {
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingChartText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#878787',
+  },
+  internHoursSummary: {
+    marginTop: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginBottom: 16,
+  },
+  summaryList: {
+    maxHeight: 300,
+  },
+  summaryItem: {
+    backgroundColor: 'rgba(245, 110, 15, 0.05)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.1)',
+  },
+  summaryItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryItemName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FBFBFB',
+    flex: 1,
+    marginRight: 8,
+  },
+  summaryItemHours: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F56E0F',
+  },
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressBarBackground: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#878787',
+    minWidth: 45,
+    textAlign: 'right',
   },
 });
