@@ -261,6 +261,8 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   
   // Training Schedule States
   const [showTrainingScheduleModal, setShowTrainingScheduleModal] = useState(false);
+  const [showTrainingScheduleRestrictionModal, setShowTrainingScheduleRestrictionModal] = useState(false);
+  const [unfinishedCompanyNames, setUnfinishedCompanyNames] = useState<string[]>([]);
   const [trainingSchedules, setTrainingSchedules] = useState<TrainingScheduleEntry[]>([]);
   const [isLoadingTrainingSchedules, setIsLoadingTrainingSchedules] = useState(false);
   const [isSavingTrainingSchedule, setIsSavingTrainingSchedule] = useState(false);
@@ -2361,12 +2363,9 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
     );
 
     if (unfinishedCompanies.length > 0) {
-      const companyNames = unfinishedCompanies.map(c => c.name).join('\n• ');
-      Alert.alert(
-        'Unfinished Internships',
-        `Please finish all company internships before adding training schedule entries. You have unfinished internship(s) that need to be completed first:\n\n• ${companyNames}`,
-        [{ text: 'OK' }]
-      );
+      const companyNames = unfinishedCompanies.map(c => c.name);
+      setUnfinishedCompanyNames(companyNames);
+      setShowTrainingScheduleRestrictionModal(true);
       return;
     }
 
@@ -3974,6 +3973,39 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
             <TouchableOpacity
               style={styles.programRestrictionButton}
               onPress={() => setShowProgramRestrictionModal(false)}
+            >
+              <Text style={styles.programRestrictionButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Training Schedule Restriction Modal */}
+      <Modal
+        visible={showTrainingScheduleRestrictionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowTrainingScheduleRestrictionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.programRestrictionModalContent}>
+            <View style={styles.programRestrictionHeader}>
+              <MaterialIcons name="warning" size={32} color="#EA4335" />
+              <Text style={styles.programRestrictionTitle}>Unfinished Internships</Text>
+            </View>
+            <Text style={styles.programRestrictionText}>
+              Please finish all company internships before adding training schedule entries. You have unfinished internship(s) that need to be completed first:
+            </Text>
+            <View style={[styles.programRestrictionInfoContainer, { marginTop: 16, marginBottom: 20 }]}>
+              {unfinishedCompanyNames.map((name, index) => (
+                <Text key={index} style={[styles.programRestrictionProgram, { fontSize: 14, marginBottom: 4 }]}>
+                  • {name}
+                </Text>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={styles.programRestrictionButton}
+              onPress={() => setShowTrainingScheduleRestrictionModal(false)}
             >
               <Text style={styles.programRestrictionButtonText}>OK</Text>
             </TouchableOpacity>
