@@ -2633,6 +2633,10 @@ const drawSupervisorEvaluationForm = async (
   pageHeight: number,
   horizontalMargin: number
 ) => {
+  // Check if real evaluation data exists (company submitted an evaluation)
+  // Only mark checkboxes if evaluationData.id exists and is not empty
+  const hasEvaluationData = !!(evaluationData.id && evaluationData.id.trim().length > 0);
+  
   // Page 1: Section I, II, and Question 1
   let page1;
   if (startPageIndex < pdfDoc.getPageCount()) {
@@ -3127,8 +3131,8 @@ const drawSupervisorEvaluationForm = async (
       borderColor: rgbFn(0, 0, 0),
       borderWidth: 1,
     });
-    // Mark if selected
-    if (evaluationData.question1Performance === option) {
+    // Mark if selected (only if real evaluation data exists)
+    if (hasEvaluationData && evaluationData.question1Performance === option) {
       page1.drawText('X', {
         x: optionX + 2,
         y: cursorY - 6,
@@ -3190,7 +3194,8 @@ const drawSupervisorEvaluationForm = async (
     borderColor: rgbFn(0, 0, 0),
     borderWidth: 1,
   });
-  if (evaluationData.question2SkillsCareer) {
+  // Only mark YES if real evaluation data exists
+  if (hasEvaluationData && evaluationData.question2SkillsCareer) {
     page2.drawText('X', {
       x: yesNoX + 2,
       y: cursorY - 6,
@@ -3215,7 +3220,8 @@ const drawSupervisorEvaluationForm = async (
     borderColor: rgbFn(0, 0, 0),
     borderWidth: 1,
   });
-  if (!evaluationData.question2SkillsCareer) {
+  // Only mark NO if real evaluation data exists
+  if (hasEvaluationData && !evaluationData.question2SkillsCareer) {
     page2.drawText('X', {
       x: yesNoX + 82,
       y: cursorY - 6,
@@ -3232,8 +3238,8 @@ const drawSupervisorEvaluationForm = async (
     color: textColor,
   });
 
-  // Elaboration if NO
-  if (!evaluationData.question2SkillsCareer && evaluationData.question2Elaboration) {
+  // Elaboration if NO (only if real evaluation data exists)
+  if (hasEvaluationData && !evaluationData.question2SkillsCareer && evaluationData.question2Elaboration) {
     cursorY -= 20;
     const elaborationLabel = '(Please elaborate)';
     const elaborationLabelX = yesNoX + 95 + 20;
@@ -3295,7 +3301,8 @@ const drawSupervisorEvaluationForm = async (
     borderColor: rgbFn(0, 0, 0),
     borderWidth: 1,
   });
-  if (evaluationData.question3FulltimeCandidate) {
+  // Only mark YES if real evaluation data exists
+  if (hasEvaluationData && evaluationData.question3FulltimeCandidate) {
     page2.drawText('X', {
       x: yesNoX + 2,
       y: cursorY - 6,
@@ -3320,7 +3327,8 @@ const drawSupervisorEvaluationForm = async (
     borderColor: rgbFn(0, 0, 0),
     borderWidth: 1,
   });
-  if (!evaluationData.question3FulltimeCandidate) {
+  // Only mark NO if real evaluation data exists
+  if (hasEvaluationData && !evaluationData.question3FulltimeCandidate) {
     page2.drawText('X', {
       x: yesNoX + 82,
       y: cursorY - 6,
@@ -3364,7 +3372,8 @@ const drawSupervisorEvaluationForm = async (
     borderColor: rgbFn(0, 0, 0),
     borderWidth: 1,
   });
-  if (evaluationData.question4InterestOtherTrainees) {
+  // Only mark YES if real evaluation data exists
+  if (hasEvaluationData && evaluationData.question4InterestOtherTrainees) {
     page2.drawText('X', {
       x: yesNoX + 2,
       y: cursorY - 6,
@@ -3389,7 +3398,8 @@ const drawSupervisorEvaluationForm = async (
     borderColor: rgbFn(0, 0, 0),
     borderWidth: 1,
   });
-  if (!evaluationData.question4InterestOtherTrainees) {
+  // Only mark NO if real evaluation data exists
+  if (hasEvaluationData && !evaluationData.question4InterestOtherTrainees) {
     page2.drawText('X', {
       x: yesNoX + 82,
       y: cursorY - 6,
@@ -3406,8 +3416,8 @@ const drawSupervisorEvaluationForm = async (
     color: textColor,
   });
 
-  // Elaboration if NO
-  if (!evaluationData.question4InterestOtherTrainees && evaluationData.question4Elaboration) {
+  // Elaboration if NO (only if real evaluation data exists)
+  if (hasEvaluationData && !evaluationData.question4InterestOtherTrainees && evaluationData.question4Elaboration) {
     cursorY -= 20;
     const elaborationLabel = '(If NO, please elaborate)';
     const elaborationLabelX = yesNoX + 95 + 20;
@@ -3588,7 +3598,7 @@ const drawSupervisorEvaluationForm = async (
   cursorY -= rowHeight + rowGap;
 
   // Helper function to draw a table row
-  const drawTableRow = (page: any, rowY: number, itemText: string, rating: number | undefined) => {
+  const drawTableRow = (page: any, rowY: number, itemText: string, rating: number | undefined, hasData: boolean) => {
     // Draw row border
     page.drawRectangle({
       x: tableStartX,
@@ -3618,8 +3628,8 @@ const drawSupervisorEvaluationForm = async (
       const centerX = colX + (ratingColWidth - regularFont.widthOfTextAtSize('X', 8)) / 2;
       const centerY = rowY - rowHeight / 2 + 3; // Adjusted for smaller rows
 
-      // Mark if this rating matches
-      if (rating === ratingValue) {
+      // Mark if this rating matches (only if real evaluation data exists)
+      if (hasData && rating === ratingValue) {
         page.drawText('X', {
           x: centerX,
           y: centerY,
@@ -3737,7 +3747,7 @@ const drawSupervisorEvaluationForm = async (
 
     // Draw table row for this item
     const rating = (evaluationData as any)[item.key] as number | undefined;
-    drawTableRow(currentPage, rowY, item.text, rating);
+    drawTableRow(currentPage, rowY, item.text, rating, hasEvaluationData);
     currentCursorY -= rowHeight + rowGap; // Add gap between rows
     itemsDrawn++;
   }
@@ -5592,7 +5602,7 @@ export const generateJournalPdf = async (
       console.log(`📋 Drawing supervisor evaluation form ${i + 1} starting on page ${firstPageNumber} (index ${startPageIndex})`);
       console.log(`📋 Has data: ${!!evaluationData}`);
       
-      // If no data, create a minimal structure with empty values
+      // If no data, create a minimal structure with empty values (no default checkbox values)
       const formDataToDraw: SupervisorEvaluationFormData = evaluationData || {
         id: '',
         studentId: '',
@@ -5606,10 +5616,11 @@ export const generateJournalPdf = async (
         endDate: '',
         totalHours: 0,
         descriptionOfDuties: '',
-        question1Performance: 'Good',
-        question2SkillsCareer: true,
-        question3FulltimeCandidate: true,
-        question4InterestOtherTrainees: true,
+        // No default values for questions - leave checkboxes empty
+        question1Performance: 'Good' as any, // Type requirement, but won't be marked if id is empty
+        question2SkillsCareer: false, // Default to false, but won't be marked if id is empty
+        question3FulltimeCandidate: false, // Default to false, but won't be marked if id is empty
+        question4InterestOtherTrainees: false, // Default to false, but won't be marked if id is empty
         supervisorName: undefined,
         supervisorSignatureUrl: undefined,
         companySignatureUrl: undefined,
