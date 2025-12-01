@@ -2354,6 +2354,22 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
       return;
     }
 
+    // Check for unfinished companies (started but not finished)
+    const unfinishedCompanies = companies.filter(c => 
+      c.startedAt !== null && c.startedAt !== undefined && 
+      (c.finishedAt === null || c.finishedAt === undefined)
+    );
+
+    if (unfinishedCompanies.length > 0) {
+      const companyNames = unfinishedCompanies.map(c => c.name).join('\n• ');
+      Alert.alert(
+        'Unfinished Internships',
+        `Please finish all company internships before adding training schedule entries. You have unfinished internship(s) that need to be completed first:\n\n• ${companyNames}`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsLoadingTrainingSchedules(true);
       
@@ -2445,6 +2461,15 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
       return;
     }
 
+    // Check if Section A total hours is 0
+    if (sectionATotalHours === 0) {
+      Alert.alert(
+        'Cannot Add Training Schedule',
+        'Section A (Total Internship Hours Summary) must be greater than 0. Please complete your internship hours first before adding training schedule entries.'
+      );
+      return;
+    }
+
     if (!trainingScheduleForm.taskClassification.trim()) {
       Alert.alert('Validation Error', 'Please enter Task/Job Classification.');
       return;
@@ -2519,6 +2544,15 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   };
 
   const handleEditTrainingSchedule = (schedule: TrainingScheduleEntry) => {
+    // Check if Section A total hours is 0
+    if (sectionATotalHours === 0) {
+      Alert.alert(
+        'Cannot Edit Training Schedule',
+        'Section A (Total Internship Hours Summary) must be greater than 0. Please complete your internship hours first before managing training schedule entries.'
+      );
+      return;
+    }
+
     setTrainingScheduleForm({
       taskClassification: schedule.taskClassification,
       toolsDeviceSoftwareUsed: schedule.toolsDeviceSoftwareUsed,
@@ -2528,26 +2562,50 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
   };
 
   const handleDeleteTrainingSchedule = async (scheduleId: string) => {
+    console.log('🗑️ Delete button clicked for schedule:', scheduleId);
+    console.log('📊 Section A Total Hours:', sectionATotalHours);
+    
+    // Check if Section A total hours is 0
+    if (sectionATotalHours === 0) {
+      console.log('❌ Blocked: Section A total hours is 0');
+      Alert.alert(
+        'Cannot Delete Training Schedule',
+        'Section A (Total Internship Hours Summary) must be greater than 0. Please complete your internship hours first before managing training schedule entries.'
+      );
+      return;
+    }
+
+    console.log('✅ Section A check passed, showing confirmation dialog');
     Alert.alert(
       'Delete Training Schedule',
       'Are you sure you want to delete this training schedule entry?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('❌ Delete cancelled by user')
+        },
         {
           text: 'Delete',
           style: 'destructive',
-                    onPress: async () => {
-                      try {
-                        const response = await apiService.deleteTrainingSchedule(scheduleId, currentUser.id);
-                        if (response.success) {
+          onPress: async () => {
+            console.log('🗑️ User confirmed deletion, calling API...');
+            try {
+              const response = await apiService.deleteTrainingSchedule(scheduleId, currentUser.id);
+              console.log('📡 Delete API response:', response);
+              
+              if (response.success) {
+                console.log('✅ Training schedule deleted successfully');
                 Alert.alert('Success', 'Training schedule deleted successfully!');
                 // Refresh schedules
+                console.log('🔄 Refreshing training schedules...');
                 await handleTrainingScheduleClick();
               } else {
+                console.error('❌ Delete failed:', response.message);
                 Alert.alert('Error', response.message || 'Failed to delete training schedule. Please try again.');
               }
             } catch (error: any) {
-              console.error('Error deleting training schedule:', error);
+              console.error('❌ Error deleting training schedule:', error);
               Alert.alert('Error', error.message || 'Failed to delete training schedule. Please try again.');
             }
           },
@@ -5268,9 +5326,12 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
               </View>
 
               <TouchableOpacity
-                style={[styles.hteInfoPrimaryButton, isSavingTrainingSchedule && styles.disabledButton]}
+                style={[
+                  styles.hteInfoPrimaryButton, 
+                  (isSavingTrainingSchedule || sectionATotalHours === 0) && styles.disabledButton
+                ]}
                 onPress={handleSaveTrainingSchedule}
-                disabled={isSavingTrainingSchedule}
+                disabled={isSavingTrainingSchedule || sectionATotalHours === 0}
               >
                 {isSavingTrainingSchedule ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -5280,6 +5341,17 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
                   </Text>
                 )}
               </TouchableOpacity>
+              {sectionATotalHours === 0 && (
+                <Text style={{ 
+                  fontSize: 12, 
+                  color: '#EA4335', 
+                  textAlign: 'center', 
+                  marginTop: 8,
+                  fontStyle: 'italic'
+                }}>
+                  Cannot add entries: Section A total hours is 0. Please complete your internship hours first.
+                </Text>
+              )}
 
               {/* List of Existing Entries */}
               {isLoadingTrainingSchedules ? (
@@ -5312,15 +5384,23 @@ export default function CompaniesPage({ currentUser }: CompaniesPageProps) {
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                           <TouchableOpacity
                             onPress={() => handleEditTrainingSchedule(schedule)}
-                            style={{ padding: 6 }}
+                            style={{ 
+                              padding: 6,
+                              opacity: sectionATotalHours === 0 ? 0.5 : 1
+                            }}
+                            disabled={sectionATotalHours === 0}
                           >
-                            <MaterialIcons name="edit" size={18} color="#4285f4" />
+                            <MaterialIcons name="edit" size={18} color={sectionATotalHours === 0 ? "#999" : "#4285f4"} />
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => handleDeleteTrainingSchedule(schedule.id)}
-                            style={{ padding: 6 }}
+                            style={{ 
+                              padding: 6,
+                              opacity: sectionATotalHours === 0 ? 0.5 : 1
+                            }}
+                            disabled={sectionATotalHours === 0}
                           >
-                            <MaterialIcons name="delete" size={18} color="#EA4335" />
+                            <MaterialIcons name="delete" size={18} color={sectionATotalHours === 0 ? "#999" : "#EA4335"} />
                           </TouchableOpacity>
                         </View>
                       </View>
