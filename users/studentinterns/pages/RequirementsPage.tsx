@@ -178,15 +178,18 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
         
         // Add submitted requirements (update existing or add new)
         submissions.forEach((sub: any) => {
+          // Normalize status to lowercase for consistency
+          const normalizedStatus = sub.status ? sub.status.toLowerCase() : sub.status;
+          
           const existingReq = allRequirements.get(sub.requirement_id);
           if (existingReq) {
             // Update existing requirement with submission data (preserve coordinator info)
             allRequirements.set(sub.requirement_id, {
               ...existingReq,
-              submissionStatus: sub.status,
+              submissionStatus: normalizedStatus,
               submittedAt: sub.submitted_at,
               coordinatorFeedback: sub.coordinator_feedback,
-              completed: sub.status === 'approved',
+              completed: normalizedStatus === 'approved',
               // Preserve coordinator info if not in submission
               coordinator_first_name: existingReq.coordinator_first_name || sub.coordinator_first_name,
               coordinator_last_name: existingReq.coordinator_last_name || sub.coordinator_last_name,
@@ -204,8 +207,8 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
               file_url: sub.submitted_file_url,
               file_name: sub.submitted_file_name,
               file_public_id: sub.submitted_file_public_id,
-              completed: sub.status === 'approved',
-              submissionStatus: sub.status,
+              completed: normalizedStatus === 'approved',
+              submissionStatus: normalizedStatus,
               submittedAt: sub.submitted_at,
               coordinatorFeedback: sub.coordinator_feedback,
               coordinator_first_name: sub.coordinator_first_name,
@@ -518,11 +521,15 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
 
   // Enhanced Status Badge Component
   const StatusBadge = ({ status, isRequired }: { status: string; isRequired: boolean }) => {
+    // Normalize status to lowercase for consistent comparison
+    const normalizedStatus = status ? status.toLowerCase() : '';
+    
     const getStatusConfig = () => {
-      if (status === 'approved') {
+      if (normalizedStatus === 'approved') {
         return { color: '#2D5A3D', text: 'Approved', icon: 'check-circle' };
       }
-      if (status === 'pending') {
+      // Both 'pending' and 'submitted' should show as 'Pending' (submitted means pending review)
+      if (normalizedStatus === 'pending' || normalizedStatus === 'submitted') {
         return { color: '#E8A598', text: 'Pending', icon: 'schedule' };
       }
       return { color: '#F56E0F', text: 'Required', icon: 'assignment' };
@@ -621,7 +628,10 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                 </View>
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>
-                    {requirements.filter(r => r.submissionStatus === 'pending').length}
+                    {requirements.filter(r => {
+                      const status = r.submissionStatus ? r.submissionStatus.toLowerCase() : '';
+                      return status === 'pending' || status === 'submitted';
+                    }).length}
                   </Text>
                   <Text style={styles.statLabel}>Pending</Text>
                 </View>
@@ -659,14 +669,21 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
           requirements.map((requirement, index) => {
             const isExpanded = expandedCard === requirement.requirement_id;
             
-            // Debug: Log coordinator data for each requirement
+            // Debug: Log coordinator data and status for each requirement
             if (index === 0) {
+              const normalizedStatus = requirement.submissionStatus ? requirement.submissionStatus.toLowerCase() : '';
+              const isPending = normalizedStatus === 'pending' || normalizedStatus === 'submitted';
               console.log('🔍 Rendering requirement with coordinator data:', {
                 name: requirement.requirement_name,
                 coordinator_first_name: requirement.coordinator_first_name,
                 coordinator_last_name: requirement.coordinator_last_name,
                 coordinator_id: requirement.coordinator_id,
-                willShow: !!(requirement.coordinator_first_name || requirement.coordinator_last_name || requirement.coordinator_id)
+                willShow: !!(requirement.coordinator_first_name || requirement.coordinator_last_name || requirement.coordinator_id),
+                submissionStatus: requirement.submissionStatus,
+                normalizedStatus: normalizedStatus,
+                statusType: typeof requirement.submissionStatus,
+                isPending: isPending,
+                submittedAt: requirement.submittedAt
               });
             }
             
@@ -711,6 +728,53 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                       </Text>
                     </View>
                   )}
+                  
+                  {/* Pending Status Banner - Collapsed View */}
+                  {(() => {
+                    const normalizedStatus = requirement.submissionStatus ? requirement.submissionStatus.toLowerCase() : '';
+                    const isPending = normalizedStatus === 'pending' || normalizedStatus === 'submitted';
+                    return isPending ? (
+                      <View style={styles.pendingStatusBannerCollapsed}>
+                        <MaterialIcons name="schedule" size={16} color="#fbbc04" />
+                        <Text style={styles.pendingStatusTextCollapsed}>
+                          Pending Review
+                          {requirement.submittedAt && (
+                            <Text style={styles.pendingStatusDateCollapsed}>
+                              {' '}• Submitted {new Date(requirement.submittedAt).toLocaleDateString()}
+                            </Text>
+                          )}
+                        </Text>
+                      </View>
+                    ) : null;
+                  })()}
+                  
+                  {/* Rejected Status Banner - Collapsed View */}
+                  {(() => {
+                    // Check for rejected status
+                    const normalizedStatus = requirement.submissionStatus ? requirement.submissionStatus.toLowerCase() : '';
+                    const isRejected = normalizedStatus === 'rejected';
+                    
+                    return isRejected ? (
+                      <View style={styles.rejectedStatusBannerCollapsed}>
+                        <MaterialIcons name="error-outline" size={16} color="#F44336" />
+                        <View style={styles.rejectedStatusContentCollapsed}>
+                          <Text style={styles.rejectedStatusTextCollapsed}>
+                            Submission Rejected
+                            {requirement.submittedAt && (
+                              <Text style={styles.rejectedStatusDateCollapsed}>
+                                {' '}• Rejected {new Date(requirement.submittedAt).toLocaleDateString()}
+                              </Text>
+                            )}
+                          </Text>
+                          {requirement.coordinatorFeedback && (
+                            <Text style={styles.rejectedFeedbackTextCollapsed} numberOfLines={2}>
+                              Feedback: {requirement.coordinatorFeedback}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : null;
+                  })()}
                 </TouchableOpacity>
 
                 {isExpanded && (
@@ -720,6 +784,28 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                         {requirement.requirement_description}
                       </Text>
                     )}
+
+                    {/* Pending Status Banner - Expanded View */}
+                    {(() => {
+                      const normalizedStatus = requirement.submissionStatus ? requirement.submissionStatus.toLowerCase() : '';
+                      const isPending = normalizedStatus === 'pending' || normalizedStatus === 'submitted';
+                      return isPending ? (
+                        <View style={styles.pendingStatusBanner}>
+                          <MaterialIcons name="schedule" size={20} color="#fbbc04" />
+                          <View style={styles.pendingStatusContent}>
+                            <Text style={styles.pendingStatusTitle}>Pending Review</Text>
+                            <Text style={styles.pendingStatusText}>
+                              Your submission is currently being reviewed by your coordinator.
+                              {requirement.submittedAt && (
+                                <Text style={styles.pendingStatusDate}>
+                                  {' '}Submitted on {new Date(requirement.submittedAt).toLocaleDateString()}
+                                </Text>
+                              )}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null;
+                    })()}
 
                     <View style={styles.requirementDetails}>
                 {requirement.due_date && (
@@ -788,6 +874,20 @@ const RequirementsPage = ({ currentUser }: RequirementsPageProps) => {
                         Completed on: {new Date(requirement.completed_at).toLocaleDateString()}
                       </Text>
                     )}
+                    
+                    {/* Status Info Container - Expanded View */}
+                    {(() => {
+                      const normalizedStatus = requirement.submissionStatus ? requirement.submissionStatus.toLowerCase() : '';
+                      const isPending = normalizedStatus === 'pending' || normalizedStatus === 'submitted';
+                      return isPending && requirement.submittedAt ? (
+                        <View style={styles.statusInfoContainer}>
+                          <MaterialIcons name="schedule" size={18} color="#fbbc04" />
+                          <Text style={styles.statusInfoText}>
+                            Submitted on: {new Date(requirement.submittedAt).toLocaleDateString()} - Awaiting coordinator review
+                          </Text>
+                        </View>
+                      ) : null;
+                    })()}
                   </Animated.View>
                 )}
               </Animated.View>
@@ -1114,6 +1214,124 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 12,
     fontWeight: '500',
+  },
+  // Pending Status Banner Styles - Collapsed View
+  pendingStatusBannerCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251, 188, 4, 0.25)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#fbbc04',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 188, 4, 0.4)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
+  pendingStatusTextCollapsed: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '500',
+    flex: 1,
+  },
+  pendingStatusDateCollapsed: {
+    fontSize: 12,
+    color: '#fff',
+    fontStyle: 'italic',
+    opacity: 0.9,
+  },
+  // Rejected Status Banner Styles - Collapsed View
+  rejectedStatusBannerCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(244, 67, 54, 0.25)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F44336',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 67, 54, 0.4)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 6,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
+  rejectedStatusContentCollapsed: {
+    flex: 1,
+  },
+  rejectedStatusTextCollapsed: {
+    fontSize: 13,
+    color: '#F44336',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  rejectedStatusDateCollapsed: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '400',
+    opacity: 0.8,
+  },
+  rejectedFeedbackTextCollapsed: {
+    fontSize: 12,
+    color: '#fff',
+    opacity: 0.9,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  // Pending Status Banner Styles - Expanded View
+  pendingStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(251, 188, 4, 0.25)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#fbbc04',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 188, 4, 0.4)',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 12,
+  },
+  pendingStatusContent: {
+    flex: 1,
+  },
+  pendingStatusTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 6,
+  },
+  pendingStatusText: {
+    fontSize: 14,
+    color: '#fff',
+    lineHeight: 20,
+    opacity: 0.9,
+  },
+  pendingStatusDate: {
+    fontSize: 13,
+    color: '#fff',
+    fontStyle: 'italic',
+    opacity: 0.8,
+  },
+  // Status Info Container Styles
+  statusInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  statusInfoText: {
+    fontSize: 13,
+    color: '#fff',
+    flex: 1,
+    lineHeight: 18,
+    opacity: 0.9,
   },
   // Upload Section Styles
   uploadSection: {

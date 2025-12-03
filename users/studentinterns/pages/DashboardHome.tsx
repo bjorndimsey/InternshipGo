@@ -450,9 +450,10 @@ interface UserInfo {
 
 interface DashboardHomeProps {
   currentUser: UserInfo;
+  onNavigateToRequirements?: () => void;
 }
 
-export default function DashboardHome({ currentUser }: DashboardHomeProps) {
+export default function DashboardHome({ currentUser, onNavigateToRequirements }: DashboardHomeProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -469,6 +470,20 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [useKNN, setUseKNN] = useState(true); // Toggle for KNN vs traditional ranking
+  
+  // Eligibility state management
+  const [hasEnrolledClass, setHasEnrolledClass] = useState(false);
+  const [allRequirementsApproved, setAllRequirementsApproved] = useState(false);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [eligibilityMessage, setEligibilityMessage] = useState('');
+  const [showEligibilityModal, setShowEligibilityModal] = useState(false);
+  const [requirementsList, setRequirementsList] = useState<any[]>([]);
+  const [requirementsStats, setRequirementsStats] = useState({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    new: 0
+  });
   
   // Animation values for stats
   const [animatedStats, setAnimatedStats] = useState({
@@ -508,6 +523,13 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
     };
     initializeData();
   }, []);
+
+  // Check eligibility when student profile is available
+  useEffect(() => {
+    if (studentProfile) {
+      checkApplicationEligibility();
+    }
+  }, [studentProfile]);
 
   // Animation function for counting numbers
   const animateValue = (start: number, end: number, duration: number, callback: (value: number) => void) => {
@@ -611,6 +633,139 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
       }
     } catch (error) {
       console.error('Error fetching student profile:', error);
+    }
+  };
+
+  const checkApplicationEligibility = async () => {
+    try {
+      setCheckingEligibility(true);
+      
+      if (!currentUser || !studentProfile) {
+        console.log('⚠️ No current user or student profile available for eligibility check');
+        setCheckingEligibility(false);
+        return;
+      }
+
+      const studentId = studentProfile.student_id || studentProfile.id;
+      if (!studentId) {
+        console.log('⚠️ No student ID available for eligibility check');
+        setCheckingEligibility(false);
+        return;
+      }
+
+      console.log('🔍 Checking application eligibility for student:', studentId);
+
+      // Check 1: Class Enrollment
+      let enrolledClasses: any[] = [];
+      try {
+        const classesResponse = await apiService.getStudentClasses(studentId);
+        if (classesResponse.success && (classesResponse as any).classes) {
+          enrolledClasses = (classesResponse as any).classes.filter(
+            (cls: any) => cls.enrollmentStatus === 'enrolled'
+          );
+          console.log('📚 Enrolled classes found:', enrolledClasses.length);
+        }
+      } catch (error) {
+        console.error('❌ Error checking class enrollment:', error);
+      }
+
+      const hasEnrolled = enrolledClasses.length > 0;
+      setHasEnrolledClass(hasEnrolled);
+      console.log('📚 Has enrolled class:', hasEnrolled);
+
+      // Check 2: Requirements Approval
+      let requirements: any[] = [];
+      let submissions: any[] = [];
+      
+      try {
+        // Fetch requirements
+        const requirementsResponse = await apiService.getStudentRequirements(studentId);
+        if (requirementsResponse.success && requirementsResponse.requirements) {
+          requirements = requirementsResponse.requirements;
+          console.log('📋 Requirements found:', requirements.length);
+        }
+
+        // Fetch submissions
+        const submissionsResponse = await apiService.getStudentSubmissions(studentId);
+        if (submissionsResponse.success && submissionsResponse.data) {
+          submissions = submissionsResponse.data;
+          console.log('📤 Submissions found:', submissions.length);
+        }
+      } catch (error) {
+        console.error('❌ Error checking requirements:', error);
+      }
+
+      // Map submissions to requirements by requirement_id
+      const submissionMap = new Map();
+      submissions.forEach((sub: any) => {
+        submissionMap.set(sub.requirement_id, sub);
+      });
+
+      // Process requirements with submission status
+      const requirementsWithStatus = requirements.map((req: any) => {
+        const submission = submissionMap.get(req.requirement_id);
+        const normalizedStatus = submission?.status ? String(submission.status).toLowerCase() : null;
+        
+        let requirementStatus = 'new';
+        if (normalizedStatus === 'approved') {
+          requirementStatus = 'approved';
+        } else if (normalizedStatus === 'pending' || normalizedStatus === 'submitted') {
+          requirementStatus = 'pending';
+        }
+
+        return {
+          ...req,
+          submissionStatus: requirementStatus,
+          submittedAt: submission?.submitted_at,
+          coordinatorFeedback: submission?.coordinator_feedback
+        };
+      });
+
+      // Calculate stats
+      let approvedCount = 0;
+      let pendingCount = 0;
+      let newCount = 0;
+
+      requirementsWithStatus.forEach((req: any) => {
+        if (req.submissionStatus === 'approved') {
+          approvedCount++;
+        } else if (req.submissionStatus === 'pending') {
+          pendingCount++;
+        } else {
+          newCount++;
+        }
+      });
+
+      const stats = {
+        total: requirementsWithStatus.length,
+        approved: approvedCount,
+        pending: pendingCount,
+        new: newCount
+      };
+
+      setRequirementsStats(stats);
+      setRequirementsList(requirementsWithStatus);
+      console.log('📊 Requirements stats:', stats);
+
+      // Check if all requirements are approved
+      const allApproved = requirementsWithStatus.length > 0 && 
+                         requirementsWithStatus.every((req: any) => req.submissionStatus === 'approved');
+      setAllRequirementsApproved(allApproved);
+      console.log('✅ All requirements approved:', allApproved);
+
+      // Set eligibility message
+      if (!hasEnrolled) {
+        setEligibilityMessage('You must be enrolled in at least one class to apply for internships.');
+      } else if (!allApproved) {
+        setEligibilityMessage('You must complete all assigned requirements before applying for internships.');
+      } else {
+        setEligibilityMessage('');
+      }
+
+    } catch (error) {
+      console.error('❌ Error checking application eligibility:', error);
+    } finally {
+      setCheckingEligibility(false);
     }
   };
 
@@ -940,6 +1095,16 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
   };
 
   const handleApply = (company: Company) => {
+    // Check eligibility before allowing application
+    const isEligible = hasEnrolledClass && allRequirementsApproved;
+    
+    if (!isEligible) {
+      // Show eligibility modal
+      setShowEligibilityModal(true);
+      return;
+    }
+    
+    // If eligible, proceed with application
     setSelectedCompanyForApplication(company);
     setShowResumeModal(true);
   };
@@ -1363,6 +1528,20 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
           </View>
         )}
 
+        {/* Eligibility Warning Banner - Only visible when expanded and not eligible */}
+        {isExpanded && (!hasEnrolledClass || !allRequirementsApproved) && (
+          <View style={styles.eligibilityWarningBanner}>
+            <MaterialIcons name="info" size={20} color="#fbbc04" />
+            <Text style={styles.eligibilityWarningText}>
+              {!hasEnrolledClass 
+                ? 'You must be enrolled in at least one class to apply.'
+                : !allRequirementsApproved
+                ? 'You must complete all assigned requirements before applying.'
+                : 'Please complete the requirements to apply.'}
+            </Text>
+          </View>
+        )}
+
         {/* Action Buttons - Only visible when expanded */}
         {isExpanded && (
           <View style={styles.actionButtons}>
@@ -1378,21 +1557,48 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
               style={[
                 styles.actionButton, 
                 styles.applyButton,
-                (company.availableInternSlots || company.availableSlots) === 0 && styles.disabledButton
+                ((company.availableInternSlots || company.availableSlots) === 0 || 
+                 checkingEligibility || 
+                 !hasEnrolledClass || 
+                 !allRequirementsApproved) && styles.disabledButton
               ]} 
               onPress={() => handleApply(company)}
-              disabled={(company.availableInternSlots || company.availableSlots) === 0}
+              disabled={
+                (company.availableInternSlots || company.availableSlots) === 0 || 
+                checkingEligibility || 
+                !hasEnrolledClass || 
+                !allRequirementsApproved
+              }
             >
               <MaterialIcons 
                 name="send" 
                 size={16} 
-                color={(company.availableInternSlots || company.availableSlots) > 0 ? "#02050a" : "#fff"} 
+                color={
+                  (company.availableInternSlots || company.availableSlots) === 0 || 
+                  checkingEligibility || 
+                  !hasEnrolledClass || 
+                  !allRequirementsApproved
+                    ? "#fff" 
+                    : "#02050a"
+                } 
               />
               <Text style={[
                 styles.actionButtonText,
-                (company.availableInternSlots || company.availableSlots) > 0 && styles.applyButtonText
+                (company.availableInternSlots || company.availableSlots) > 0 && 
+                !checkingEligibility && 
+                hasEnrolledClass && 
+                allRequirementsApproved && 
+                styles.applyButtonText
               ]}>
-                {(company.availableInternSlots || company.availableSlots) === 0 ? 'Full' : 'Apply'}
+                {checkingEligibility 
+                  ? 'Checking...' 
+                  : (company.availableInternSlots || company.availableSlots) === 0 
+                  ? 'Full' 
+                  : !hasEnrolledClass
+                  ? 'Enroll First'
+                  : !allRequirementsApproved
+                  ? 'Complete Requirements'
+                  : 'Apply'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1730,6 +1936,147 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
           position="Intern"
         />
       )}
+
+      {/* Eligibility Modal */}
+      <Modal
+        visible={showEligibilityModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowEligibilityModal(false)}
+      >
+        <View style={styles.eligibilityModalOverlay}>
+          <View style={styles.eligibilityModalContent}>
+            <View style={styles.eligibilityModalHeader}>
+              <MaterialIcons name="info" size={24} color="#fbbc04" />
+              <Text style={styles.eligibilityModalTitle}>Application Requirements</Text>
+            </View>
+
+            <ScrollView style={styles.eligibilityModalBody} showsVerticalScrollIndicator={false}>
+              {/* Class Enrollment Item */}
+              <View style={styles.eligibilityItem}>
+                <View style={styles.eligibilityItemHeader}>
+                  <MaterialIcons 
+                    name={hasEnrolledClass ? "check-circle" : "cancel"} 
+                    size={20} 
+                    color={hasEnrolledClass ? "#34a853" : "#ea4335"} 
+                  />
+                  <Text style={[
+                    styles.eligibilityItemTitle,
+                    hasEnrolledClass && styles.eligibilityItemTitleCompleted
+                  ]}>
+                    Class Enrollment
+                  </Text>
+                </View>
+                <Text style={styles.eligibilityItemDescription}>
+                  {hasEnrolledClass 
+                    ? 'You are enrolled in at least one class.'
+                    : 'You must be enrolled in at least one class to apply for internships.'}
+                </Text>
+              </View>
+
+              {/* Requirements Item */}
+              <View style={styles.eligibilityItem}>
+                <View style={styles.eligibilityItemHeader}>
+                  <MaterialIcons 
+                    name={allRequirementsApproved ? "check-circle" : "cancel"} 
+                    size={20} 
+                    color={allRequirementsApproved ? "#34a853" : "#ea4335"} 
+                  />
+                  <Text style={[
+                    styles.eligibilityItemTitle,
+                    allRequirementsApproved && styles.eligibilityItemTitleCompleted
+                  ]}>
+                    Requirements Completion
+                  </Text>
+                </View>
+                <Text style={styles.eligibilityItemDescription}>
+                  {allRequirementsApproved 
+                    ? 'All assigned requirements have been approved.'
+                    : 'You must complete all assigned requirements before applying for internships.'}
+                </Text>
+
+                {/* Requirements Progress Bar */}
+                {requirementsStats.total > 0 && (
+                  <View style={styles.requirementsProgressSection}>
+                    <View style={styles.requirementsProgressBar}>
+                      <View 
+                        style={[
+                          styles.requirementsProgressFill,
+                          { width: `${(requirementsStats.approved / requirementsStats.total) * 100}%` }
+                        ]} 
+                      />
+                    </View>
+                    <Text style={styles.requirementsProgressText}>
+                      {requirementsStats.approved} of {requirementsStats.total} requirements approved
+                    </Text>
+                  </View>
+                )}
+
+                {/* Requirements List */}
+                {requirementsList.length > 0 && (
+                  <View style={styles.requirementsListContainer}>
+                    {requirementsList.map((req, index) => {
+                      const getStatusConfig = () => {
+                        if (req.submissionStatus === 'approved') {
+                          return { color: '#34a853', icon: 'check-circle', text: 'Approved' };
+                        } else if (req.submissionStatus === 'pending') {
+                          return { color: '#fbbc04', icon: 'schedule', text: 'Pending Review' };
+                        } else {
+                          return { color: '#ea4335', icon: 'assignment', text: 'Not Submitted' };
+                        }
+                      };
+                      const statusConfig = getStatusConfig();
+                      
+                      return (
+                        <View key={req.requirement_id || index} style={styles.requirementListItem}>
+                          <MaterialIcons 
+                            name={statusConfig.icon as any} 
+                            size={18} 
+                            color={statusConfig.color} 
+                          />
+                          <Text style={styles.requirementListItemName}>{req.requirement_name}</Text>
+                          <View style={[styles.requirementStatusBadge, { backgroundColor: statusConfig.color }]}>
+                            <Text style={styles.requirementStatusBadgeText}>{statusConfig.text}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {!allRequirementsApproved && (
+                  <>
+                    <Text style={styles.eligibilityItemNote}>
+                      Please navigate to the Requirements page to view and complete your requirements.
+                    </Text>
+                    {onNavigateToRequirements && (
+                      <TouchableOpacity
+                        style={styles.navigateButton}
+                        onPress={() => {
+                          setShowEligibilityModal(false);
+                          onNavigateToRequirements();
+                        }}
+                      >
+                        <Text style={styles.navigateButtonText}>View Requirements</Text>
+                        <MaterialIcons name="arrow-forward" size={20} color="#F56E0F" />
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={styles.eligibilityModalFooter}>
+              <TouchableOpacity
+                style={styles.eligibilityModalButton}
+                onPress={() => setShowEligibilityModal(false)}
+              >
+                <Text style={styles.eligibilityModalButtonText}>I Understand</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Success Modal */}
       <Modal
@@ -2561,5 +2908,182 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  // Eligibility Warning Banner Styles
+  eligibilityWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251, 188, 4, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#fbbc04',
+  },
+  eligibilityWarningText: {
+    fontSize: 14,
+    color: '#fff',
+    marginLeft: 10,
+    flex: 1,
+    fontWeight: '500',
+  },
+  // Eligibility Modal Styles
+  eligibilityModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  eligibilityModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  eligibilityModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  eligibilityModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginLeft: 12,
+  },
+  eligibilityModalBody: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  eligibilityItem: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  eligibilityItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  eligibilityItemTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginLeft: 10,
+  },
+  eligibilityItemTitleCompleted: {
+    color: '#34a853',
+  },
+  eligibilityItemDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginLeft: 30,
+  },
+  eligibilityItemNote: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 12,
+    marginLeft: 30,
+  },
+  requirementsProgressSection: {
+    marginTop: 12,
+    marginLeft: 30,
+  },
+  requirementsProgressBar: {
+    height: 8,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  requirementsProgressFill: {
+    height: '100%',
+    backgroundColor: '#34a853',
+    borderRadius: 4,
+  },
+  requirementsProgressText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+  },
+  requirementsListContainer: {
+    marginTop: 12,
+    marginLeft: 30,
+    gap: 8,
+  },
+  requirementListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    gap: 10,
+  },
+  requirementListItemName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1a1a2e',
+    fontWeight: '500',
+  },
+  requirementStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  requirementStatusBadgeText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  eligibilityModalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  eligibilityModalButton: {
+    backgroundColor: '#F56E0F',
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  eligibilityModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Navigate Button Styles
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#F56E0F',
+  },
+  navigateButtonText: {
+    color: '#F56E0F',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

@@ -628,7 +628,10 @@ export default function StudentInternsDashboard({ onLogout, currentUser }: Stude
               onLocationPickerOpened={() => setShouldOpenLocationPicker(false)}
             />
           ) : activeScreen === 'home' ? (
-            <DashboardHome currentUser={currentUser} />
+            <DashboardHome 
+            currentUser={currentUser} 
+            onNavigateToRequirements={() => setActiveScreen('requirements')}
+          />
           ) : activeScreen === 'requirements' ? (
             <RequirementsPage currentUser={currentUser} />
           ) : activeScreen === 'messages' ? (

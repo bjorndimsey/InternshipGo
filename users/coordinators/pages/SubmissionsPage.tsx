@@ -82,6 +82,8 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectFeedback, setRejectFeedback] = useState('');
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -299,21 +301,25 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
     }
   };
 
-  const handleStatusUpdate = async (submissionId: number, newStatus: string) => {
+  const handleStatusUpdate = async (submissionId: number, newStatus: string, feedbackText?: string) => {
     try {
-      console.log('🔄 Updating submission status:', { submissionId, newStatus, feedback });
+      const feedbackToUse = feedbackText || feedback;
+      console.log('🔄 Updating submission status:', { submissionId, newStatus, feedback: feedbackToUse });
       
       const response = await apiService.updateSubmissionStatus(
         submissionId.toString(),
         newStatus,
-        feedback.trim() || undefined
+        feedbackToUse.trim() || undefined
       );
       
       if (response.success) {
         Alert.alert('Success', 'Submission status updated successfully');
         setShowDetailsModal(false);
+        setShowRejectModal(false);
         setFeedback('');
+        setRejectFeedback('');
         await fetchSubmissions();
+        await fetchRequirements();
       } else {
         Alert.alert('Error', 'Failed to update submission status');
       }
@@ -321,6 +327,20 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
       console.error('Error updating submission status:', error);
       Alert.alert('Error', 'Failed to update submission status');
     }
+  };
+
+  const handleRejectSubmission = () => {
+    if (!selectedSubmission) return;
+    setShowRejectModal(true);
+  };
+
+  const handleConfirmReject = () => {
+    if (!selectedSubmission) return;
+    if (!rejectFeedback.trim()) {
+      Alert.alert('Feedback Required', 'Please provide feedback before rejecting the submission.');
+      return;
+    }
+    handleStatusUpdate(selectedSubmission.id, 'rejected', rejectFeedback);
   };
 
   const handleToggleSubmissionStatus = async (submissionId: number, isApproved: boolean) => {
@@ -809,6 +829,40 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
                             Feedback: {student.coordinator_feedback}
                           </Text>
                         )}
+                        <TouchableOpacity
+                          style={styles.studentRejectButton}
+                          onPress={() => {
+                            // Prepare student submission data for rejection modal
+                            const studentSubmission = {
+                              ...selectedSubmission,
+                              id: student.id,
+                              student: {
+                                first_name: student.student_name.split(' ')[0] || '',
+                                last_name: student.student_name.split(' ').slice(1).join(' ') || '',
+                                id_number: '',
+                                program: '',
+                                major: '',
+                                university: ''
+                              },
+                              requirement_id: selectedSubmission.requirement_id,
+                              requirement_name: selectedSubmission.requirement_name,
+                              requirement_description: selectedSubmission.requirement_description,
+                              due_date: selectedSubmission.due_date,
+                              submitted_file_url: student.submitted_file_url,
+                              submitted_file_name: student.submitted_file_name,
+                              submitted_file_size: student.submitted_file_size || 0,
+                              submitted_at: student.submitted_at,
+                              status: student.status,
+                              coordinator_feedback: student.coordinator_feedback || '',
+                              coordinator_reviewed_at: ''
+                            };
+                            setSelectedSubmission(studentSubmission as any);
+                            setShowRejectModal(true);
+                          }}
+                        >
+                          <MaterialIcons name="close" size={16} color="#FBFBFB" />
+                          <Text style={styles.studentRejectButtonText}>Reject</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   ))
@@ -903,7 +957,7 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
 
                     <TouchableOpacity
                       style={[styles.statusButton, { backgroundColor: '#F44336' }]}
-                      onPress={() => handleStatusUpdate(selectedSubmission.id, 'rejected')}
+                      onPress={handleRejectSubmission}
                     >
                       <MaterialIcons name="close" size={20} color="#FBFBFB" />
                       <Text style={styles.statusButtonText}>Reject</Text>
@@ -921,6 +975,67 @@ const SubmissionsPage = ({ currentUser }: SubmissionsPageProps) => {
               )}
             </ScrollView>
           )}
+        </View>
+      </Modal>
+
+      {/* Rejection Feedback Modal */}
+      <Modal
+        visible={showRejectModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowRejectModal(false);
+          setRejectFeedback('');
+        }}
+      >
+        <View style={styles.rejectModalOverlay}>
+          <View style={styles.rejectModalContent}>
+            <View style={styles.rejectModalHeader}>
+              <MaterialIcons name="close" size={24} color="#F44336" />
+              <Text style={styles.rejectModalTitle}>Reject Submission</Text>
+            </View>
+
+            <View style={styles.rejectModalBody}>
+              <Text style={styles.rejectModalSubtitle}>
+                Please provide feedback explaining why this submission is being rejected. This feedback will be visible to the student.
+              </Text>
+              <Text style={styles.rejectModalLabel}>Feedback (Required):</Text>
+              <TextInput
+                style={styles.rejectModalTextArea}
+                multiline
+                numberOfLines={6}
+                placeholder="Enter rejection feedback here..."
+                placeholderTextColor="#878787"
+                value={rejectFeedback}
+                onChangeText={setRejectFeedback}
+              />
+            </View>
+
+            <View style={styles.rejectModalActions}>
+              <TouchableOpacity
+                style={[styles.rejectModalButton, styles.rejectModalCancelButton]}
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setRejectFeedback('');
+                }}
+              >
+                <Text style={styles.rejectModalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.rejectModalButton,
+                  styles.rejectModalConfirmButton,
+                  !rejectFeedback.trim() && styles.rejectModalButtonDisabled
+                ]}
+                onPress={handleConfirmReject}
+                disabled={!rejectFeedback.trim()}
+              >
+                <MaterialIcons name="close" size={18} color="#FBFBFB" />
+                <Text style={styles.rejectModalConfirmButtonText}>Reject Submission</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </Animated.View>
@@ -1489,6 +1604,126 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'right',
     opacity: 0.8,
+  },
+  // Student Reject Button Styles
+  studentRejectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F44336',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+    justifyContent: 'center',
+  },
+  studentRejectButtonText: {
+    fontSize: 12,
+    color: '#FBFBFB',
+    fontWeight: '600',
+  },
+  // Rejection Modal Styles
+  rejectModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  rejectModalContent: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    elevation: 10,
+    shadowColor: '#F44336',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 2,
+    borderColor: '#F44336',
+  },
+  rejectModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 67, 54, 0.3)',
+    gap: 12,
+  },
+  rejectModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+  },
+  rejectModalBody: {
+    padding: 20,
+  },
+  rejectModalSubtitle: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    marginBottom: 16,
+    lineHeight: 20,
+    opacity: 0.9,
+  },
+  rejectModalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginBottom: 8,
+  },
+  rejectModalTextArea: {
+    borderWidth: 2,
+    borderColor: '#F44336',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#FBFBFB',
+    textAlignVertical: 'top',
+    backgroundColor: '#2A2A2E',
+    minHeight: 120,
+    maxHeight: 200,
+  },
+  rejectModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(244, 67, 54, 0.3)',
+    gap: 12,
+  },
+  rejectModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  rejectModalCancelButton: {
+    backgroundColor: '#2A2A2E',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 67, 54, 0.3)',
+  },
+  rejectModalCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+  },
+  rejectModalConfirmButton: {
+    backgroundColor: '#F44336',
+  },
+  rejectModalConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+  },
+  rejectModalButtonDisabled: {
+    backgroundColor: '#666',
+    opacity: 0.5,
   },
 });
 
