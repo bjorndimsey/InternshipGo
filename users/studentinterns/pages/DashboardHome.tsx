@@ -1558,16 +1558,12 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
                 styles.actionButton, 
                 styles.applyButton,
                 ((company.availableInternSlots || company.availableSlots) === 0 || 
-                 checkingEligibility || 
-                 !hasEnrolledClass || 
-                 !allRequirementsApproved) && styles.disabledButton
+                 checkingEligibility) && styles.disabledButton
               ]} 
               onPress={() => handleApply(company)}
               disabled={
                 (company.availableInternSlots || company.availableSlots) === 0 || 
-                checkingEligibility || 
-                !hasEnrolledClass || 
-                !allRequirementsApproved
+                checkingEligibility
               }
             >
               <MaterialIcons 
