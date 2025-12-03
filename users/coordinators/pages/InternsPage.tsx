@@ -196,6 +196,9 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies }: In
     filterInterns();
   }, [searchQuery, selectedSchoolYear, interns]);
 
+  // Filter classes by selected school year
+  const filteredClasses = classes.filter(classItem => classItem.schoolYear === selectedSchoolYear);
+
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setDimensions({ width: window.width, height: window.height });
@@ -2126,92 +2129,7 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies }: In
         )}
       </View>
 
-      {/* My Classes Section */}
-      <View style={[
-        styles.classesSection,
-        { paddingHorizontal: dimensions.width < 768 ? 10 : 20 }
-      ]}>
-        <View style={styles.classesSectionHeader}>
-          <Text style={[
-            styles.classesSectionTitle,
-            { fontSize: dimensions.width < 768 ? 18 : 20 }
-          ]}>
-            My Classes
-          </Text>
-          <Text style={styles.classesSectionSubtitle}>
-            {loadingClasses ? 'Loading...' : `${classes.length} class${classes.length !== 1 ? 'es' : ''} created`}
-          </Text>
-        </View>
-
-        {loadingClasses ? (
-          <View style={styles.classesGrid}>
-            {Array.from({ length: 2 }).map((_, index) => (
-              <View key={`skeleton-class-${index}`} style={styles.skeletonClassCard} />
-            ))}
-          </View>
-        ) : classes.length === 0 ? (
-          <View style={styles.emptyClassesContainer}>
-            <MaterialIcons name="class" size={48} color="#878787" />
-            <Text style={styles.emptyClassesText}>No classes created yet</Text>
-            <Text style={styles.emptyClassesSubtext}>
-              Click "Create Class" to create your first class
-            </Text>
-          </View>
-        ) : (
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={[
-              styles.classesScrollView,
-              { marginHorizontal: dimensions.width < 768 ? -10 : 0 }
-            ]}
-            contentContainerStyle={[
-              styles.classesGrid,
-              { paddingHorizontal: dimensions.width < 768 ? 10 : 0 }
-            ]}
-          >
-            {classes.map((classItem) => (
-              <View key={classItem.id} style={styles.classCard}>
-                <View style={styles.classCardHeader}>
-                  <MaterialIcons name="class" size={24} color="#F56E0F" />
-                  <Text style={styles.classCardName} numberOfLines={2}>
-                    {classItem.className}
-                  </Text>
-                </View>
-                
-                <View style={styles.classCardBody}>
-                  <View style={styles.classCardInfoRow}>
-                    <MaterialIcons name="calendar-today" size={16} color="#878787" />
-                    <Text style={styles.classCardInfoText}>{classItem.schoolYear}</Text>
-                  </View>
-                  
-                  <View style={styles.classCardCodeRow}>
-                    <View style={styles.classCardCodeContainer}>
-                      <Text style={styles.classCardCodeLabel}>Class Code:</Text>
-                      <Text style={styles.classCardCode}>{classItem.classCode}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.copyCodeButton}
-                      onPress={() => copyClassCode(classItem.classCode)}
-                    >
-                      <MaterialIcons name="content-copy" size={18} color="#F56E0F" />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <View style={styles.classCardInfoRow}>
-                    <MaterialIcons name="people" size={16} color="#34a853" />
-                    <Text style={styles.classCardStudentCount}>
-                      {classItem.studentCount} student{classItem.studentCount !== 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-
-      {/* Interns List */}
+      {/* Interns List with Classes */}
       <ScrollView 
         style={[
           styles.internsList,
@@ -2219,6 +2137,104 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies }: In
         ]} 
         showsVerticalScrollIndicator={false}
       >
+        {/* My Classes Section */}
+        <View style={styles.classesSection}>
+          <View style={styles.classesSectionHeader}>
+            <Text style={[
+              styles.classesSectionTitle,
+              { fontSize: dimensions.width < 768 ? 18 : 20 }
+            ]}>
+              My Classes ({selectedSchoolYear})
+            </Text>
+            <Text style={styles.classesSectionSubtitle}>
+              {loadingClasses ? 'Loading...' : `${filteredClasses.length} class${filteredClasses.length !== 1 ? 'es' : ''} for ${selectedSchoolYear}`}
+            </Text>
+          </View>
+
+          {loadingClasses ? (
+            <View style={[
+              styles.classesGrid,
+              { flexWrap: 'wrap', justifyContent: 'flex-start' }
+            ]}>
+              {Array.from({ length: 2 }).map((_, index) => (
+                <View key={`skeleton-class-${index}`} style={styles.skeletonClassCard} />
+              ))}
+            </View>
+          ) : filteredClasses.length === 0 ? (
+            <View style={styles.emptyClassesContainer}>
+              <MaterialIcons name="class" size={48} color="#878787" />
+              <Text style={styles.emptyClassesText}>No classes for {selectedSchoolYear}</Text>
+              <Text style={styles.emptyClassesSubtext}>
+                Click "Create Class" to create a class for this school year
+              </Text>
+            </View>
+          ) : (
+            <View style={[
+              styles.classesGrid,
+              { 
+                flexWrap: 'wrap', 
+                justifyContent: 'flex-start',
+                width: '100%'
+              }
+            ]}>
+              {filteredClasses.map((classItem) => (
+                <View 
+                  key={classItem.id} 
+                  style={[
+                    styles.classCard,
+                    {
+                      width: dimensions.width < 768 
+                        ? '100%' 
+                        : dimensions.width < 1024 
+                        ? '48%' 
+                        : '31%',
+                      flexBasis: dimensions.width < 768 
+                        ? '100%' 
+                        : dimensions.width < 1024 
+                        ? '48%' 
+                        : '31%',
+                    }
+                  ]}
+                >
+                  <View style={styles.classCardHeader}>
+                    <MaterialIcons name="class" size={24} color="#F56E0F" />
+                    <Text style={styles.classCardName} numberOfLines={2}>
+                      {classItem.className}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.classCardBody}>
+                    <View style={styles.classCardInfoRow}>
+                      <MaterialIcons name="calendar-today" size={16} color="#878787" />
+                      <Text style={styles.classCardInfoText}>{classItem.schoolYear}</Text>
+                    </View>
+                    
+                    <View style={styles.classCardCodeRow}>
+                      <View style={styles.classCardCodeContainer}>
+                        <Text style={styles.classCardCodeLabel}>Class Code:</Text>
+                        <Text style={styles.classCardCode}>{classItem.classCode}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.copyCodeButton}
+                        onPress={() => copyClassCode(classItem.classCode)}
+                      >
+                        <MaterialIcons name="content-copy" size={18} color="#F56E0F" />
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.classCardInfoRow}>
+                      <MaterialIcons name="people" size={16} color="#34a853" />
+                      <Text style={styles.classCardStudentCount}>
+                        {classItem.studentCount} student{classItem.studentCount !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {loading ? (
           // Show skeleton loading
           (() => {
