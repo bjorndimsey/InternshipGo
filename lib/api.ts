@@ -550,6 +550,19 @@ class ApiService {
     return this.makeRequest<any[]>('/auth/locations');
   }
 
+  // Register push notification token
+  async registerPushToken(userId: string | number, pushToken: string, userType: string = 'student'): Promise<ApiResponse> {
+    console.log('📱 API SERVICE - registerPushToken called', { userId, pushToken, userType });
+    return this.makeRequest('/users/push-token', {
+      method: 'POST',
+      body: JSON.stringify({
+        userId: userId.toString(),
+        pushToken,
+        userType,
+      }),
+    });
+  }
+
   // Events methods
   async getEvents(coordinatorId: string): Promise<ApiResponse> {
     return this.makeRequest(`/events/coordinator/${coordinatorId}`);
