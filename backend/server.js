@@ -33,7 +33,6 @@ const certificateRoutes = require('./routes/certificateRoutes');
 const trainingScheduleRoutes = require('./routes/trainingScheduleRoutes');
 const internFeedbackFormRoutes = require('./routes/internFeedbackFormRoutes');
 const supervisorEvaluationRoutes = require('./routes/supervisorEvaluationRoutes');
-const pushTokenRoutes = require('./routes/pushTokenRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -134,7 +133,6 @@ app.use('/api/certificates', certificateRoutes);
 app.use('/api/training-schedules', trainingScheduleRoutes);
 app.use('/api/intern-feedback-forms', internFeedbackFormRoutes);
 app.use('/api/supervisor-evaluations', supervisorEvaluationRoutes);
-app.use('/api/users', pushTokenRoutes);
 
 
 // 404 handler

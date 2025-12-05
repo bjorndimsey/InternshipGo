@@ -1,5 +1,4 @@
 const { supabase } = require('../config/supabase');
-const pushNotificationService = require('../services/pushNotificationService');
 
 // Helper function to format timestamp
 function formatTimestamp(timestamp) {
@@ -680,45 +679,6 @@ class MessagingController {
         isImportant,
         messageType
       };
-      // Get all participants in the conversation (except the sender)
-      const { data: participants, error: participantsError } = await supabase
-        .from('conversation_participants')
-        .select('user_id')
-        .eq('conversation_id', conversationId)
-        .eq('is_active', true)
-        .neq('user_id', userId);
-
-      // Send push notifications to all participants (only for unread messages)
-      if (!participantsError && participants && participants.length > 0) {
-        const participantIds = participants.map(p => p.user_id);
-        
-        // Send push notification to each participant asynchronously (don't wait)
-        // Use Promise.allSettled to handle all notifications without blocking
-        Promise.allSettled(
-          participantIds.map(async (participantId) => {
-            try {
-              await pushNotificationService.sendPushNotification(
-                participantId,
-                `New message from ${senderName}`,
-                content.length > 100 ? content.substring(0, 100) + '...' : content,
-                {
-                  type: 'message',
-                  conversationId: conversationId,
-                  senderId: userId.toString(),
-                  senderName: senderName
-                },
-                true // onlyIfUnread = true - only send if user has unread messages
-              );
-            } catch (pushError) {
-              console.error(`Error sending push notification to user ${participantId}:`, pushError);
-              // Don't fail the message send if push notification fails
-            }
-          })
-        ).catch(error => {
-          console.error('Error in push notification batch:', error);
-          // Don't fail the message send if push notification fails
-        });
-      }
       res.json({
         success: true,
         message
