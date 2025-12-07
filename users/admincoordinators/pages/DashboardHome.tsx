@@ -940,7 +940,7 @@
       switch (status) {
         case 'active': return 'Active';
         case 'expired': return 'Expired';
-        case 'pending': return 'Pending';
+        case 'pending': return 'Available';
         default: return 'Unknown';
       }
     };
@@ -957,6 +957,24 @@
       switch (status) {
         case 'active': return 'Partner';
         case 'inactive': return 'Not Partner';
+        default: return 'Unknown';
+      }
+    };
+
+    const getPartnershipStatusColor = (status: string) => {
+      switch (status?.toLowerCase()) {
+        case 'pending': return '#fbbc04';
+        case 'approved': return '#34a853';
+        case 'rejected': return '#ea4335';
+        default: return '#666';
+      }
+    };
+
+    const getPartnershipStatusText = (status: string) => {
+      switch (status?.toLowerCase()) {
+        case 'pending': return 'Available';
+        case 'approved': return 'Approved';
+        case 'rejected': return 'Rejected';
         default: return 'Unknown';
       }
     };
@@ -1375,11 +1393,11 @@
                           </View>
                         </View>
                         <View style={styles.modalInfoRow}>
-                          <MaterialIcons name="description" size={20} color={selectedCompany.moaStatus === 'active' ? '#34a853' : selectedCompany.moaStatus === 'pending' ? '#fbbc04' : '#ea4335'} />
+                          <MaterialIcons name="description" size={20} color={getMOAStatusColor(selectedCompany.moaStatus)} />
                           <View style={styles.modalInfoContent}>
                             <Text style={styles.modalInfoLabel}>MOA Status</Text>
-                            <Text style={[styles.modalInfoValue, { color: selectedCompany.moaStatus === 'active' ? '#34a853' : selectedCompany.moaStatus === 'pending' ? '#fbbc04' : '#ea4335' }]}>
-                              {selectedCompany.moaStatus.toUpperCase()}
+                            <Text style={[styles.modalInfoValue, { color: getMOAStatusColor(selectedCompany.moaStatus) }]}>
+                              {getMOAStatusText(selectedCompany.moaStatus)}
                             </Text>
                           </View>
                         </View>
