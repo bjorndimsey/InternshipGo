@@ -248,6 +248,10 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
         return 'Edit Skills & Specializations';
       case 'professionalBackground':
         return 'Edit Professional Background';
+      case 'professionalInformation':
+        return 'Edit Professional Information';
+      case 'contactInformation':
+        return 'Edit Contact Information';
       default:
         return 'Edit Profile';
     }
@@ -831,7 +835,7 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
                 </View>
                 <TouchableOpacity 
                   style={styles.cardEditButton} 
-                  onPress={() => handleEditSection('professionalBackground')}
+                  onPress={() => handleEditSection('professionalInformation')}
                 >
                   <MaterialIcons name="add" size={16} color="#FBFBFB" />
                   <Text style={styles.cardEditButtonText}>Edit</Text>
@@ -857,7 +861,7 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
                 </View>
                 <TouchableOpacity 
                   style={styles.cardEditButton} 
-                  onPress={() => handleEditSection('professionalBackground')}
+                  onPress={() => handleEditSection('contactInformation')}
                 >
                   <MaterialIcons name="add" size={16} color="#FBFBFB" />
                   <Text style={styles.cardEditButtonText}>Edit</Text>
@@ -981,6 +985,85 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
                 </View>
               )}
 
+              {editingSection === 'professionalInformation' && (
+                <View style={styles.editForm}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>First Name</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.firstName || ''}
+                      onChangeText={(text) => setEditData({ ...editData, firstName: text })}
+                      placeholder="Enter your first name"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Last Name</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.lastName || ''}
+                      onChangeText={(text) => setEditData({ ...editData, lastName: text })}
+                      placeholder="Enter your last name"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Program</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.program || ''}
+                      onChangeText={(text) => setEditData({ ...editData, program: text })}
+                      placeholder="Enter your program"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Years of Experience</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.yearsOfExperience?.toString() || ''}
+                      onChangeText={(text) => setEditData({ ...editData, yearsOfExperience: parseInt(text) || 0 })}
+                      keyboardType="numeric"
+                      placeholder="Enter years of experience"
+                    />
+                  </View>
+                </View>
+              )}
+
+              {editingSection === 'contactInformation' && (
+                <View style={styles.editForm}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.email || ''}
+                      onChangeText={(text) => setEditData({ ...editData, email: text })}
+                      placeholder="Enter your email"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editData.phoneNumber || ''}
+                      onChangeText={(text) => setEditData({ ...editData, phoneNumber: text })}
+                      placeholder="Enter your phone number"
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Address</Text>
+                    <TextInput
+                      style={[styles.textInput, styles.textArea]}
+                      value={editData.address || ''}
+                      onChangeText={(text) => setEditData({ ...editData, address: text })}
+                      placeholder="Enter your address"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+                </View>
+              )}
+
               {editingSection === 'skills' && (
                 <View style={styles.editForm}>
                   <View style={styles.inputGroup}>
@@ -1071,16 +1154,6 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
                       onChangeText={(text) => setEditData({ ...editData, linkedinUrl: text })}
                       placeholder="Enter your LinkedIn profile URL"
                       keyboardType="url"
-                    />
-                  </View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Years of Experience</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      value={editData.yearsOfExperience?.toString() || ''}
-                      onChangeText={(text) => setEditData({ ...editData, yearsOfExperience: parseInt(text) || 0 })}
-                      keyboardType="numeric"
-                      placeholder="Enter years of experience"
                     />
                   </View>
                 </View>

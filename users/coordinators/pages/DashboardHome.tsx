@@ -1020,7 +1020,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
     switch (status) {
       case 'active': return 'Active';
       case 'expired': return 'Expired';
-      case 'pending': return 'Pending';
+      case 'pending': return 'Available';
       default: return 'Unknown';
     }
   };
@@ -1052,7 +1052,7 @@ export default function DashboardHome({ currentUser }: DashboardHomeProps) {
 
   const getPartnershipStatusText = (status: string) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return 'Pending';
+      case 'pending': return 'Available';
       case 'approved': return 'Approved';
       case 'rejected': return 'Rejected';
       default: return 'Unknown';
