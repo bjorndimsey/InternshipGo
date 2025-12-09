@@ -485,6 +485,11 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
     new: 0
   });
   
+  // MOA status and ineligibility state management
+  const [showMOAReminderModal, setShowMOAReminderModal] = useState(false);
+  const [companyWithMOAIssue, setCompanyWithMOAIssue] = useState<Company | null>(null);
+  const [isMatchingInfoExpanded, setIsMatchingInfoExpanded] = useState(false);
+  
   // Animation values for stats
   const [animatedStats, setAnimatedStats] = useState({
     companyCount: 0,
@@ -777,7 +782,7 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
       console.log('🚀 [STUDENT DASHBOARD] Starting fetchCompanies...');
       console.log('🚀 [STUDENT DASHBOARD] Current user:', currentUser?.id);
       
-      const response = await apiService.getAllCompanies();
+      const response = await apiService.getAllCompanies(true);
       
       console.log('📡 [STUDENT DASHBOARD] API Response:', {
         success: response.success,
@@ -1095,7 +1100,14 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
   };
 
   const handleApply = (company: Company) => {
-    // Check eligibility before allowing application
+    // First check MOA status
+    if (company.moaStatus === 'pending' || company.moaStatus === 'expired') {
+      setCompanyWithMOAIssue(company);
+      setShowMOAReminderModal(true);
+      return;
+    }
+    
+    // Then check student eligibility
     const isEligible = hasEnrolledClass && allRequirementsApproved;
     
     if (!isEligible) {
@@ -1104,7 +1116,7 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
       return;
     }
     
-    // If eligible, proceed with application
+    // If all checks pass, proceed with application
     setSelectedCompanyForApplication(company);
     setShowResumeModal(true);
   };
@@ -1522,6 +1534,32 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
               )}
             </View>
 
+            {/* MOA Ineligibility Warning Banner - Pending */}
+            {company.moaStatus === 'pending' && (
+              <View style={styles.moaIneligibilityBanner}>
+                <MaterialIcons name="warning" size={20} color="#ea4335" />
+                <View style={styles.moaIneligibilityContent}>
+                  <Text style={styles.moaIneligibilityLabel}>Ineligible:</Text>
+                  <Text style={styles.moaIneligibilityText}>
+                    This company's MOA is pending approval. Applications cannot be submitted until the MOA is active.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* MOA Ineligibility Warning Banner - Expired */}
+            {company.moaStatus === 'expired' && (
+              <View style={styles.moaIneligibilityBanner}>
+                <MaterialIcons name="warning" size={20} color="#ea4335" />
+                <View style={styles.moaIneligibilityContent}>
+                  <Text style={styles.moaIneligibilityLabel}>Ineligible:</Text>
+                  <Text style={styles.moaIneligibilityText}>
+                    This company's MOA has expired. Applications cannot be submitted until the MOA is renewed and active.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             <Text style={styles.description} numberOfLines={2}>
               {company.description}
             </Text>
@@ -1558,12 +1596,16 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
                 styles.actionButton, 
                 styles.applyButton,
                 ((company.availableInternSlots || company.availableSlots) === 0 || 
-                 checkingEligibility) && styles.disabledButton
+                 checkingEligibility ||
+                 company.moaStatus === 'pending' ||
+                 company.moaStatus === 'expired') && styles.disabledButton
               ]} 
               onPress={() => handleApply(company)}
               disabled={
                 (company.availableInternSlots || company.availableSlots) === 0 || 
-                checkingEligibility
+                checkingEligibility ||
+                company.moaStatus === 'pending' ||
+                company.moaStatus === 'expired'
               }
             >
               <MaterialIcons 
@@ -1573,7 +1615,9 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
                   (company.availableInternSlots || company.availableSlots) === 0 || 
                   checkingEligibility || 
                   !hasEnrolledClass || 
-                  !allRequirementsApproved
+                  !allRequirementsApproved ||
+                  company.moaStatus === 'pending' ||
+                  company.moaStatus === 'expired'
                     ? "#fff" 
                     : "#02050a"
                 } 
@@ -1583,11 +1627,14 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
                 (company.availableInternSlots || company.availableSlots) > 0 && 
                 !checkingEligibility && 
                 hasEnrolledClass && 
-                allRequirementsApproved && 
+                allRequirementsApproved &&
+                company.moaStatus === 'active' && 
                 styles.applyButtonText
               ]}>
                 {checkingEligibility 
                   ? 'Checking...' 
+                  : company.moaStatus === 'pending' || company.moaStatus === 'expired'
+                  ? 'Ineligible'
                   : (company.availableInternSlots || company.availableSlots) === 0 
                   ? 'Full' 
                   : !hasEnrolledClass
@@ -1695,15 +1742,46 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
           <Text style={styles.sectionSubtitle}>
             {searchQuery 
               ? `${filteredCompanies.length} companies found for "${searchQuery}"`
-              : studentProfile 
-                ? `${companies.length} approved partner companies matched to your skills, program, and location`
-                : `${companies.filter(c => c.availableSlots > 0).length} approved partner companies with open positions`
+              : (() => {
+                  const activeCount = companies.filter(c => c.moaStatus === 'active').length;
+                  const ineligibleCount = companies.filter(c => c.moaStatus === 'pending' || c.moaStatus === 'expired').length;
+                  
+                  if (studentProfile) {
+                    if (ineligibleCount > 0) {
+                      return `${companies.length} partner companies matched to your skills, program, and location (${activeCount} active, ${ineligibleCount} ineligible)`;
+                    }
+                    return `${companies.length} partner companies matched to your skills, program, and location`;
+                  } else {
+                    const activeWithSlots = companies.filter(c => c.moaStatus === 'active' && (c.availableSlots > 0 || (c.availableInternSlots ?? 0) > 0)).length;
+                    if (ineligibleCount > 0) {
+                      return `${companies.length} partner companies (${activeWithSlots} active with open positions, ${ineligibleCount} ineligible)`;
+                    }
+                    return `${activeWithSlots} partner companies with open positions`;
+                  }
+                })()
             }
           </Text>
           {studentProfile && !searchQuery && (
-            <Text style={styles.matchingInfoText}>
-              Only approved partner companies are shown. Companies are ranked by relevance to your {studentProfile.program} program, skills, and proximity to your location. Companies where you have approved applications are hidden.
-            </Text>
+            <View>
+              <Text style={styles.matchingInfoText}>
+                {isMatchingInfoExpanded 
+                  ? `Partner companies are shown regardless of MOA status. Companies with active MOA are eligible for applications, while companies with pending or expired MOA are marked as ineligible. Companies are ranked by relevance to your ${studentProfile.program} program, skills, and proximity to your location. Companies where you have approved applications are hidden.`
+                  : `Partner companies are shown regardless of MOA status. Companies with active MOA are eligible for applications, while companies with pending or expired MOA are marked as ineligible. Companies are ranked by relevance to your ${studentProfile.program} program, skills, and proximity to your location...`}
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setIsMatchingInfoExpanded(!isMatchingInfoExpanded)}
+                style={styles.expandInfoButton}
+              >
+                <Text style={styles.expandInfoText}>
+                  {isMatchingInfoExpanded ? 'Show Less' : 'Show More'}
+                </Text>
+                <MaterialIcons 
+                  name={isMatchingInfoExpanded ? "expand-less" : "expand-more"} 
+                  size={16} 
+                  color="#F56E0F" 
+                />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -1723,8 +1801,8 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
               {searchQuery 
                 ? `No companies match your search for "${searchQuery}". Try different keywords or check your spelling.`
                 : studentProfile 
-                  ? 'No new internship opportunities available. Only approved partner companies are shown, and companies where you have approved applications are hidden.'
-                  : 'No approved partner companies available. Check back later for new internship opportunities.'
+                  ? 'No new internship opportunities available. Partner companies are shown regardless of MOA status, and companies where you have approved applications are hidden.'
+                  : 'No partner companies available. Check back later for new internship opportunities.'
               }
             </Text>
             {searchQuery && (
@@ -2066,6 +2144,83 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
               <TouchableOpacity
                 style={styles.eligibilityModalButton}
                 onPress={() => setShowEligibilityModal(false)}
+              >
+                <Text style={styles.eligibilityModalButtonText}>I Understand</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MOA Ineligibility Reminder Modal */}
+      <Modal
+        visible={showMOAReminderModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowMOAReminderModal(false)}
+      >
+        <View style={styles.eligibilityModalOverlay}>
+          <View style={styles.eligibilityModalContent}>
+            <View style={styles.eligibilityModalHeader}>
+              <MaterialIcons name="warning" size={24} color="#ea4335" />
+              <Text style={styles.eligibilityModalTitle}>Company Ineligible</Text>
+            </View>
+
+            <ScrollView style={styles.eligibilityModalBody} showsVerticalScrollIndicator={false}>
+              {companyWithMOAIssue && (
+                <>
+                  <View style={styles.eligibilityItem}>
+                    <View style={styles.eligibilityItemHeader}>
+                      <MaterialIcons 
+                        name="cancel" 
+                        size={20} 
+                        color="#ea4335" 
+                      />
+                      <Text style={styles.eligibilityItemTitle}>
+                        {companyWithMOAIssue.moaStatus === 'pending' ? 'MOA Pending Approval' : 'MOA Expired'}
+                      </Text>
+                    </View>
+                    <Text style={styles.eligibilityItemDescription}>
+                      {companyWithMOAIssue.moaStatus === 'pending' 
+                        ? `The Memorandum of Agreement (MOA) for ${companyWithMOAIssue.name} is currently pending approval. Applications cannot be submitted until the MOA is approved and becomes active.`
+                        : `The Memorandum of Agreement (MOA) for ${companyWithMOAIssue.name} has expired. Applications cannot be submitted until the MOA is renewed and becomes active.`}
+                    </Text>
+                    {companyWithMOAIssue.moaExpiryDate && companyWithMOAIssue.moaStatus === 'expired' && (
+                      <Text style={styles.eligibilityItemNote}>
+                        MOA expired on: {companyWithMOAIssue.moaExpiryDate}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.eligibilityItem}>
+                    <View style={styles.eligibilityItemHeader}>
+                      <MaterialIcons 
+                        name="info" 
+                        size={20} 
+                        color="#4285f4" 
+                      />
+                      <Text style={styles.eligibilityItemTitle}>What happens next?</Text>
+                    </View>
+                    <Text style={styles.eligibilityItemDescription}>
+                      {companyWithMOAIssue.moaStatus === 'pending'
+                        ? 'The coordinator is working with the company to finalize the MOA. Once approved, the company will become eligible for applications and you will be able to apply.'
+                        : 'The coordinator is working with the company to renew the MOA. Once renewed and active, the company will become eligible for applications and you will be able to apply.'}
+                    </Text>
+                    <Text style={styles.eligibilityItemNote}>
+                      You can check back later or contact your coordinator for updates on the MOA status.
+                    </Text>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+
+            <View style={styles.eligibilityModalFooter}>
+              <TouchableOpacity
+                style={styles.eligibilityModalButton}
+                onPress={() => {
+                  setShowMOAReminderModal(false);
+                  setCompanyWithMOAIssue(null);
+                }}
               >
                 <Text style={styles.eligibilityModalButtonText}>I Understand</Text>
               </TouchableOpacity>
@@ -2870,6 +3025,46 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 6,
     opacity: 0.7,
+  },
+  expandInfoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+  expandInfoText: {
+    fontSize: 13,
+    color: '#F56E0F',
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  // MOA Ineligibility Banner Styles
+  moaIneligibilityBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(234, 67, 53, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ea4335',
+  },
+  moaIneligibilityContent: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  moaIneligibilityLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ea4335',
+    marginBottom: 4,
+  },
+  moaIneligibilityText: {
+    fontSize: 13,
+    color: '#fff',
+    lineHeight: 18,
+    opacity: 0.9,
   },
   // Modal Matching Styles
   modalMatchingContainer: {

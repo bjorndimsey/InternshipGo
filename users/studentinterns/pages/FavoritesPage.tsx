@@ -616,13 +616,6 @@ export default function FavoritesPage({ currentUser }: FavoritesPageProps) {
             </Text>
             <Text style={styles.statLabel}>Available Slots</Text>
           </View>
-          <View style={styles.statItem}>
-            <MaterialIcons name="star" size={32} color="#F56E0F" />
-            <Text style={styles.statNumber}>
-              {favoriteCompanies.length > 0 ? (favoriteCompanies.reduce((sum, company) => sum + company.rating, 0) / favoriteCompanies.length).toFixed(1) : '0.0'}
-            </Text>
-            <Text style={styles.statLabel}>Avg Rating</Text>
-          </View>
         </View>
 
         {/* Favorites List */}
