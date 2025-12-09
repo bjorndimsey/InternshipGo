@@ -13,6 +13,7 @@ import {
   Modal,
   Platform,
   Animated,
+  Clipboard,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -85,6 +86,15 @@ interface Company {
   application_date?: string;
 }
 
+interface Class {
+  id: string;
+  className: string;
+  schoolYear: string;
+  classCode: string;
+  studentCount: number;
+  status?: string;
+}
+
 interface UserInfo {
   id: string;
   email: string;
@@ -155,6 +165,8 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies, onVi
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [selectedCompanyForAttendance, setSelectedCompanyForAttendance] = useState<Company | null>(null);
   const [showCompanySelectorModal, setShowCompanySelectorModal] = useState(false);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
 
   const schoolYears = [
     '2023-2024', 
@@ -173,11 +185,22 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies, onVi
 
   useEffect(() => {
     fetchInterns();
+    fetchClasses();
   }, []);
+
+  useEffect(() => {
+    // Refresh classes when a new class is created
+    if (!showCreateClassModal) {
+      fetchClasses();
+    }
+  }, [showCreateClassModal]);
 
   useEffect(() => {
     filterInterns();
   }, [searchQuery, selectedSchoolYear, interns, showAllInterns]);
+
+  // Filter classes by selected school year
+  const filteredClasses = classes.filter(classItem => classItem.schoolYear === selectedSchoolYear);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -204,6 +227,64 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies, onVi
       }).start();
     }
   }, [showAssignedCompanyModal, slideInAnim]);
+
+  const fetchClasses = async () => {
+    try {
+      setLoadingClasses(true);
+      
+      if (!currentUser) {
+        console.log('No current user found for fetching classes');
+        setClasses([]);
+        setLoadingClasses(false);
+        return;
+      }
+
+      console.log('Fetching classes for coordinator:', currentUser.id);
+      
+      const response = await apiService.getCoordinatorClasses(currentUser.id) as any;
+      
+      if (response.success && response.classes) {
+        console.log('✅ Classes fetched successfully:', response.classes.length);
+        
+        const transformedClasses: Class[] = (response.classes || []).map((cls: any) => ({
+          id: cls.id?.toString() || '',
+          className: cls.className || cls.class_name || '',
+          schoolYear: cls.schoolYear || cls.school_year || '',
+          classCode: cls.classCode || cls.class_code || '',
+          studentCount: cls.studentCount || 0,
+          status: cls.status || 'active'
+        }));
+        
+        setClasses(transformedClasses);
+      } else {
+        console.log('No classes found or error:', response.message);
+        setClasses([]);
+      }
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+      setClasses([]);
+    } finally {
+      setLoadingClasses(false);
+    }
+  };
+
+  const copyClassCode = async (classCode: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        // Web: Use Clipboard API
+        await navigator.clipboard.writeText(classCode);
+      } else {
+        // React Native: Use Clipboard from react-native
+        if (Clipboard && Clipboard.setString) {
+          Clipboard.setString(classCode);
+        }
+      }
+      Alert.alert('Success', `Class code "${classCode}" copied to clipboard!`);
+    } catch (error) {
+      console.error('Error copying class code:', error);
+      Alert.alert('Error', 'Failed to copy class code. Please try again.');
+    }
+  };
 
   const fetchInterns = async () => {
     try {
@@ -2122,6 +2203,107 @@ export default function InternsPage({ currentUser, onViewAssignedCompanies, onVi
           </>
         )}
       </View>
+
+        {/* My Classes Section */}
+        <View style={[
+          styles.classesSection,
+          { paddingHorizontal: dimensions.width < 768 ? 10 : 20 }
+        ]}>
+          <View style={styles.classesSectionHeader}>
+            <Text style={[
+              styles.classesSectionTitle,
+              { fontSize: dimensions.width < 768 ? 18 : 20 }
+            ]}>
+              My Classes ({selectedSchoolYear})
+            </Text>
+            <Text style={styles.classesSectionSubtitle}>
+              {loadingClasses ? 'Loading...' : `${filteredClasses.length} class${filteredClasses.length !== 1 ? 'es' : ''} for ${selectedSchoolYear}`}
+            </Text>
+          </View>
+
+          {loadingClasses ? (
+            <View style={[
+              styles.classesGrid,
+              { flexWrap: 'wrap', justifyContent: 'flex-start' }
+            ]}>
+              {Array.from({ length: 2 }).map((_, index) => (
+                <View key={`skeleton-class-${index}`} style={styles.skeletonClassCard} />
+              ))}
+            </View>
+          ) : filteredClasses.length === 0 ? (
+            <View style={styles.emptyClassesContainer}>
+              <MaterialIcons name="class" size={48} color="#878787" />
+              <Text style={styles.emptyClassesText}>No classes for {selectedSchoolYear}</Text>
+              <Text style={styles.emptyClassesSubtext}>
+                Click "Create Class" to create a class for this school year
+              </Text>
+            </View>
+          ) : (
+            <View style={[
+              styles.classesGrid,
+              { 
+                flexWrap: 'wrap', 
+                justifyContent: 'flex-start',
+                width: '100%'
+              }
+            ]}>
+              {filteredClasses.map((classItem) => (
+                <View 
+                  key={classItem.id} 
+                  style={[
+                    styles.classCard,
+                    {
+                      width: dimensions.width < 768 
+                        ? '100%' 
+                        : dimensions.width < 1024 
+                        ? '48%' 
+                        : '31%',
+                      flexBasis: dimensions.width < 768 
+                        ? '100%' 
+                        : dimensions.width < 1024 
+                        ? '48%' 
+                        : '31%',
+                    }
+                  ]}
+                >
+                  <View style={styles.classCardHeader}>
+                    <MaterialIcons name="class" size={24} color="#F56E0F" />
+                    <Text style={styles.classCardName} numberOfLines={2}>
+                      {classItem.className}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.classCardBody}>
+                    <View style={styles.classCardInfoRow}>
+                      <MaterialIcons name="calendar-today" size={16} color="#878787" />
+                      <Text style={styles.classCardInfoText}>{classItem.schoolYear}</Text>
+                    </View>
+                    
+                    <View style={styles.classCardCodeRow}>
+                      <View style={styles.classCardCodeContainer}>
+                        <Text style={styles.classCardCodeLabel}>Class Code:</Text>
+                        <Text style={styles.classCardCode}>{classItem.classCode}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.copyCodeButton}
+                        onPress={() => copyClassCode(classItem.classCode)}
+                      >
+                        <MaterialIcons name="content-copy" size={18} color="#F56E0F" />
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.classCardInfoRow}>
+                      <MaterialIcons name="people" size={16} color="#34a853" />
+                      <Text style={styles.classCardStudentCount}>
+                        {classItem.studentCount} student{classItem.studentCount !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* Interns List */}
         <View 
@@ -5100,5 +5282,137 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // My Classes Section Styles
+  classesSection: {
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  classesSectionHeader: {
+    marginBottom: 16,
+  },
+  classesSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+    marginBottom: 4,
+  },
+  classesSectionSubtitle: {
+    fontSize: 14,
+    color: '#878787',
+  },
+  classesScrollView: {
+    marginHorizontal: 0,
+  },
+  classesGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingHorizontal: 0,
+    paddingBottom: 8,
+  },
+  classCard: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    padding: 20,
+    minWidth: 280,
+    maxWidth: 320,
+    elevation: 4,
+    shadowColor: '#F56E0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  classCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  classCardName: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FBFBFB',
+  },
+  classCardBody: {
+    gap: 12,
+  },
+  classCardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  classCardInfoText: {
+    fontSize: 14,
+    color: '#FBFBFB',
+    opacity: 0.9,
+  },
+  classCardCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(245, 110, 15, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  classCardCodeContainer: {
+    flex: 1,
+  },
+  classCardCodeLabel: {
+    fontSize: 12,
+    color: '#878787',
+    marginBottom: 4,
+  },
+  classCardCode: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#F56E0F',
+    fontFamily: 'monospace',
+    letterSpacing: 2,
+  },
+  copyCodeButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(245, 110, 15, 0.2)',
+  },
+  classCardStudentCount: {
+    fontSize: 14,
+    color: '#34a853',
+    fontWeight: '600',
+  },
+  emptyClassesContainer: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
+    borderStyle: 'dashed',
+  },
+  emptyClassesText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FBFBFB',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyClassesSubtext: {
+    fontSize: 14,
+    color: '#878787',
+    textAlign: 'center',
+  },
+  skeletonClassCard: {
+    backgroundColor: '#1B1B1E',
+    borderRadius: 16,
+    padding: 20,
+    minWidth: 280,
+    maxWidth: 320,
+    height: 180,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 110, 15, 0.2)',
   },
 });

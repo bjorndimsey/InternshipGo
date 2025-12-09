@@ -224,7 +224,7 @@ export default function CompaniesSection() {
           ]}
         >
           <Text style={styles.title}>
-            Trusted by <Text style={styles.highlight}>top companies</Text>
+            Trusted by <Text style={styles.highlight}>Approved companies</Text>
           </Text>
           <Text style={styles.subtitle}>
             Join thousands of students who have found their dream internships with these amazing companies

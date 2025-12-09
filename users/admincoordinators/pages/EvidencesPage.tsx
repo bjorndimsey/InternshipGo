@@ -160,13 +160,23 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
 
   useEffect(() => {
     if (selectedIntern) {
-      fetchInternEvidences(selectedIntern.user_id);
+      // Fetch all evidences by default (no date filter) to match DiaryPage behavior
+      // Only filter by date when in calendar view and user navigates to a different month
+      fetchInternEvidences(selectedIntern.user_id, viewMode !== 'calendar');
     }
-  }, [selectedIntern, selectedDate]);
+  }, [selectedIntern]); // ✅ Removed selectedDate dependency - fetch all by default
+
+  // Separate effect for calendar view date changes
+  useEffect(() => {
+    if (selectedIntern && viewMode === 'calendar') {
+      // In calendar view, fetch evidences for the selected month
+      fetchInternEvidences(selectedIntern.user_id, false);
+    }
+  }, [selectedDate, viewMode]);
 
   useEffect(() => {
     filterEvidences();
-  }, [searchQuery, evidences]);
+  }, [searchQuery, evidences, viewMode, selectedDate]);
 
   const fetchInterns = async () => {
     try {
@@ -204,7 +214,7 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
     }
   };
 
-  const fetchInternEvidences = async (internId: string, skipDateFilter: boolean = false) => {
+  const fetchInternEvidences = async (internId: string, skipDateFilter: boolean = true) => {
     if (!internId) {
       console.log('⚠️ No intern ID provided');
       setEvidences([]);
@@ -263,6 +273,16 @@ export default function EvidencesPage({ currentUser }: EvidencesPageProps) {
         evidence.task_notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
         evidence.companies?.company_name.toLowerCase().includes(searchQuery.toLowerCase())
       );
+    }
+
+    // Filter by selected date if in calendar mode
+    if (viewMode === 'calendar') {
+      const month = selectedDate.getMonth();
+      const year = selectedDate.getFullYear();
+      filtered = filtered.filter(evidence => {
+        const evidenceDate = new Date(evidence.submitted_at);
+        return evidenceDate.getMonth() === month && evidenceDate.getFullYear() === year;
+      });
     }
 
     setFilteredEvidences(filtered);

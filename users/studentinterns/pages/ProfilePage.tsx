@@ -23,6 +23,7 @@ import ESignature from '../../../components/ESignature';
 import { EmailService } from '../../../lib/emailService';
 import OTPVerificationScreen from '../../../screens/OTPVerificationScreen';
 import NewPasswordScreen from '../../../screens/NewPasswordScreen';
+import DiaryPage from './DiaryPage';
 
 const { width } = Dimensions.get('window');
 
@@ -95,6 +96,7 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
   const [passwordChangeStep, setPasswordChangeStep] = useState<'otp' | 'password'>('otp');
   const [isLoadingOTP, setIsLoadingOTP] = useState(false);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [showDiaryPage, setShowDiaryPage] = useState(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -990,6 +992,11 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
           <Text style={styles.settingText}>Signature</Text>
           <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
         </TouchableOpacity>
+        <TouchableOpacity style={styles.settingItem} onPress={() => setShowDiaryPage(true)}>
+          <MaterialIcons name="book" size={20} color="#F56E0F" />
+          <Text style={styles.settingText}>Diary</Text>
+          <MaterialIcons name="chevron-right" size={20} color="#F56E0F" />
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Edit Profile Modal */}
@@ -1384,6 +1391,19 @@ export default function ProfilePage({ currentUser, autoOpenLocationPicker, onLoc
             isGoogleUser={isGoogleUser}
           />
         )}
+      </Modal>
+
+      {/* Diary Page Modal */}
+      <Modal
+        visible={showDiaryPage}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowDiaryPage(false)}
+      >
+        <DiaryPage
+          currentUser={currentUser}
+          onClose={() => setShowDiaryPage(false)}
+        />
       </Modal>
 
       {/* Toast Component */}
