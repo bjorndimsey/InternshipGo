@@ -1748,15 +1748,15 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
                   
                   if (studentProfile) {
                     if (ineligibleCount > 0) {
-                      return `${companies.length} partner companies matched to your skills, program, and location (${activeCount} active, ${ineligibleCount} ineligible)`;
+                      return `${companies.length}  companies matched to your skills, program, and location (${activeCount} active, ${ineligibleCount} ineligible)`;
                     }
-                    return `${companies.length} partner companies matched to your skills, program, and location`;
+                    return `${companies.length}  companies matched to your skills, program, and location`;
                   } else {
                     const activeWithSlots = companies.filter(c => c.moaStatus === 'active' && (c.availableSlots > 0 || (c.availableInternSlots ?? 0) > 0)).length;
                     if (ineligibleCount > 0) {
-                      return `${companies.length} partner companies (${activeWithSlots} active with open positions, ${ineligibleCount} ineligible)`;
+                      return `${companies.length}  companies (${activeWithSlots} active with open positions, ${ineligibleCount} ineligible)`;
                     }
-                    return `${activeWithSlots} partner companies with open positions`;
+                    return `${activeWithSlots}  companies with open positions`;
                   }
                 })()
             }
@@ -1765,8 +1765,8 @@ export default function DashboardHome({ currentUser, onNavigateToRequirements }:
             <View>
               <Text style={styles.matchingInfoText}>
                 {isMatchingInfoExpanded 
-                  ? `Partner companies are shown regardless of MOA status. Companies with active MOA are eligible for applications, while companies with pending or expired MOA are marked as ineligible. Companies are ranked by relevance to your ${studentProfile.program} program, skills, and proximity to your location. Companies where you have approved applications are hidden.`
-                  : `Partner companies are shown regardless of MOA status. Companies with active MOA are eligible for applications, while companies with pending or expired MOA are marked as ineligible. Companies are ranked by relevance to your ${studentProfile.program} program, skills, and proximity to your location...`}
+                  ? ` companies are shown regardless of MOA status. Companies with active MOA are eligible for applications, while companies with pending or expired MOA are marked as ineligible. Companies are ranked by relevance to your ${studentProfile.program} program, skills, and proximity to your location. Companies where you have approved applications are hidden.`
+                  : ` companies are shown regardless of MOA status. Companies with active MOA are eligible for applications, while companies with pending or expired MOA are marked as ineligible. Companies are ranked by relevance to your ${studentProfile.program} program, skills, and proximity to your location...`}
               </Text>
               <TouchableOpacity 
                 onPress={() => setIsMatchingInfoExpanded(!isMatchingInfoExpanded)}
