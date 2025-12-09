@@ -10,7 +10,6 @@ import {
   Image,
   Modal,
   Animated,
-  FlatList,
   TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -439,7 +438,11 @@ export default function DiaryPage({ currentUser, onClose }: DiaryPageProps) {
       </Animated.View>
 
       {/* Content */}
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollContainer} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContentContainer}
+      >
         <Animated.View style={[styles.contentContainer, { opacity: fadeAnim }]}>
           {filteredEvidences.length === 0 ? (
             <View style={styles.emptyState}>
@@ -464,17 +467,41 @@ export default function DiaryPage({ currentUser, onClose }: DiaryPageProps) {
               )}
             </View>
           ) : (
-            <FlatList
-              key={`evidences-${currentCardsPerRow}`}
-              data={filteredEvidences}
-              renderItem={renderEvidenceCard}
-              keyExtractor={(item) => item.id}
-              numColumns={currentCardsPerRow}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.evidencesGrid}
-              columnWrapperStyle={currentCardsPerRow > 1 ? styles.evidencesRow : undefined}
-              scrollEnabled={false}
-            />
+            <View style={styles.evidencesGrid}>
+              {currentCardsPerRow > 1 ? (
+                // Multi-column layout
+                Array.from({ length: Math.ceil(filteredEvidences.length / currentCardsPerRow) }).map((_, rowIndex) => {
+                  const startIndex = rowIndex * currentCardsPerRow;
+                  const endIndex = Math.min(startIndex + currentCardsPerRow, filteredEvidences.length);
+                  const rowItems = filteredEvidences.slice(startIndex, endIndex);
+                  const isLastRow = endIndex === filteredEvidences.length;
+                  const emptySlots = isLastRow && filteredEvidences.length % currentCardsPerRow !== 0 
+                    ? currentCardsPerRow - (filteredEvidences.length % currentCardsPerRow) 
+                    : 0;
+                  
+                  return (
+                    <View key={rowIndex} style={styles.evidencesRow}>
+                      {rowItems.map((evidence, colIndex) => (
+                        <View key={evidence.id} style={styles.evidenceCardWrapper}>
+                          {renderEvidenceCard({ item: evidence, index: startIndex + colIndex })}
+                        </View>
+                      ))}
+                      {/* Fill empty slots in the last row for proper alignment */}
+                      {Array.from({ length: emptySlots }).map((_, emptyIndex) => (
+                        <View key={`empty-${emptyIndex}`} style={styles.evidenceCardWrapper} />
+                      ))}
+                    </View>
+                  );
+                })
+              ) : (
+                // Single column layout
+                filteredEvidences.map((evidence, index) => (
+                  <View key={evidence.id}>
+                    {renderEvidenceCard({ item: evidence, index })}
+                  </View>
+                ))
+              )}
+            </View>
           )}
         </Animated.View>
       </ScrollView>
@@ -514,6 +541,9 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -626,9 +656,14 @@ const createStyles = (responsiveValues: any) => StyleSheet.create({
     paddingBottom: 20,
   },
   evidencesRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: responsiveValues.isDesktop ? 12 : responsiveValues.isTablet ? 10 : 8,
     gap: responsiveValues.isDesktop ? 8 : responsiveValues.isTablet ? 6 : 4,
+  },
+  evidenceCardWrapper: {
+    flex: 1,
+    minWidth: 0,
   },
   evidenceCard: {
     backgroundColor: '#FFFEF7', // Cream paper
